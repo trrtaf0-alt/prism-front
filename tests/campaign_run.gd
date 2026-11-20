@@ -326,7 +326,7 @@ func _roster_report() -> void:
 		return
 	output.store_line("# 50웨이브 편성 예시")
 	output.store_line("")
-	output.store_line("시드 7043에서 계산한 기본 슬롯입니다. 실전은 시드에 따라 달라지며, 분열 및 증식 개체는 추가됩니다. 50웨이브 예시는 슬롯 순서에 따라 180기와 495기에서 지원군 가중치를 전환한 표입니다. 실제 보스의 체력 단계나 경과 시간에 따라 이 전환이 앞당겨질 수 있습니다.")
+	output.store_line("시드 7043에서 계산한 기본 슬롯입니다. 실전은 시드에 따라 달라지며, 분열 및 증식 개체는 추가됩니다. 50웨이브 예시는 슬롯 순서에 따라 180기와 495기에서 지원군 가중치를 전환한 표입니다. 보스의 체력 단계에 따라 이 전환이 앞당겨질 수 있습니다.")
 	output.store_line("")
 	output.store_line("| 웨이브 | 기본 슬롯 | 출현 수와 구성비 |")
 	output.store_line("| ---: | ---: | --- |")
@@ -338,7 +338,7 @@ func _roster_report() -> void:
 			var elite := 1.0
 			if wave == 50:
 				var phase := 2 if i > 495 else (1 if i > 180 else 0)
-				elite = float(rules.balance.finale[phase].elite)
+				elite = float(rules.balance.finale_elite[phase])
 			var def := roster.next(elite)
 			counts[def.id] = int(counts.get(def.id, 0)) + 1
 		var rows: PackedStringArray = []
@@ -352,8 +352,9 @@ func _roster_report() -> void:
 
 func _boss_walk() -> void:
 	for multiplier in [1.0, 1.28]:
-		var sim := Battle.new(map, rules)
-		var boss := sim.spawn(0.0, rules.mobs.lookup("boss"))
+		var sim := Battle.new(map, rules, difficulty)
+		var boss_def := rules.enemy_for_wave(rules.mobs.lookup("boss"), BattleData.FINAL_WAVE, difficulty)
+		var boss := sim.spawn(0.0, boss_def)
 		boss.speed *= multiplier
 		while not sim.lost:
 			sim.tick(STEP)
