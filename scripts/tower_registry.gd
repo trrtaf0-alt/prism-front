@@ -8,7 +8,7 @@ const DEFAULTS := {
 	"shots": 1, "spread": 0.0, "width": 0.25, "max_targets": 0, "jump_radius": 0.0,
 	"windup": 0.0, "ramp": 0.0, "duration": 0.0, "tick": 0.0, "guided": false,
 	"returning": false, "split": 0, "fragment_damage": 0, "fragment_range": 0.0,
-	"slow": 0.0, "pull": 0.0, "shock": false, "status_time": 0.0, "mark_bonus": 0.0,
+	"slow": 0.0, "gravity_slow": 0.0, "shock": false, "status_time": 0.0, "mark_bonus": 0.0,
 	"mark_cap": 0,
 }
 const ATTACK_NAMES := {
@@ -44,6 +44,10 @@ func _add(raw: Dictionary) -> void:
 			or float(raw.get("interval", 0)) <= 0.0 or int(raw.get("cost", 0)) <= 0 \
 			or float(raw.get("damage", -1)) < 0 or float(raw.get("range", -1)) < 0:
 		error = "유효하지 않은 타워 정의 · " + id
+		return
+	var gravity_slow := float(raw.get("gravity_slow", 0.0))
+	if gravity_slow < 0.0 or gravity_slow >= 1.0:
+		error = "유효하지 않은 중력 둔화 비율 · " + id
 		return
 	var kind := int(raw.get("support", TowerSupport.Kind.NONE))
 	if kind < TowerSupport.Kind.NONE or kind > TowerSupport.Kind.COMMAND or (raw.attack == "support") != (kind != TowerSupport.Kind.NONE):

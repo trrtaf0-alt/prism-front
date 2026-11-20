@@ -28,6 +28,7 @@ func _run() -> void:
 	var plate_atlas := AttackEffects.PLATES.get_image()
 	check(plate_atlas.get_size() == Vector2i(4096, 1024) and plate_atlas.has_mipmaps(), "large effect plates import at full size with lower-resolution levels")
 	_attack_details()
+	_gravity_slow()
 	_projectile_behaviors()
 	await _interface()
 	print("Expansion checks: %d, failures: %d" % [checks, failures])
@@ -132,15 +133,15 @@ func _status_and_economy() -> void:
 	check(is_equal_approx(stun.stun_left, 0.2), "initial stun duration")
 	var moved := 0.0
 	for i in 120:
-		moved += stun.step(moved, 1.0, STEP, rules.status_rules)
+		moved += stun.step(1.0, STEP, rules.status_rules)
 		stun.shock(rules.status_rules)
 	check(moved > 0.5 and stun.resistance > 5.0, "continuous shock still permits movement")
 	var resistance := stun.resistance
 	for i in 600:
-		stun.step(2.0, 1.0, STEP, rules.status_rules)
+		stun.step(1.0, STEP, rules.status_rules)
 	check(stun.resistance < resistance, "shock resistance recovers")
 	for i in 1000:
-		stun.step(2.0, 1.0, STEP, rules.status_rules)
+		stun.step(1.0, STEP, rules.status_rules)
 	stun.shock(rules.status_rules)
 	check(is_equal_approx(stun.stun_left, 0.2), "recovered hit restores original duration")
 	sim.tick(STEP)
@@ -211,8 +212,8 @@ func _attack_details() -> void:
 	far = sim.spawn(50.0, armored)
 	for i in 254:
 		sim.tick(STEP)
-	check(near.health == 996600 and far.health == 996600, "singularity delivers twenty global ticks of 170 damage")
-	check(far.position.is_equal_approx(map.position_at(far.progress)) and absf(far.progress - 50.0) < 16.0, "gravity keeps exact path coordinates")
+	check(near.health == 993600 and far.health == 993600, "singularity delivers twenty global ticks of 320 damage")
+	check(far.position.is_equal_approx(map.position_at(far.progress)) and far.progress > 50.0 and far.progress < 53.0, "singularity slows progress along the original path")
 	sim = _new_battle()
 	_unlock(sim)
 	sim.install(Vector2i(2, 4), "tower_29")
@@ -224,6 +225,38 @@ func _attack_details() -> void:
 	for drone in distant:
 		struck += int(drone.health == 999840)
 	check(struck == 1000, "spectrum deals 160 damage each to 1000 enemies despite sampled visuals")
+
+func _gravity_slow() -> void:
+	var gravity := rules.towers.lookup("tower_20")
+	var freeze := rules.towers.lookup("tower_15")
+	var singularity := rules.towers.lookup("tower_28")
+	var status := StatusEffects.new()
+	status.apply(freeze, rules.status_rules)
+	status.apply(gravity, rules.status_rules)
+	status.apply(singularity, rules.status_rules)
+	status.apply(gravity, rules.status_rules)
+	check(is_equal_approx(status.gravity_slow, 0.40) and is_equal_approx(status.gravity_slow_left, 0.24), "gravity slows use the strongest active effect without extending it")
+	var expected := 0.24 * 0.32 * 0.60 + 0.26 * 0.32
+	var distance := status.step(1.0, 0.5, rules.status_rules)
+	var prediction := StatusEffects.new()
+	prediction.apply(freeze, rules.status_rules)
+	prediction.apply(singularity, rules.status_rules)
+	check(is_equal_approx(distance, expected) and is_equal_approx(prediction.predict(5.0, 1.0, 0.5), 5.0 + distance), "movement and interception apply both slows until gravity expires")
+	check(is_equal_approx(status.step(1.0, 0.25, rules.status_rules), 0.08), "freeze keeps its own duration after gravity expires")
+	var sim := _new_battle()
+	_unlock(sim)
+	var armored := rules.drone.duplicate()
+	armored.health = 1_000_000
+	var near := sim.spawn(1.0, armored)
+	var lead := sim.spawn(5.0, armored)
+	var far := sim.spawn(50.0, armored)
+	sim.damage(near, freeze)
+	sim.install(Vector2i(2, 4), "tower_20")
+	sim.tick(STEP)
+	check(near.health == 999969 and lead.health == 999978 and far.health == 1_000_000, "gravity cannon hits only the local field for 22")
+	var previous := near.progress
+	sim.tick(STEP)
+	check(is_equal_approx(near.progress - previous, STEP * 0.224) and near.position.is_equal_approx(map.position_at(near.progress)), "gravity cannon and freeze multiply without changing path")
 
 func _projectile_behaviors() -> void:
 	var stationary := rules.drone.duplicate()

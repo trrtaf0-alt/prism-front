@@ -394,7 +394,7 @@ func _update_drones(delta: float) -> void:
 				speed *= 1.0 + drone.boost_bonus
 		var move := speed * delta
 		if drone.status.engaged:
-			move = drone.status.step(drone.progress, speed, delta, data.status_rules)
+			move = drone.status.step(speed, delta, data.status_rules)
 		var previous_progress := drone.progress
 		drone.progress = clampf(previous_progress + move, 0.0, _path_length)
 		if drone.progress >= _path_length:
@@ -605,9 +605,8 @@ func aim_at(origin: Vector2, target: Drone, speed: float = 12.0) -> Vector2:
 	# The bolt is faster than the drone, so the interception equation is monotonic,
 	# even through turns. The path sampler clamps the prediction at the exit.
 	var low := 0.0
-	var max_drift := target.status.pull * target.status.pull_left
 	var enemy_speed := target.speed * (1.0 + target.boost_bonus)
-	var high := (origin.distance_to(target.position) + max_drift) / maxf(0.001, speed - enemy_speed)
+	var high := origin.distance_to(target.position) / maxf(0.001, speed - enemy_speed)
 	for i in 12:
 		var time := (low + high) * 0.5
 		var future := field.position_at(target.status.predict(target.progress, enemy_speed, time))
@@ -677,7 +676,7 @@ func _update_bolts(delta: float) -> void:
 		var spent := hit != null
 		if def.returning:
 			while hit != null:
-				damage(hit, def, bolt.efficiency, -1.0, bolt.owner)
+				damage(hit, def, bolt.efficiency, bolt.owner)
 				bolt.hit[hit.serial] = true
 				hit = _collide(bolt.position, end, step / (bolt.speed * delta), delta, bolt.hit)
 			spent = false
@@ -706,10 +705,10 @@ func _update_bolts(delta: float) -> void:
 func _bolt_impact(bolt: Bolt, target: Drone) -> void:
 	var def := bolt.definition
 	if def.radius > 0 and not bolt.fragment:
-		arsenal.area(self, target.position, float(def.radius), def, bolt.efficiency, -1.0, bolt.owner)
+		arsenal.area(self, target.position, float(def.radius), def, bolt.efficiency, bolt.owner)
 		attack_visual.emit(def.fx, target.position, target.position, def.radius, def.tint, 0.58, int(def.stage))
 		return
-	damage(target, def, bolt.efficiency, -1.0, bolt.owner)
+	damage(target, def, bolt.efficiency, bolt.owner)
 	if def.split > 0 and not bolt.fragment:
 		var fragments := def.duplicate()
 		fragments.damage = def.fragment_damage
@@ -762,12 +761,12 @@ static func sweep(offset: Vector2, motion: Vector2, radius: float) -> float:
 func _damage_drone(drone: Drone, direction: Vector2) -> void:
 	_apply_damage(drone, _damage, direction)
 
-func damage(drone: Drone, def: Dictionary, efficiency: float = 1.0, anchor: float = -1.0, owner: Turret = null) -> void:
+func damage(drone: Drone, def: Dictionary, efficiency: float = 1.0, owner: Turret = null) -> void:
 	if drone.health <= 0:
 		return
 	var amount := _scaled_damage(def, efficiency, owner)
-	var control := def if def.shock or def.slow > 0 or def.pull > 0 else {}
-	_apply_damage(drone, amount, Vector2.ZERO, int(def.stage) >= 2, control, anchor, owner)
+	var control := def if def.shock or def.slow > 0 or def.gravity_slow > 0 else {}
+	_apply_damage(drone, amount, Vector2.ZERO, int(def.stage) >= 2, control, owner)
 
 func _scaled_damage(def: Dictionary, efficiency: float, owner: Turret) -> int:
 	if def.damage <= 0:
@@ -780,13 +779,13 @@ func _scaled_damage(def: Dictionary, efficiency: float, owner: Turret) -> int:
 	owner.damage_remainder = maxf(0.0, raw - whole)
 	return whole
 
-func barrage(targets: Array, def: Dictionary, efficiency: float, anchor: float = -1.0, owner: Turret = null) -> void:
+func barrage(targets: Array, def: Dictionary, efficiency: float, owner: Turret = null) -> void:
 	if owner != null and (owner.damage_multiplier > 1.0 or support.linked.has(owner)):
 		for drone: Drone in targets:
-			damage(drone, def, efficiency, anchor, owner)
+			damage(drone, def, efficiency, owner)
 		return
 	var amount := _scaled_damage(def, efficiency, owner)
-	if not def.shock and def.slow <= 0 and def.pull <= 0:
+	if not def.shock and def.slow <= 0 and def.gravity_slow <= 0:
 		if amount == 0:
 			return
 		for drone: Drone in targets:
@@ -798,9 +797,9 @@ func barrage(targets: Array, def: Dictionary, efficiency: float, anchor: float =
 				_apply_damage(drone, amount, Vector2.ZERO, true)
 		return
 	for drone: Drone in targets:
-		_apply_damage(drone, amount, Vector2.ZERO, true, def, anchor)
+		_apply_damage(drone, amount, Vector2.ZERO, true, def)
 
-func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool = false, control: Dictionary = {}, anchor: float = -1.0, owner: Turret = null, final_damage: bool = false) -> void:
+func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool = false, control: Dictionary = {}, owner: Turret = null, final_damage: bool = false) -> void:
 	if drone.health <= 0 or (amount <= 0 and control.is_empty()):
 		return
 	var before := drone.health + drone.shield_hp
@@ -841,7 +840,7 @@ func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool
 			var multiplier := 1.0
 			if drone.control_resist > 0.0 or drone.shield_hp > 0:
 				multiplier = data.mobs.control_multiplier(drone.control_resist, drone.shield_hp > 0)
-			drone.status.apply(control, data.status_rules, anchor, multiplier)
+			drone.status.apply(control, data.status_rules, multiplier)
 		if drone.phase_pending:
 			MobAbilities.advance_phase(self, drone, elapsed)
 			drone.phase_pending = drone.mob.phase < drone.mob.phases.size()
@@ -984,20 +983,6 @@ func nearest_in_radius(center: Vector2, radius: float, seen: Dictionary, detect_
 			nearest = drone
 			distance = squared
 	return nearest
-
-func projection(point: Vector2) -> float:
-	var closest := INF
-	var progress := 0.0
-	for i in range(field.path.size() - 1):
-		var start := field.path[i]
-		var direction := field.path[i + 1] - start
-		var offset := point - start
-		var part := clampf(offset.dot(direction), 0, 1)
-		var distance := (offset - direction * part).length_squared()
-		if distance < closest:
-			closest = distance
-			progress = i + part
-	return progress
 
 func _award_credits(amount: int) -> void:
 	total_credits += amount

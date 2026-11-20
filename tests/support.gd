@@ -92,7 +92,7 @@ func _range_and_speed() -> void:
 	sim.install(Vector2i(3, 4), "tower_33")
 	target = _heavy(sim)
 	for i in 4:
-		sim.damage(target, tower.definition, 1.0, -1.0, tower)
+		sim.damage(target, tower.definition, 1.0, tower)
 	check(target.health == 9995, "fractional +25% is retained across one-damage hits")
 	sim = _new_battle()
 	sim.install(HOST)
@@ -128,11 +128,11 @@ func _quantum() -> void:
 	var doomed := sim.spawn(3.0)
 	var weapon := owner.definition.duplicate()
 	weapon.damage = 60
-	sim.barrage([target_1, target_2], weapon, 1.0, -1.0, owner)
+	sim.barrage([target_1, target_2], weapon, 1.0, owner)
 	weapon.damage = 40
-	sim.damage(target_1, weapon, 1.0, -1.0, owner)
-	sim.damage(target_2, weapon, 1.0, -1.0, partner)
-	sim.damage(doomed, weapon, 1.0, -1.0, owner)
+	sim.damage(target_1, weapon, 1.0, owner)
+	sim.damage(target_2, weapon, 1.0, partner)
+	sim.damage(doomed, weapon, 1.0, owner)
 	sim.support.tick(sim, 1.99)
 	check(hits.is_empty(), "quantum waits for the two-second window")
 	sim.support.tick(sim, 0.01)

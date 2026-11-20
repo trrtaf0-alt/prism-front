@@ -122,7 +122,7 @@ func tick(sim, delta: float) -> void:
 		var extra := roundi(highest * QUANTUM_SHARE)
 		if best != null and extra > 0:
 			sim.support_visual.emit(&"quantum", Kind.QUANTUM, tower.position, best.position)
-			sim._apply_damage(best, extra, Vector2.ZERO, true, {}, -1.0, null, true)
+			sim._apply_damage(best, extra, Vector2.ZERO, true, {}, null, true)
 
 func note_damage(sim, tower, drone, amount: int) -> void:
 	if amount <= 0 or tower == null:
