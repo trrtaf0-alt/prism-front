@@ -410,8 +410,58 @@ func _interface() -> void:
 		await _visual_preview(ui)
 	await _camera_effects(ui)
 	await _tower_audio(ui)
+	await _research_stage(ui)
 	ui.queue_free()
 	await process_frame
+
+func _research_stage(ui) -> void:
+	ui.start_game()
+	ui.show_research()
+	var sim: Battle = ui.battle
+	var panel: ResearchScreen = ui.research_screen
+	var sound = root.get_node("Sound")
+	var audible := DisplayServer.get_name() != "headless"
+	var chime: AudioStreamWAV = sound._voices[&"research_stage"].stream
+	check(chime.stereo and chime.get_length() > 1.5 and _pcm_peak(chime) > 1000, "research milestone has its own audible stereo chime")
+	var milestones: Array[int] = []
+	var nodes := sim.research.graph.nodes
+	sim.research.purchased.connect(func(id: String, _unlocked: String, advanced: bool) -> void:
+		if advanced:
+			milestones.append(int(nodes[id].stage))
+	)
+	panel.board.jump(5)
+	check(sim.research.highest_stage == 0 and panel._accent_stage == 0, "browsing locked stages leaves the research tint at the hub")
+	sim.research.earn(100)
+	check(not sim.research.purchase("rifling") and milestones.is_empty(), "unmet prerequisites do not activate a stage")
+	check(sim.research.purchase("survey") and milestones.is_empty(), "hub purchases do not trigger a new stage")
+	check(sim.research.purchase("rifling") and milestones == [1], "first successful purchase in a new zone advances the stage")
+	if audible:
+		check(sound._voices[&"research_stage"].playing, "real research purchase plays the new-stage chime")
+	for node in ["needle", "motion", "bus", "heat", "field", "charge"]:
+		check(sim.research.purchase(node), "stage fixture can purchase " + node)
+	check(milestones == [1], "repeated and older stage purchases keep the current stage")
+	check(sim.research.purchase("arc") and milestones == [1, 2], "the next stage activates once")
+	await create_timer(0.65).timeout
+	check(panel._accent_stage == 2 and panel.board._stage_tint.is_equal_approx(ResearchScreen.STAGE_TINTS[2]), "the visible tint reaches the highest activated stage")
+	panel.board.select_node("arc")
+	panel.board.overview()
+	if audible and "--visual" in OS.get_cmdline_user_args():
+		check(chime.save_to_wav("res://reports/research-stage-chime.wav") == OK, "save a preview of the stage chime")
+	await _capture("research-stage-mid")
+	ui.close_modal()
+	ui.show_research()
+	panel = ui.research_screen
+	check(panel.board._stage_tint == ResearchScreen.STAGE_TINTS[2], "reopening preserves the current stage tint")
+	_unlock(sim)
+	await create_timer(0.65).timeout
+	check(panel.board._stage_tint.is_equal_approx(ResearchScreen.STAGE_TINTS[5]), "latest reached stage wins a series of quick purchases")
+	panel.board.select_node("cataclysm")
+	panel.board.overview()
+	await _capture("research-stage-terminal")
+	ui.start_game()
+	ui.show_research()
+	check(ui.battle.research.highest_stage == 0 and ui.research_screen.board._stage_tint == ResearchScreen.STAGE_TINTS[0], "a fresh run restores the hub tint")
+	ui.close_modal()
 
 func _tower_audio(ui) -> void:
 	var sound = root.get_node("Sound")

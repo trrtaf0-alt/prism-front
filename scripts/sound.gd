@@ -38,6 +38,7 @@ func _ready() -> void:
 	var limiter := AudioEffectHardLimiter.new()
 	limiter.ceiling_db = -1.0
 	AudioServer.add_bus_effect(0, limiter)
+	_register(&"research_stage", _research_chime(), 1)
 	for kind: StringName in CUES:
 		_register(kind, _synthesize(CUES[kind]), 2)
 	for kind: StringName in TOWER_AUDIO.VOICES:
@@ -86,6 +87,7 @@ func stop_battle_cues() -> void:
 		return
 	for kind: StringName in TOWER_AUDIO.VOICES:
 		_voices[kind].stop()
+	_voices[&"research_stage"].stop()
 	_last_time.clear()
 
 func attack_cue(style: String, _start: Vector2, _end: Vector2, _radius: float, _tint: Color, _life: float, stage: int) -> void:
@@ -142,6 +144,37 @@ func cue(kind: StringName) -> void:
 		return
 	_last_time[kind] = now
 	_voices[kind].play()
+
+func _research_chime() -> AudioStreamWAV:
+	var stream := AudioStreamWAV.new()
+	stream.format = AudioStreamWAV.FORMAT_16_BITS
+	stream.mix_rate = RATE
+	stream.stereo = true
+	var duration := 1.65
+	var samples := roundi(duration * RATE)
+	var bytes := PackedByteArray()
+	bytes.resize(samples * 4)
+	# D minor add-nine voiced as an ascending, overlapping glass arpeggio.
+	var notes := [293.665, 440.000, 698.456, 1318.510]
+	var pans := [-0.35, 0.31, -0.20, 0.28]
+	for i in samples:
+		var t := i / float(RATE)
+		var voice := Vector2.ZERO
+		for n in notes.size():
+			var age := t - n * 0.088
+			if age <= 0.0:
+				continue
+			var phase := TAU * float(notes[n]) * age
+			var bell := 0.74 * sin(phase) + 0.19 * sin(phase * 2.004) * exp(-4.0 * age)
+			bell += 0.07 * sin(phase * 3.011) * exp(-6.5 * age)
+			var gain := 0.14 * smoothstep(0.0, 0.027, age) * exp(-age * (2.8 + n * 0.20))
+			var pan: float = pans[n]
+			voice += Vector2(0.75 - pan * 0.5, 0.75 + pan * 0.5) * bell * gain
+		voice *= 1.0 - smoothstep(1.28, duration - 0.005, t)
+		bytes.encode_s16(i * 4, roundi(voice.x * 32767.0))
+		bytes.encode_s16(i * 4 + 2, roundi(voice.y * 32767.0))
+	stream.data = bytes
+	return stream
 
 func _synthesize(cue_data: Array) -> AudioStreamWAV:
 	var duration: float = cue_data[0]

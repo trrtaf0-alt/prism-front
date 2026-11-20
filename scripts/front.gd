@@ -710,11 +710,14 @@ func show_research(tower_id: String = "") -> void:
 	research_screen.setup(self, battle.research, data.towers, research_view, tower_id)
 	field.frozen = bool(data.balance.research_pauses_battle)
 
-func _research_purchased(_id: String, tower_id: String) -> void:
+func _research_purchased(_id: String, tower_id: String, advanced_stage: bool) -> void:
+	if advanced_stage:
+		Sound.cue(&"research_stage")
 	if not tower_id.is_empty():
 		wave_callout = data.towers.lookup(tower_id).name + " 해금"
 		callout_time = 2.0
-		Sound.cue(&"clear")
+		if not advanced_stage:
+			Sound.cue(&"clear")
 	_update_hud()
 
 func show_catalog() -> void:

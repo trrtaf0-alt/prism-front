@@ -2,11 +2,12 @@ class_name ResearchRun
 extends RefCounted
 
 signal changed
-signal purchased(id: String, unlocked: String)
+signal purchased(id: String, unlocked: String, advanced_stage: bool)
 
 var graph: ResearchGraph
 var points := 0
 var total_earned := 0
+var highest_stage := 0
 var completed: Dictionary = {}
 var unlocked: Dictionary = {TowerRegistry.BASE: true}
 
@@ -39,6 +40,9 @@ func purchase(id: String) -> bool:
 	var tower := str(node.get("unlock", {}).get("id", ""))
 	if not tower.is_empty():
 		unlocked[tower] = true
-	purchased.emit(id, tower)
+	var stage := int(node.stage)
+	var advanced := stage > highest_stage
+	highest_stage = maxi(highest_stage, stage)
+	purchased.emit(id, tower, advanced)
 	changed.emit()
 	return true

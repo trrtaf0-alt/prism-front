@@ -14,6 +14,7 @@ var focus_id := ""
 var highlighted: Dictionary = {}
 var bounds := Rect2()
 var _states: Dictionary = {}
+var _stage_tint := Color("#a9c6bd")
 var _pressed := false
 var _moved := false
 var _press_point := Vector2.ZERO
@@ -121,14 +122,23 @@ func _pick(at: Vector2) -> void:
 			select_node(id)
 			return
 
+func set_stage_tint(color: Color) -> void:
+	_stage_tint = color
+	queue_redraw()
+
 func _draw() -> void:
 	var viewport := Rect2(Vector2.ZERO, size)
-	draw_rect(viewport, Color("#111519"))
+	var base := Color("#111519")
+	draw_polygon(
+		PackedVector2Array([Vector2.ZERO, Vector2(size.x, 0), size, Vector2(0, size.y)]),
+		PackedColorArray([base.lerp(_stage_tint, 0.096), base.lerp(_stage_tint, 0.054), base, base.lerp(_stage_tint, 0.025)])
+	)
+	var grid := Color("#1c2227").lerp(_stage_tint, 0.05)
 	var cadence := clampf(80.0 * zoom, 24, 100)
 	for x in range(int(fposmod(offset.x, cadence)), int(size.x), roundi(cadence)):
-		draw_line(Vector2(x, 0), Vector2(x, size.y), Color("#1c2227"))
+		draw_line(Vector2(x, 0), Vector2(x, size.y), grid)
 	for y in range(int(fposmod(offset.y, cadence)), int(size.y), roundi(cadence)):
-		draw_line(Vector2(0, y), Vector2(size.x, y), Color("#1c2227"))
+		draw_line(Vector2(0, y), Vector2(size.x, y), grid)
 	var graph := run.graph
 	var view_scale := _view_scale()
 	var world := Rect2(-offset / view_scale, size / view_scale).grow(12.0)
@@ -183,4 +193,4 @@ func _draw() -> void:
 			prior_stage = stage
 			var x := maxf(10.0, graph.point(id).x * zoom + offset.x - 18.0)
 			draw_string(font, Vector2(x, 29), graph.ZONES[stage], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#a5a8a5"))
-	draw_rect(viewport, EDGE, false)
+	draw_rect(viewport, EDGE.lerp(_stage_tint, 0.30), false)

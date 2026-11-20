@@ -5,6 +5,7 @@ const INK := Color("#eee9dc")
 const MUTED := Color("#a5a8a5")
 const MINT := Color("#a9c6bd")
 const GOLD := Color("#dcc197")
+const STAGE_TINTS := [MINT, Color("#80d8c4"), Color("#80baff"), Color("#b69bf2"), Color("#ed9cbd"), Color("#f0ca88")]
 
 var front
 var run: ResearchRun
@@ -18,6 +19,12 @@ var outcome: Label
 var cost: Label
 var link_summary: Label
 var buy: Button
+var _title: Label
+var _detail_frame: StyleBoxFlat
+var _zone_buttons: Array[Button] = []
+var _accent := MINT
+var _accent_stage := 0
+var _accent_tween: Tween
 var _minimum := -1
 var _completed_count := -1
 var _last_focus := ""
@@ -28,7 +35,7 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	run = session
 	registry = tower_registry
 	mouse_filter = MOUSE_FILTER_IGNORE
-	front.text_at(self, "연구 그물망", 36, 23, 43)
+	_title = front.text_at(self, "연구 그물망", 36, 23, 43)
 	front.text_at(self, "드래그로 이동  ·  휠로 확대/축소  ·  R / Esc 닫기", 39, 82, 18, MUTED)
 	balance_label = front.text_at(self, "", 875, 40, 25, GOLD, 540)
 	balance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -38,7 +45,7 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	front.place(board, self, Rect2(36, 183, 1328, 746))
 	board.selected.connect(_select)
 	for i in ResearchGraph.ZONES.size():
-		front.button_at(self, ResearchGraph.ZONES[i], Rect2(36 + i * 151, 121, 139, 44), board.jump.bind(i))
+		_zone_buttons.append(front.button_at(self, ResearchGraph.ZONES[i], Rect2(36 + i * 151, 121, 139, 44), board.jump.bind(i)))
 	front.button_at(self, "전체 보기", Rect2(1216, 121, 148, 44), board.overview)
 	var search := OptionButton.new()
 	search.add_item("타워 연구 찾기")
@@ -50,6 +57,7 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	search.item_selected.connect(_jump_to_tower.bind(search))
 	front.place(search, self, Rect2(1392, 121, 420, 44))
 	var panel: Panel = front.panel_at(self, Rect2(1392, 183, 420, 746), "#191e23", "#414649")
+	_detail_frame = panel.get_theme_stylebox("panel") as StyleBoxFlat
 	heading = front.text_at(panel, "", 23, 19, 28, INK, 374)
 	cost = front.text_at(panel, "", 23, 63, 23, GOLD, 374)
 	description = _wrap(panel, 107, 19, MUTED)
@@ -62,6 +70,8 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	for i in ResearchGraph.LANES.size():
 		front.text_at(self, ResearchGraph.LANES[i], 40 + i * 186, 947, 16, Color(ResearchGraph.COLORS[i]))
 	front.text_at(self, "녹색 완료  ·  금색 RP 부족  ·  회색 선행 조건 미충족", 985, 947, 16, MUTED)
+	_accent_stage = run.highest_stage
+	_apply_accent(STAGE_TINTS[_accent_stage])
 	run.changed.connect(_schedule_refresh)
 	if not view.is_empty():
 		board.zoom = view.zoom
@@ -98,6 +108,13 @@ func _schedule_refresh() -> void:
 
 func _refresh() -> void:
 	_pending_refresh = false
+	if _accent_stage != run.highest_stage:
+		_zone_buttons[_accent_stage].remove_theme_color_override("font_color")
+		_accent_stage = run.highest_stage
+		if _accent_tween != null and _accent_tween.is_running():
+			_accent_tween.kill()
+		_accent_tween = create_tween().set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_accent_tween.tween_method(_apply_accent, _accent, STAGE_TINTS[_accent_stage], 0.58)
 	var id := board.focus_id
 	var node: Dictionary = run.graph.nodes[id]
 	var state := run.state(id)
@@ -123,6 +140,14 @@ func _refresh() -> void:
 	var states := {&"done": "완료됨", &"ready": "연구 완료", &"locked": "선행 조건 미충족", &"insufficient": "연구 포인트 부족"}
 	buy.text = states[state]
 	buy.disabled = state != &"ready"
+
+func _apply_accent(color: Color) -> void:
+	_accent = color
+	_title.add_theme_color_override("font_color", INK.lerp(color, 0.28))
+	_zone_buttons[_accent_stage].add_theme_color_override("font_color", INK.lerp(color, 0.58))
+	_detail_frame.border_color = Color("#414649").lerp(color, 0.31)
+	_detail_frame.bg_color = Color("#191e23").lerp(color, 0.043)
+	board.set_stage_tint(color)
 
 func _purchase() -> void:
 	if run.purchase(board.focus_id):
