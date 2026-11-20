@@ -27,9 +27,12 @@ var _used := PackedInt32Array()
 var _last_time := -1.0
 var _last_count := -1
 
-func setup(material_mask: ShaderMaterial) -> void:
+var _cell: float
+
+func setup(material_mask: ShaderMaterial, cell: float) -> void:
+	_cell = cell
 	for texture in TEXTURES:
-		var body := SpriteBatch.new(texture, 48.0, material_mask)
+		var body := SpriteBatch.new(texture, _cell, material_mask)
 		bodies.append(body)
 		add_child(body)
 	var white := Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
@@ -79,7 +82,7 @@ func submit(battle: Battle, origin: Vector2, dim: bool) -> void:
 			color = color.lerp(Color.WHITE, 0.25 if dim else 0.53)
 		if drone.status.stun_left > 0.0:
 			color = color.lerp(SHOCK_TINT, 0.58)
-		var at := origin + drone.position * 48.0
+		var at := origin + drone.position * _cell
 		var segment := mini(floori(drone.progress), last)
 		var heading := path[segment + 1] - path[segment]
 		if drone.shape == 5:

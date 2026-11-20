@@ -1,7 +1,6 @@
 class_name AttackEffects
 extends Node2D
 
-const FIELD := Rect2(48, 147, 1440, 864)
 const BUDGET := 400
 const LIMITS := [30, 55, 88]
 const HUGE_LIMIT := 18
@@ -34,8 +33,12 @@ var _time := 0.0
 var _style_counts: Dictionary = {}
 var _preferences
 var _sound
+var _field: Rect2
+var _cell: float
 
-func setup(glow: Texture2D, preferences: Node, sound: Node) -> void:
+func setup(glow: Texture2D, preferences: Node, sound: Node, bounds: Rect2, cell: float) -> void:
+	_field = bounds
+	_cell = cell
 	_preferences = preferences
 	_sound = sound
 	var white := Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
@@ -85,10 +88,10 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	var large := style.begins_with("charge_") or style in ["cataclysm", "nova", "singularity", "collapse_gravity", "doom", "orbit", "mob_boss_spawn", "mob_boss_down", "mob_phase"]
 	var layer := _huge if large else _ordinary
 	var limit: int = HUGE_LIMIT if large else LIMITS[_preferences.fx_quality]
-	var from := FIELD.position + start * 48.0
-	var to := FIELD.position + finish * 48.0
-	var extent := Rect2(from.min(to), (to - from).abs()).grow(maxf(48.0, radius * 48.0))
-	if not FIELD.grow(95).intersects(extent):
+	var from := _field.position + start * _cell
+	var to := _field.position + finish * _cell
+	var extent := Rect2(from.min(to), (to - from).abs()).grow(maxf(_cell, radius * _cell))
+	if not _field.grow(95).intersects(extent):
 		return
 	if not large and style in REFRESHABLE:
 		for prior in _ordinary:
@@ -173,14 +176,14 @@ func _recycle(fx: Effect) -> void:
 func _draw() -> void:
 	if _flash > 0.0 and _preferences.fx_flash > 0.0:
 		var intensity := 0.07 if _preferences.fx_dim else 0.22
-		draw_rect(FIELD, Color(_flash_tint, _flash * intensity * _preferences.fx_flash))
+		draw_rect(_field, Color(_flash_tint, _flash * intensity * _preferences.fx_flash))
 
 func _render(fx: Effect) -> void:
 	var t := fx.elapsed / fx.life
 	var fade := (1.0 - t) * (0.56 if _preferences.fx_dim else 1.0)
 	var tint := Color(fx.tint, fade)
 	var at := fx.origin
-	var reach := maxf(12, fx.radius * 48.0)
+	var reach := maxf(12, fx.radius * _cell)
 	match fx.style:
 		"mob_grant", "mob_boost":
 			_beam(at, fx.end, 3.0, Color(tint, fade * 0.78))
@@ -281,7 +284,7 @@ func _charge(fx: Effect, t: float, terminal: bool) -> void:
 func _terminal(fx: Effect, t: float, fade: float, great: bool) -> void:
 	var tint := Color(fx.tint, fade)
 	var at := fx.origin
-	var field_size := fx.radius * 48.0
+	var field_size := fx.radius * _cell
 	_glow(at, field_size * (0.6 + t), Color(tint, fade * 0.57))
 	for i in (5 if great else 3):
 		var wave := maxf(0.0, t * 1.28 - i * 0.12)
@@ -290,7 +293,7 @@ func _terminal(fx: Effect, t: float, fade: float, great: bool) -> void:
 	if great:
 		var above := Vector2(clampf(at.x, 270, 1270), 169)
 		_beam(above, at + Vector2(0, 120), 112.0 * fade + 12.0, tint)
-		_beam(Vector2(FIELD.position.x, at.y), Vector2(FIELD.end.x, at.y), fade * 43.0 + 3.0, Color("#ff8da8", fade * 0.75))
+		_beam(Vector2(_field.position.x, at.y), Vector2(_field.end.x, at.y), fade * 43.0 + 3.0, Color("#ff8da8", fade * 0.75))
 		_hoop(above + Vector2(0, 100), 100 + t * 75, 6, _time * 1.5, tint)
 	_spray(at, minf(field_size, 250.0), tint, t, 55 if great else 32)
 
@@ -378,7 +381,7 @@ func _spray(at: Vector2, reach: float, tint: Color, t: float, requested: int) ->
 	for i in count:
 		var heading := Vector2.from_angle(i * 2.39996 + at.x * 0.18)
 		var point := at + heading * reach * (0.23 + (i % 5) * 0.16) * t
-		if not FIELD.grow(35).has_point(point):
+		if not _field.grow(35).has_point(point):
 			continue
 		var length := 4.0 + 11.0 * (1.0 - t)
 		_particles.item(_particle_count, point, heading * length, tint, 2.2 / length)
@@ -388,7 +391,7 @@ func _clip_end(start: Vector2, end: Vector2) -> Vector2:
 	var d := end - start
 	var factor := 1.0
 	if d.x != 0.0:
-		factor = minf(factor, ((FIELD.end.x if d.x > 0 else FIELD.position.x) - start.x) / d.x)
+		factor = minf(factor, ((_field.end.x if d.x > 0 else _field.position.x) - start.x) / d.x)
 	if d.y != 0.0:
-		factor = minf(factor, ((FIELD.end.y if d.y > 0 else FIELD.position.y) - start.y) / d.y)
+		factor = minf(factor, ((_field.end.y if d.y > 0 else _field.position.y) - start.y) / d.y)
 	return start + d * maxf(0, factor)

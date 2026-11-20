@@ -1,8 +1,8 @@
 class_name FieldView
 extends Node2D
 
-const CELL := 48.0
-const ORIGIN := Vector2(48, 147)
+const CELL := 52.0
+const ORIGIN := Vector2(34, 68)
 const MINT := Color("#50f6ed")
 const PINK := Color("#ff467d")
 const GOLD := Color("#ffc879")
@@ -59,12 +59,12 @@ func _ready() -> void:
 	_drone_color = Color(battle.data.drone.color)
 	var material_mask := ShaderMaterial.new()
 	material_mask.shader = NEON_SHADER
-	_bases = SpriteBatch.new(TURRET_BASE, 48.0, material_mask)
-	_heads = SpriteBatch.new(TURRET_HEAD, 48.0, material_mask)
+	_bases = SpriteBatch.new(TURRET_BASE, CELL, material_mask)
+	_heads = SpriteBatch.new(TURRET_HEAD, CELL, material_mask)
 	_bolts = SpriteBatch.new(BOLT_TEXTURE, 55.0, material_mask)
 	add_child(_bases)
 	add_child(_heads)
-	_mobs.setup(material_mask)
+	_mobs.setup(material_mask, CELL)
 	add_child(_mobs)
 	add_child(_bolts)
 	_overlay = Node2D.new()
@@ -78,7 +78,8 @@ func _ready() -> void:
 	_sparks = SpriteBatch.new(dot, 1.0, null)
 	for batch: SpriteBatch in [_effect_glows, _rings, _sparks]:
 		add_child(batch)
-	advanced_fx.setup(_glow, _preferences, get_tree().root.get_node("Sound"))
+	var bounds := Rect2(ORIGIN, Vector2(battle.field.size) * CELL)
+	advanced_fx.setup(_glow, _preferences, get_tree().root.get_node("Sound"), bounds, CELL)
 	add_child(advanced_fx)
 	battle.attack_visual.connect(advanced_fx.capture)
 	battle.mob_visual.connect(advanced_fx.capture_mob)
@@ -104,13 +105,17 @@ func _draw_floor(canvas: Node2D) -> void:
 	var bounds := Rect2(ORIGIN, extent)
 	canvas.draw_rect(bounds.grow(12), Color("#090c10"))
 	canvas.draw_rect(bounds, Color("#151a1f"))
-	canvas.draw_texture_rect(_glow, Rect2(ORIGIN, extent), false, Color("#39434a"))
+	for y in map.size.y:
+		for x in range(y % 2, map.size.x, 2):
+			var tile_origin := ORIGIN + Vector2(x, y) * CELL
+			canvas.draw_rect(Rect2(tile_origin, Vector2.ONE * CELL), Color("#191e23"))
+	canvas.draw_texture_rect(_glow, bounds, false, Color("#39434a"))
 	for y in map.size.y:
 		for x in map.size.x:
 			if map.tile_at(Vector2i(x, y)) != "#":
 				continue
 			var at := ORIGIN + Vector2(x, y) * CELL
-			var plate := Rect2(at + Vector2(4, 4), Vector2(40, 40))
+			var plate := Rect2(at + Vector2(4, 4), Vector2.ONE * (CELL - 8.0))
 			canvas.draw_rect(plate, Color("#101419"))
 			canvas.draw_rect(plate, Color("#2e3438"), false, 1.0)
 			canvas.draw_line(plate.position + Vector2(1, 1), plate.position + Vector2(16, 1), Color("#4a4843"), 1.5)
@@ -259,7 +264,7 @@ func _draw() -> void:
 	if map.contains(hovered) and not battle.lost:
 		var at := pixel(Vector2(hovered))
 		var color := MINT if not building or battle.can_install(hovered, build_id) else PINK
-		var tile := Rect2(at + Vector2(2, 2), Vector2(44, 44))
+		var tile := Rect2(at + Vector2(2, 2), Vector2.ONE * (CELL - 4.0))
 		draw_rect(tile, Color(color, 0.12))
 		draw_rect(tile, Color(color, 0.76), false, 1.5)
 		if building and focus == hovered and not battle.occupied.has(hovered):

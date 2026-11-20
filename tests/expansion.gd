@@ -341,7 +341,7 @@ func _interface() -> void:
 	ui.close_modal()
 	ui._physics_process(STEP)
 	check(first.progress > progress, "closing research resumes same combat")
-	_click(ui, Vector2(1798, 434))
+	_click(ui, ui.catalog_button.get_rect().get_center())
 	check(ui.modal_kind == "catalog", "catalog opens from HUD")
 	await _capture("tower-catalog")
 	sim.credits = 200

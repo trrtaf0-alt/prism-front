@@ -228,50 +228,46 @@ func start_game() -> void:
 	_update_hud()
 
 func _make_hud() -> void:
-	text_at(screen, "프리즘 방어선", 48, 35, 32)
-	text_at(screen, map.title + ("  /  샘플 맵" if map.sample else ""), 50, 81, 18, MUTED)
-	text_at(screen, "웨이브", 579, 31, 18, MUTED)
-	wave_label = text_at(screen, "", 579, 56, 32, LIGHT, 270)
-	text_at(screen, "기지 체력", 886, 31, 18, MUTED)
-	health_label = text_at(screen, "", 886, 56, 32, MINT)
-	panel_at(screen, Rect2(1030, 77, 140, 8), "#303437", "#303437")
+	text_at(screen, "웨이브", 34, 15, 18, MUTED)
+	wave_label = text_at(screen, "", 106, 8, 26, LIGHT, 138)
+	text_at(screen, "기지", 278, 15, 18, MUTED)
+	health_label = text_at(screen, "", 328, 8, 26, MINT)
+	panel_at(screen, Rect2(492, 24, 140, 6), "#303437", "#303437")
 	health_bar = ColorRect.new()
 	health_bar.color = MINT
 	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(health_bar, screen, Rect2(1030, 77, 140, 8))
-	text_at(screen, "재화", 1230, 31, 18, MUTED)
-	credits_label = text_at(screen, "", 1230, 56, 29, GOLD, 246)
-	text_at(screen, "연구 포인트", 1495, 31, 18, MUTED)
-	rp_label = text_at(screen, "0", 1495, 56, 29, Color("#c3b5d0"), 151)
-	button_at(screen, "일시정지  ·  Esc", Rect2(1660, 45, 212, 57), show_pause)
+	place(health_bar, screen, Rect2(492, 24, 140, 6))
+	text_at(screen, "재화", 672, 15, 18, MUTED)
+	credits_label = text_at(screen, "", 727, 8, 26, GOLD, 190)
+	text_at(screen, "RP", 944, 15, 18, MUTED)
+	rp_label = text_at(screen, "0", 987, 8, 26, Color("#c3b5d0"), 162)
+	button_at(screen, "일시정지  ·  Esc", Rect2(1726, 8, 160, 39), show_pause)
 
-	panel_at(screen, Rect2(1527, 147, 345, 808))
-	panel_at(screen, Rect2(1550, 390, 299, 1), "#3b3e3f", "#3b3e3f")
-	text_at(screen, "웨이브 제어", 1550, 166, 21, MUTED)
-	status = text_at(screen, "", 1550, 202, 24, LIGHT, 299)
-	wave_button = button_at(screen, "웨이브 시작", Rect2(1550, 251, 299, 59), start_wave, true)
-	forecast = text_at(screen, "", 1550, 313, 16, MINT, 299)
-	result = text_at(screen, "", 1550, 357, 16, GOLD, 299)
+	panel_at(screen, Rect2(1614, 68, 272, 934))
+	panel_at(screen, Rect2(1630, 316, 240, 1), "#3b3e3f", "#3b3e3f")
+	status = text_at(screen, "", 1630, 100, 22, LIGHT, 240)
+	wave_button = button_at(screen, "웨이브 시작", Rect2(1630, 144, 240, 54), start_wave, true)
+	forecast = text_at(screen, "", 1630, 213, 15, MINT, 240)
+	result = text_at(screen, "", 1630, 267, 16, GOLD, 240)
 	_forecast_wave = -1
 
+	text_at(screen, "타워 설치", 1630, 359, 20, MUTED)
+	catalog_button = button_at(screen, "목록", Rect2(1782, 352, 88, 40), show_catalog)
+	build_button = button_at(screen, "", Rect2(1630, 411, 240, 54), toggle_build, true)
+	build_hint = text_at(screen, "", 1630, 478, 16, MUTED, 240)
+	research_button = button_at(screen, "연구 그물망  ·  R", Rect2(1630, 895, 240, 52), show_research, true)
 
-	text_at(screen, "타워 설치", 1550, 420, 21, MUTED)
-	catalog_button = button_at(screen, "목록", Rect2(1750, 412, 99, 40), show_catalog)
-	build_button = button_at(screen, "", Rect2(1550, 467, 299, 61), toggle_build, true)
-	build_hint = text_at(screen, "", 1550, 540, 17, MUTED, 299)
-	research_button = button_at(screen, "연구 그물망  ·  R", Rect2(1550, 879, 299, 52), show_research, true)
-
-	panel_at(screen, Rect2(1550, 595, 299, 1), "#3b3e3f", "#3b3e3f")
-	tower_heading = text_at(screen, "", 1550, 624, 23, LIGHT, 299)
-	tower_stats = text_at(screen, "", 1550, 674, 19, MUTED, 299)
-	sell_button = button_at(screen, "포탑 판매  +%d" % int(data.turret.refund), Rect2(1550, 791, 299, 53), sell_selected)
+	panel_at(screen, Rect2(1630, 542, 240, 1), "#3b3e3f", "#3b3e3f")
+	tower_heading = text_at(screen, "", 1630, 580, 21, LIGHT, 240)
+	tower_stats = text_at(screen, "", 1630, 627, 17, MUTED, 240)
+	sell_button = button_at(screen, "포탑 판매  +%d" % int(data.turret.refund), Rect2(1630, 755, 240, 49), sell_selected)
 	text_at(screen, "경로", 70, 1028, 17, MUTED)
 	text_at(screen, "장애물", 170, 1028, 17, MUTED)
 	text_at(screen, "생성 지점", 286, 1028, 17, MUTED)
 	text_at(screen, "기지 코어", 431, 1028, 17, MUTED)
-	warning_edge = panel_at(screen, Rect2(39, 138, 1458, 882), "#00000000", "#ff467d")
+	warning_edge = panel_at(screen, Rect2(FieldView.ORIGIN, Vector2(map.size) * FieldView.CELL).grow(6), "#00000000", "#ff467d")
 	warning_edge.hide()
-	toast = panel_at(screen, Rect2(521, 164, 494, 63), "#1a2025", "#66615a")
+	toast = panel_at(screen, Rect2(567, 87, 494, 63), "#1a2025", "#66615a")
 	toast_text = text_at(toast, "", 13, 8, 27, MINT, 468)
 	toast_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.hide()
@@ -372,7 +368,7 @@ func _update_hud() -> void:
 		sell_button.text = "타워 판매  +%d" % int(definition.refund)
 	else:
 		tower_heading.text = "선택한 타워"
-		tower_stats.text = "전장 위에 배치된 타워를\n클릭하면 능력치를 볼 수 있습니다."
+		tower_stats.text = "배치한 타워를 클릭하면\n능력치를 볼 수 있습니다."
 		tower_stats.tooltip_text = ""
 		sell_button.text = "타워 판매"
 	sell_button.disabled = not has_tower or battle.lost
@@ -388,7 +384,7 @@ func _update_forecast() -> void:
 	_forecast_seed = battle.roster_seed
 	var forecast_text := ""
 	if upcoming == BattleData.FINAL_WAVE:
-		forecast_text = "종결 보스 1 · 지원군 %d\n보스의 보호막은 체력 단계마다 바뀝니다" % (data.wave_count(upcoming) - 1)
+		forecast_text = "종결 보스 1 · 지원군 %d\n체력 단계마다 보호막 갱신" % (data.wave_count(upcoming) - 1)
 	else:
 		var counts := battle.preview_wave()
 		var threats: Array = counts.keys()
@@ -400,13 +396,13 @@ func _update_forecast() -> void:
 			var id: String = threats[i]
 			summary.append("%s %d" % [data.mobs.lookup(id).name, counts[id]])
 		if summary.is_empty():
-			forecast_text = "일반형만 등장\n진입로와 굽은 길을 함께 노려보세요"
+			forecast_text = "일반형만 등장\n진입로와 굽은 길을 노려보세요"
 		else:
 			forecast_text = "주요 적  " + " · ".join(summary)
 			if counts.has("swift") and upcoming <= 9:
-				forecast_text += "\n빠른 적은 속사포나 냉각포로 대응"
+				forecast_text += "\n신속형 대응 · 속사포 / 냉각포"
 			elif counts.has("armored") and upcoming <= 9:
-				forecast_text += "\n장갑 적은 관통포로 한 줄을 노리세요"
+				forecast_text += "\n중장갑 대응 · 관통포"
 	forecast.text = forecast_text
 
 func toggle_build() -> void:
@@ -821,9 +817,9 @@ func _leave_settings() -> void:
 func _draw() -> void:
 	draw_rect(Rect2(0, 0, 1920, 1080), Color("#101316"))
 	if game:
-		draw_rect(Rect2(0, 0, 1920, 122), Color("#0a0d10"))
+		draw_rect(Rect2(0, 0, 1920, 53), Color("#0a0d10"))
 		draw_rect(Rect2(0, 1021, 1920, 59), Color("#0a0d10"))
-		draw_line(Vector2(48, 116), Vector2(1872, 116), LINE, 1.0)
+		draw_line(Vector2(34, 52), Vector2(1886, 52), LINE, 1.0)
 		for entry: Array in [[52, "#667069"], [152, "#62605a"], [268, "#b77a7d"], [413, "#a9c6bd"]]:
 			draw_rect(Rect2(entry[0], 1040, 9, 9), Color(entry[1]))
 		return
