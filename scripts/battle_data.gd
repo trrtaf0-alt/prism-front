@@ -10,6 +10,9 @@ static func read_json(path: String) -> Dictionary:
 var turret: Dictionary = read_json("res://data/turret.json")
 var drone: Dictionary = read_json("res://data/drone.json")
 var balance: Dictionary = read_json("res://data/balance.json")
+var status_rules: Dictionary = read_json("res://data/status.json")
+var towers := TowerRegistry.new(turret, read_json("res://data/towers.json").get("towers", []))
+var research := ResearchGraph.new(read_json("res://data/research.json").get("nodes", []), towers)
 
 func wave_count(wave: int) -> int:
 	return wave_value(int(balance.first_wave_count), wave)

@@ -27,6 +27,9 @@ var battle: Battle
 var hovered := Vector2i(-1, -1)
 var selected := Vector2i(-1, -1)
 var building := false
+var build_id := TowerRegistry.BASE
+var advanced_fx := AttackEffects.new()
+var _preferences
 var frozen := false
 var elapsed := 0.0
 var _flares: Array[Flare] = []
@@ -44,6 +47,7 @@ var _rings: SpriteBatch
 var _effect_glows: SpriteBatch
 
 func _ready() -> void:
+	_preferences = get_tree().root.get_node("Profile")
 	var floor_canvas := Node2D.new()
 	floor_canvas.show_behind_parent = true
 	add_child(floor_canvas)
@@ -69,6 +73,9 @@ func _ready() -> void:
 	_sparks = SpriteBatch.new(ImageTexture.create_from_image(white), 1.0, null)
 	for batch: SpriteBatch in [_effect_glows, _rings, _sparks]:
 		add_child(batch)
+	advanced_fx.setup(_glow, _preferences, get_tree().root.get_node("Sound"))
+	add_child(advanced_fx)
+	battle.attack_visual.connect(advanced_fx.capture)
 	battle.effect.connect(impact)
 
 static func make_glow() -> ImageTexture:
@@ -83,7 +90,7 @@ static func pixel(point: Vector2) -> Vector2:
 	return ORIGIN + point * CELL
 
 func cell_under(point: Vector2) -> Vector2i:
-	return Vector2i(((point - ORIGIN) / CELL).floor())
+	return Vector2i(((point - position - ORIGIN) / CELL).floor())
 
 func _draw_floor(canvas: Node2D) -> void:
 	var map := battle.field
@@ -121,7 +128,8 @@ func _draw_floor(canvas: Node2D) -> void:
 
 func impact(kind: StringName, point: Vector2, direction: Vector2) -> void:
 	var critical := kind in [&"base", &"collapse", &"install", &"sell"]
-	if _flares.size() >= MAX_EFFECTS:
+	var limit := mini(MAX_EFFECTS, 70 + 45 * _preferences.fx_quality)
+	if _flares.size() >= limit:
 		if not critical:
 			return
 		_available.append(_flares.pop_front())
@@ -160,6 +168,7 @@ func _process(delta: float) -> void:
 		i -= 1
 	_update_batches()
 	_update_flares()
+	position = advanced_fx.update(delta)
 	queue_redraw()
 	_overlay.queue_redraw()
 
@@ -171,48 +180,63 @@ func _update_batches() -> void:
 		var at := pixel(tower.position)
 		var aim := Vector2.from_angle(tower.angle)
 		var pulse := 0.9 + sin(elapsed * 3.0) * 0.1
-		_bases.item(i, at, Vector2.RIGHT, Color(_turret_color, pulse))
-		_heads.item(i, at - aim * (tower.recoil * 34.0), aim, _turret_color)
+		var tint: Color = tower.definition.tint
+		var scale := 1.0 + float(tower.definition.stage) * 0.085
+		_bases.item(i, at, Vector2.RIGHT * scale, Color(tint, pulse))
+		_heads.item(i, at - aim * (tower.recoil * 34.0), aim * scale, tint)
 	_bases.finish()
 	_heads.finish()
 	_drones.begin(battle.enemies.size())
 	for i in battle.enemies.size():
 		var drone := battle.enemies[i]
-		var color := Color.WHITE if drone.flash > 0.0 else _drone_color
+		var color := drone.tint.lerp(Color.WHITE, 0.64 if not _preferences.fx_dim else 0.27) if drone.flash > 0.0 else drone.tint
+		if drone.status.stun_left > 0.0:
+			color = color.lerp(Color("#8fc9ff"), 0.65)
 		_drones.item(i, pixel(drone.position), battle.field.heading_at(drone.progress), color)
 	_drones.finish()
 	_bolts.begin(battle.bolts.size())
 	for i in battle.bolts.size():
 		var bolt := battle.bolts[i]
-		_bolts.item(i, pixel(bolt.position), bolt.direction, _turret_color)
+		_bolts.item(i, pixel(bolt.position), bolt.direction * (0.68 if bolt.fragment else 1.0), bolt.definition.tint)
 	_bolts.finish()
 
 func _draw() -> void:
 	var map := battle.field
 	_draw_portals()
-	var focus := selected if map.contains(selected) else (hovered if building and battle.can_install(hovered) else Vector2i(-1, -1))
+	var focus := selected if map.contains(selected) else (hovered if building and battle.can_install(hovered, build_id) else Vector2i(-1, -1))
 	if map.contains(focus):
 		var at := pixel(Vector2(focus) + Vector2(0.5, 0.5))
-		var radius := float(battle.data.turret.range) * CELL
-		draw_circle(at, radius, Color(MINT, 0.09), true, -1.0, true)
-		draw_arc(at, radius, 0, TAU, 96, Color(MINT, 0.6), 1.6, true)
+		var def: Dictionary = battle.occupied[focus].definition if battle.occupied.has(focus) else battle.data.towers.lookup(build_id)
+		var tint: Color = def.tint
+		if def.global:
+			var area := Rect2(ORIGIN, Vector2(battle.field.size) * CELL).grow(-2.0)
+			draw_rect(area, Color(tint, 0.075))
+			draw_rect(area, Color(tint, 0.78), false, 2.3)
+		else:
+			var radius := float(def.range) * CELL
+			draw_circle(at, radius, Color(tint, 0.075), true, -1.0, true)
+			draw_arc(at, radius, 0, TAU, 96, Color(tint, 0.6), 1.6, true)
 	if map.contains(hovered) and not battle.lost:
 		var at := pixel(Vector2(hovered))
-		var color := MINT if not building or battle.can_install(hovered) else PINK
+		var color := MINT if not building or battle.can_install(hovered, build_id) else PINK
 		var tile := Rect2(at + Vector2(2, 2), Vector2(44, 44))
 		draw_rect(tile, Color(color, 0.12))
 		draw_rect(tile, Color(color, 0.76), false, 1.5)
 	if battle.occupied.has(selected):
-		draw_arc(pixel(battle.occupied[selected].position), 21.0, 0, TAU, 32, _turret_color, 2.0, true)
+		draw_arc(pixel(battle.occupied[selected].position), 21.0, 0, TAU, 32, battle.occupied[selected].definition.tint, 2.0, true)
 
 func _draw_overlay() -> void:
-	var cap := float(battle.data.drone.health)
-	var health_color := _drone_color.lightened(0.35)
 	for drone in battle.enemies:
-		if drone.health < cap:
-			var at := pixel(drone.position) + Vector2(-9, -14)
+		var at := pixel(drone.position) + Vector2(-9, -14)
+		if drone.health < drone.maximum_health:
 			_overlay.draw_rect(Rect2(at, Vector2(18, 2)), Color("#3a1b34"))
-			_overlay.draw_rect(Rect2(at, Vector2(18 * drone.health / cap, 2)), health_color)
+			_overlay.draw_rect(Rect2(at, Vector2(18 * drone.health / float(drone.maximum_health), 2)), Color("#ffa4bd"))
+		if drone.status.mark_stacks > 0:
+			_overlay.draw_rect(Rect2(at + Vector2(21, 0), Vector2(3 + 2 * drone.status.mark_stacks, 3)), Color("#ddb3ff"))
+	for tower in battle.towers:
+		if tower.definition.stage >= 3 and tower.recoil > 0.0:
+			var tint: Color = Color(tower.definition.tint, tower.recoil * 5.0)
+			_overlay.draw_arc(pixel(tower.position), 18.0 + 8.0 * (1.0 - tower.recoil / 0.12), elapsed * 2.0, elapsed * 2.0 + 4.9, 22, tint, 2.3)
 
 func _draw_portals() -> void:
 	var start := pixel(Vector2(battle.field.start) + Vector2(0.5, 0.5))
@@ -245,7 +269,7 @@ func _update_flares() -> void:
 	for i in _flares.size():
 		var flare := _flares[i]
 		var t := flare.age / flare.duration
-		var alpha := 1.0 - t
+		var alpha := (1.0 - t) * (0.52 if _preferences.fx_dim else 1.0)
 		var tint := Color(flare.color, alpha)
 		var at := flare.point
 		if flare.kind == &"fire":
@@ -274,15 +298,15 @@ func _update_flares() -> void:
 	_sparks.finish()
 
 func _spark_count(kind: StringName) -> int:
+	if kind == &"fire":
+		return 1
+	var count := 4
 	match kind:
-		&"fire":
-			return 1
 		&"kill", &"base":
-			return 8
+			count = 8
 		&"collapse":
-			return 24
-		_:
-			return 4
+			count = 24
+	return roundi(count * _preferences.fx_particles * (0.5 + 0.25 * _preferences.fx_quality))
 
 func glow_at(at: Vector2, radius: float, color: Color) -> void:
 	draw_texture_rect(_glow, centered(at, radius), false, color)

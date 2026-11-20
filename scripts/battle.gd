@@ -5,6 +5,7 @@ signal effect(kind: StringName, point: Vector2, direction: Vector2)
 signal wave_started(number: int)
 signal wave_finished(number: int, reward: int)
 signal defeated(number: int)
+signal attack_visual(style: String, origin: Vector2, end: Vector2, radius: float, tint: Color, life: float, stage: int)
 
 # All distances are measured in tiles. The display converts them to pixels.
 const HIT_RADIUS := 0.21
@@ -16,6 +17,11 @@ class Drone:
 	var previous := Vector2.ZERO
 	var health: int
 	var flash := 0.0
+	var serial := 0
+	var definition: Dictionary
+	var maximum_health: int
+	var tint: Color
+	var status := StatusEffects.new()
 
 class Turret:
 	var cell: Vector2i
@@ -25,12 +31,27 @@ class Turret:
 	var recoil := 0.0
 	var full_buckets := PackedInt32Array()
 	var edge_buckets := PackedInt32Array()
+	var definition: Dictionary
+	var field_age := 0.0
+	var mirror_timers: Dictionary = {}
 
 class Bolt:
 	var position: Vector2
 	var direction: Vector2
 	var remaining: float
+	var definition: Dictionary
+	var speed: float
+	var origin: Vector2
+	var efficiency: float
+	var guided_target: Drone
+	var target_serial := 0
+	var reversed := false
+	var hit: Dictionary = {}
+	var fragment := false
 
+var arsenal := TowerArsenal.new()
+var field_diagonal: float
+var research: ResearchRun
 var data: BattleData
 var field: FieldMap
 var health: int
@@ -53,43 +74,48 @@ var _path_length: float
 var _drone_pool: Array[Drone] = []
 var _bolt_pool: Array[Bolt] = []
 var _range: float
-var _bolt_speed: float
 var _drone_speed: float
-var _drone_health: int
 var _damage: int
-var _shot_interval: float
+var _global_leader: Drone
+var _serial := 0
+var _impact_budget := 64
+var _needs_cleanup := false
+var _maximum_step := 0.0
+var _copy_neighbors: Dictionary = {}
 
 func _init(map: FieldMap, rules: BattleData) -> void:
 	field = map
 	data = rules
+	research = ResearchRun.new(data.research)
 	health = int(data.balance.base_health)
 	credits = int(data.balance.starting_credits)
 	_range = float(data.turret.range)
-	_bolt_speed = float(data.turret.projectile_speed)
 	_drone_speed = float(data.drone.speed)
-	_drone_health = int(data.drone.health)
 	_damage = int(data.turret.damage)
-	_shot_interval = 1.0 / float(data.turret.shots_per_second)
 	_path_length = field.length()
+	field_diagonal = Vector2(field.size).length()
 	for point in field.path:
 		_track_cells.append(Vector2i(point.floor()))
 	for i in field.size.x * field.size.y:
 		_buckets.append([])
 		_bucket_leaders.append(null)
 
-func can_install(cell: Vector2i) -> bool:
-	return not lost and credits >= int(data.turret.cost) and field.tile_at(cell) == "." and not occupied.has(cell)
+func can_install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
+	var definition := data.towers.lookup(id)
+	return not lost and research.unlocked.has(id) and not definition.is_empty() 		and credits >= int(definition.cost) and field.tile_at(cell) == "." and not occupied.has(cell)
 
-func install(cell: Vector2i) -> bool:
-	if not can_install(cell):
+func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
+	if not can_install(cell, id):
 		return false
 	var tower := Turret.new()
 	tower.cell = cell
 	tower.position = Vector2(cell) + Vector2(0.5, 0.5)
-	_cache_range(tower)
+	tower.definition = data.towers.lookup(id)
+	_cache_range(tower, float(tower.definition.range))
 	towers.append(tower)
 	occupied[cell] = tower
-	credits -= int(data.turret.cost)
+	credits -= int(tower.definition.cost)
+	_refresh_copies()
 	effect.emit(&"install", tower.position, Vector2.ZERO)
 	return true
 
@@ -99,7 +125,8 @@ func sell(cell: Vector2i) -> bool:
 	var tower: Turret = occupied[cell]
 	occupied.erase(cell)
 	towers.erase(tower)
-	_credit(int(data.turret.refund))
+	_credit(int(tower.definition.refund))
+	_refresh_copies()
 	effect.emit(&"sell", tower.position, Vector2.ZERO)
 	return true
 
@@ -114,13 +141,19 @@ func start_wave() -> bool:
 	spawn()
 	return true
 
-func spawn(progress: float = 0.0) -> Drone:
+func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
 	var drone: Drone = Drone.new() if _drone_pool.is_empty() else _drone_pool.pop_back()
 	drone.progress = progress
 	drone.position = field.position_at(progress)
 	drone.previous = drone.position
-	drone.health = _drone_health
+	_serial += 1
+	drone.serial = _serial
+	drone.definition = data.drone if enemy_definition.is_empty() else enemy_definition
+	drone.maximum_health = int(drone.definition.health)
+	drone.health = drone.maximum_health
+	drone.tint = Color(str(drone.definition.color))
 	drone.flash = 0.0
+	drone.status.reset()
 	enemies.append(drone)
 	if is_zero_approx(progress):
 		effect.emit(&"spawn", drone.position, field.heading_at(progress))
@@ -129,12 +162,18 @@ func spawn(progress: float = 0.0) -> Drone:
 func tick(delta: float) -> void:
 	if lost:
 		return
+	_impact_budget = 64
+	_needs_cleanup = false
 	_update_drones(delta)
 	_update_bolts(delta)
 	_remove_drones()
 	if lost:
 		return
+	_needs_cleanup = false
+	arsenal.update(self, delta)
 	_update_towers(delta)
+	if _needs_cleanup:
+		_remove_drones()
 	if queued > 0:
 		_spawn_clock -= delta
 		while _spawn_clock <= 0.000001 and queued > 0:
@@ -152,10 +191,14 @@ func _update_drones(delta: float) -> void:
 		_buckets[i].clear()
 		_bucket_leaders[i] = null
 	_used_buckets.clear()
+	_global_leader = null
+	_maximum_step = 0.0
 	for drone in enemies:
 		drone.previous = drone.position
-		drone.progress = minf(drone.progress + _drone_speed * delta, _path_length)
+		var move := drone.status.step(drone.progress, float(drone.definition.speed), delta, data.status_rules)
+		drone.progress = clampf(drone.progress + move, 0, _path_length)
 		drone.position = field.position_at(drone.progress)
+		_maximum_step = maxf(_maximum_step, absf(move))
 		drone.flash = maxf(0.0, drone.flash - delta)
 		var cell := Vector2i(drone.position.floor())
 		var i := _bucket_index(cell.x, cell.y)
@@ -165,6 +208,8 @@ func _update_drones(delta: float) -> void:
 		var leader := _bucket_leaders[i]
 		if drone.progress < _path_length and (leader == null or drone.progress > leader.progress):
 			_bucket_leaders[i] = drone
+		if _valid(drone) and (_global_leader == null or drone.progress > _global_leader.progress):
+			_global_leader = drone
 
 func _remove_drones() -> void:
 	var i := enemies.size() - 1
@@ -195,35 +240,96 @@ func _update_towers(delta: float) -> void:
 	for tower in towers:
 		tower.recoil = maxf(0.0, tower.recoil - delta)
 		tower.cooldown = maxf(0.0, tower.cooldown - delta)
+		if tower.definition.attack == "copy":
+			_update_copy(tower, delta)
+			continue
 		if enemies.is_empty():
+			tower.field_age = 0.0
 			continue
-		var target := _target_in_range(tower)
+		var target := _global_target() if tower.definition.global else _target_in_range(tower)
 		if target == null:
+			tower.field_age = 0.0
 			continue
-		var direction := tower.position.direction_to(target.position)
-		if tower.cooldown <= 0.10:
-			direction = aim_at(tower.position, target)
+		var direction := target_direction(tower, target, tower.definition, tower.cooldown <= 0.10)
 		var angle := direction.angle()
 		tower.angle = rotate_toward(tower.angle, angle, delta * 24.0)
 		if tower.cooldown <= 0.000001:
-			# The head catches up before firing when acquiring a target behind it.
-			if absf(angle_difference(tower.angle, angle)) > 0.45:
+			if tower.definition.id == TowerRegistry.BASE and absf(angle_difference(tower.angle, angle)) > 0.45:
 				continue
-			tower.cooldown = _shot_interval
+			tower.cooldown = float(tower.definition.interval)
 			tower.angle = angle
 			tower.recoil = 0.12
-			_fire(tower.position + direction * BARREL_LENGTH, direction)
+			arsenal.attack(self, tower, target, tower.definition, direction)
+
+func target_direction(tower: Turret, target: Drone, def: Dictionary, predict: bool) -> Vector2:
+	if predict and def.attack == "bolt" and not def.guided:
+		return aim_at(tower.position, target, float(def.projectile_speed))
+	var direction := tower.position.direction_to(target.position)
+	return Vector2.RIGHT if direction.is_zero_approx() else direction
+
+func _refresh_copies() -> void:
+	_copy_neighbors.clear()
+	for tower in towers:
+		if tower.definition.attack != "copy":
+			continue
+		var neighbors: Array[Turret] = []
+		var radius := float(tower.definition.range)
+		for other in towers:
+			if other.definition.attack != "copy" and other.position.distance_squared_to(tower.position) <= radius * radius:
+				neighbors.append(other)
+		neighbors.sort_custom(func(a: Turret, b: Turret): return tower.position.distance_squared_to(a.position) < tower.position.distance_squared_to(b.position))
+		neighbors.resize(mini(neighbors.size(), int(tower.definition.max_targets)))
+		for prior: Variant in tower.mirror_timers.keys():
+			if not neighbors.has(prior):
+				tower.mirror_timers.erase(prior)
+		_copy_neighbors[tower] = neighbors
+
+func _update_copy(tower: Turret, delta: float) -> void:
+	for other: Turret in _copy_neighbors.get(tower, []):
+		var timer := maxf(0.0, float(tower.mirror_timers.get(other, 0.0)) - delta)
+		tower.mirror_timers[other] = timer
+		if timer > 0.000001 or enemies.is_empty():
+			continue
+		var def := other.definition
+		var target := _global_target() if def.global else _nearest_leading(tower.position, float(def.range))
+		if target == null:
+			continue
+		var final_weapon := int(def.stage) == 5
+		var efficiency := float(tower.definition.terminal_efficiency if final_weapon else tower.definition.copy_efficiency)
+		var cadence := float(tower.definition.terminal_cadence if final_weapon else tower.definition.copy_cadence)
+		var direction := target_direction(tower, target, def, true)
+		tower.angle = direction.angle()
+		tower.recoil = 0.12
+		tower.mirror_timers[other] = float(def.interval) * cadence
+		attack_visual.emit("holo", tower.position, other.position, 0, tower.definition.tint, 0.25, 4)
+		arsenal.attack(self, tower, target, def, direction, efficiency)
+
+func _global_target() -> Drone:
+	if not _valid(_global_leader):
+		_global_leader = _nearest_leading(Vector2.ZERO, 0.0, true)
+	return _global_leader
+
+func _nearest_leading(origin: Vector2, radius: float, anywhere: bool = false) -> Drone:
+	var best: Drone
+	for drone in query_radius(origin, radius, anywhere):
+		if best == null or drone.progress > best.progress:
+			best = drone
+	return best
+
+func _valid(drone: Drone) -> bool:
+	return drone != null and drone.health > 0 and drone.progress < _path_length
 
 func target_for(origin: Vector2) -> Drone:
 	var query := Turret.new()
 	query.position = origin
-	_cache_range(query)
+	query.definition = data.towers.lookup(TowerRegistry.BASE)
+	_cache_range(query, _range)
 	return _target_in_range(query)
 
-func _cache_range(tower: Turret) -> void:
+func _cache_range(tower: Turret, radius: float) -> void:
 	# Interior cells need only their leading drone. Boundary cells still use
 	# exact circular range, including the edge itself.
-	var radius_squared := _range * _range
+	var radius_squared := radius * radius
 	var half_tile := Vector2(0.5, 0.5)
 	for cell in _track_cells:
 		var offset := (tower.position - (Vector2(cell) + half_tile)).abs()
@@ -250,7 +356,7 @@ func _target_in_range(tower: Turret) -> Drone:
 				if drone.progress > progress and drone.progress < _path_length and drone.health > 0:
 					best = drone
 					progress = drone.progress
-	var radius_squared := _range * _range
+	var radius_squared := pow(float(tower.definition.range), 2.0)
 	for index in tower.edge_buckets:
 		var leader := _bucket_leaders[index]
 		if leader == null or leader.progress <= progress:
@@ -261,51 +367,110 @@ func _target_in_range(tower: Turret) -> Drone:
 				progress = drone.progress
 	return best
 
-func aim_at(origin: Vector2, target: Drone) -> Vector2:
+func aim_at(origin: Vector2, target: Drone, speed: float = 12.0) -> Vector2:
 	# The bolt is faster than the drone, so the interception equation is monotonic,
 	# even through turns. The path sampler clamps the prediction at the exit.
 	var low := 0.0
-	var high := origin.distance_to(target.position) / maxf(0.001, _bolt_speed - _drone_speed)
+	var high := origin.distance_to(target.position) / maxf(0.001, speed - float(target.definition.speed))
 	for i in 12:
 		var time := (low + high) * 0.5
-		var future := field.position_at(target.progress + _drone_speed * time)
-		if origin.distance_to(future) > BARREL_LENGTH + _bolt_speed * time:
+		var future := field.position_at(target.status.predict(target.progress, float(target.definition.speed), time))
+		if origin.distance_to(future) > BARREL_LENGTH + speed * time:
 			low = time
 		else:
 			high = time
-	var direction := origin.direction_to(field.position_at(target.progress + _drone_speed * high))
+	var direction := origin.direction_to(field.position_at(target.status.predict(target.progress, float(target.definition.speed), high)))
 	return Vector2.RIGHT if direction.is_zero_approx() else direction
 
-func _fire(origin: Vector2, direction: Vector2) -> void:
+func _fire(origin: Vector2, direction: Vector2, definition: Dictionary = {}, target: Drone = null, efficiency: float = 1.0, source: Vector2 = Vector2.ZERO, show: bool = true) -> Bolt:
+	var def := data.towers.lookup(TowerRegistry.BASE) if definition.is_empty() else definition
 	var bolt: Bolt = Bolt.new() if _bolt_pool.is_empty() else _bolt_pool.pop_back()
 	bolt.position = origin
 	bolt.direction = direction
-	bolt.remaining = _range + _drone_speed * _range / maxf(0.001, _bolt_speed - _drone_speed) + HIT_RADIUS
+	bolt.definition = def
+	bolt.speed = float(def.projectile_speed)
+	var speed_margin := maxf(0.001, bolt.speed - _drone_speed)
+	bolt.remaining = float(def.range) * (1.0 + _drone_speed / speed_margin) + HIT_RADIUS
+	bolt.origin = source
+	bolt.efficiency = efficiency
+	bolt.guided_target = target if def.guided else null
+	bolt.target_serial = bolt.guided_target.serial if bolt.guided_target != null else 0
+	bolt.reversed = false
+	bolt.hit.clear()
+	bolt.fragment = false
 	bolts.append(bolt)
-	effect.emit(&"fire", origin, direction)
+	if show:
+		if def.id == TowerRegistry.BASE:
+			effect.emit(&"fire", origin, direction)
+		else:
+			attack_visual.emit("muzzle", origin, origin + direction, 0, def.tint, 0.13, int(def.stage))
+	return bolt
 
 func _update_bolts(delta: float) -> void:
-	var i := bolts.size() - 1
-	while i >= 0:
+	if delta <= 0.0:
+		return
+	for i in range(bolts.size() - 1, -1, -1):
 		var bolt := bolts[i]
-		var step := minf(_bolt_speed * delta, bolt.remaining)
+		var def := bolt.definition
+		if def.guided:
+			if not _valid(bolt.guided_target) or bolt.guided_target.serial != bolt.target_serial:
+				bolt.guided_target = _nearest_leading(bolt.position, bolt.remaining)
+				bolt.target_serial = bolt.guided_target.serial if bolt.guided_target != null else 0
+			if bolt.guided_target != null:
+				var angle := bolt.position.angle_to_point(bolt.guided_target.position)
+				bolt.direction = Vector2.from_angle(rotate_toward(bolt.direction.angle(), angle, delta * 12.0))
+		var step := minf(bolt.speed * delta, bolt.remaining)
 		var end := bolt.position + bolt.direction * step
-		var hit := _collide(bolt.position, end, step / (_bolt_speed * delta), delta)
+		var hit := _collide(bolt.position, end, step / (bolt.speed * delta), delta, bolt.hit)
+		var spent := hit != null
+		if def.returning:
+			while hit != null:
+				damage(hit, def, bolt.efficiency)
+				bolt.hit[hit.serial] = true
+				hit = _collide(bolt.position, end, step / (bolt.speed * delta), delta, bolt.hit)
+			spent = false
+		elif hit != null:
+			_bolt_impact(bolt, hit)
 		bolt.position = end
 		bolt.remaining -= step
-		if hit != null or bolt.remaining <= 0.00001:
-			if hit != null:
-				_damage_drone(hit, bolt.direction)
-			else:
+		if def.returning and not bolt.reversed and bolt.remaining <= 0.00001:
+			bolt.reversed = true
+			bolt.hit.clear()
+			bolt.remaining = end.distance_to(bolt.origin)
+			bolt.direction = end.direction_to(bolt.origin)
+			continue
+		if spent or bolt.remaining <= 0.00001:
+			if not spent and _impact_budget > 0:
+				_impact_budget -= 1
 				effect.emit(&"miss", end, bolt.direction)
+			bolt.guided_target = null
+			bolt.hit.clear()
 			if _bolt_pool.size() < 1024:
 				_bolt_pool.append(bolt)
 			bolts[i] = bolts.back()
 			bolts.pop_back()
-		i -= 1
 
-func _collide(from: Vector2, to: Vector2, tick_fraction: float, delta: float) -> Drone:
-	var padding := Vector2.ONE * (HIT_RADIUS + _drone_speed * delta + 0.01)
+func _bolt_impact(bolt: Bolt, target: Drone) -> void:
+	var def := bolt.definition
+	if def.radius > 0 and not bolt.fragment:
+		arsenal.area(self, target.position, float(def.radius), def, bolt.efficiency)
+		attack_visual.emit(def.fx, target.position, target.position, def.radius, def.tint, 0.58, int(def.stage))
+		return
+	damage(target, def, bolt.efficiency)
+	if def.split > 0 and not bolt.fragment:
+		var fragments := def.duplicate()
+		fragments.damage = def.fragment_damage
+		fragments.range = def.fragment_range
+		var origin := target.position
+		for i in int(def.split):
+			var aim := Vector2.from_angle(TAU * i / float(def.split))
+			var shard := _fire(origin, aim, fragments, null, bolt.efficiency, origin, false)
+			shard.fragment = true
+			shard.hit[target.serial] = true
+		attack_visual.emit("split", origin, origin, float(def.fragment_range) * 0.55, def.tint, 0.36, int(def.stage))
+
+func _collide(from: Vector2, to: Vector2, tick_fraction: float, delta: float, visited: Dictionary = {}) -> Drone:
+	var padding := Vector2.ONE * (HIT_RADIUS + maxf(_maximum_step, _drone_speed * delta) + 0.01)
 	var lo := (from.min(to) - padding).floor().max(Vector2.ZERO)
 	var hi := (from.max(to) + padding).floor().min(Vector2(field.size - Vector2i.ONE))
 	var first := 2.0
@@ -313,7 +478,7 @@ func _collide(from: Vector2, to: Vector2, tick_fraction: float, delta: float) ->
 	for y in range(int(lo.y), int(hi.y) + 1):
 		for x in range(int(lo.x), int(hi.x) + 1):
 			for drone: Drone in _buckets[_bucket_index(x, y)]:
-				if drone.health <= 0:
+				if drone.health <= 0 or visited.has(drone.serial):
 					continue
 				var offset := from - drone.previous
 				var motion := to - from - (drone.position - drone.previous) * tick_fraction
@@ -336,14 +501,81 @@ static func sweep(offset: Vector2, motion: Vector2, radius: float) -> float:
 	return time if time >= 0.0 and time <= 1.0 else -1.0
 
 func _damage_drone(drone: Drone, direction: Vector2) -> void:
+	_apply_damage(drone, _damage, direction)
+
+func damage(drone: Drone, def: Dictionary, efficiency: float = 1.0, anchor: float = -1.0) -> void:
 	if drone.health <= 0:
 		return
-	drone.health -= _damage
+	if def.shock or def.slow > 0 or def.pull > 0:
+		drone.status.apply(def, data.status_rules, anchor)
+	var amount := maxi(1, roundi(float(def.damage) * efficiency)) if def.damage > 0 else 0
+	_apply_damage(drone, amount, Vector2.ZERO)
+
+func _apply_damage(drone: Drone, amount: int, direction: Vector2) -> void:
+	if drone.health <= 0 or amount <= 0:
+		return
+	drone.health -= drone.status.boosted_damage(amount)
 	drone.flash = 0.09
-	effect.emit(&"hit", drone.position, direction)
-	if drone.health <= 0:
-		_credit(int(data.drone.reward))
-		effect.emit(&"kill", drone.position, direction)
+	var killed := drone.health <= 0
+	if killed:
+		_needs_cleanup = true
+		_credit(int(drone.definition.reward))
+		research.earn(int(drone.definition.get("reward_rp", 0)))
+	if _impact_budget > 0:
+		_impact_budget -= 1
+		effect.emit(&"kill" if killed else &"hit", drone.position, direction)
+
+func query_box(first: Vector2, last: Vector2, padding: float = 0.0) -> Array[Drone]:
+	var pad := Vector2.ONE * padding
+	var low := (first - pad).floor().max(Vector2.ZERO)
+	var high := (last + pad).floor().min(Vector2(field.size - Vector2i.ONE))
+	var matches: Array[Drone] = []
+	for index in _used_buckets:
+		var y := floori(float(index) / field.size.x)
+		var x := index % field.size.x
+		if x < low.x or x > high.x or y < low.y or y > high.y:
+			continue
+		for drone: Drone in _buckets[index]:
+			if _valid(drone):
+				matches.append(drone)
+	return matches
+
+func query_radius(center: Vector2, radius: float, anywhere: bool = false) -> Array[Drone]:
+	var matches: Array[Drone] = []
+	if anywhere:
+		for drone in enemies:
+			if _valid(drone):
+				matches.append(drone)
+		return matches
+	var squared := radius * radius
+	for drone in query_box(center, center, radius):
+		if drone.position.distance_squared_to(center) <= squared:
+			matches.append(drone)
+	return matches
+
+func nearest_in_radius(center: Vector2, radius: float, seen: Dictionary) -> Drone:
+	var nearest: Drone
+	var distance := INF
+	for drone in query_radius(center, radius):
+		var squared := drone.position.distance_squared_to(center)
+		if not seen.has(drone.serial) and squared < distance:
+			nearest = drone
+			distance = squared
+	return nearest
+
+func projection(point: Vector2) -> float:
+	var closest := INF
+	var progress := 0.0
+	for i in range(field.path.size() - 1):
+		var start := field.path[i]
+		var direction := field.path[i + 1] - start
+		var offset := point - start
+		var part := clampf(offset.dot(direction), 0, 1)
+		var distance := (offset - direction * part).length_squared()
+		if distance < closest:
+			closest = distance
+			progress = i + part
+	return progress
 
 func _credit(amount: int) -> void:
 	credits = mini(BattleData.NUMBER_LIMIT, credits + amount)

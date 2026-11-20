@@ -12,6 +12,11 @@ var resolution := 1
 var best := 0
 var file_path := PATH
 var save_error := false
+var fx_quality := 2
+var fx_particles := 0.85
+var fx_flash := 0.45
+var fx_shake := 0.35
+var fx_dim := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -29,11 +34,23 @@ func load_profile() -> void:
 	fullscreen = false
 	resolution = 1
 	best = 0
+	fx_quality = 2
+	fx_particles = 0.85
+	fx_flash = 0.45
+	fx_shake = 0.35
+	fx_dim = false
 	var config := ConfigFile.new()
 	if config.load(file_path) != OK:
 		return
 	master = _volume(config.get_value("audio", "master", master), master)
 	effects = _volume(config.get_value("audio", "effects", effects), effects)
+	var quality: Variant = config.get_value("visual", "quality", fx_quality)
+	if quality is int:
+		fx_quality = clampi(quality, 0, 2)
+	fx_particles = _volume(config.get_value("visual", "particles", fx_particles), fx_particles)
+	fx_flash = _volume(config.get_value("visual", "flash", fx_flash), fx_flash)
+	fx_shake = _volume(config.get_value("visual", "shake", fx_shake), fx_shake)
+	fx_dim = config.get_value("visual", "dim", fx_dim) == true
 	var saved_mode: Variant = config.get_value("display", "fullscreen", false)
 	fullscreen = saved_mode == true
 	var saved_size: Variant = config.get_value("display", "resolution", resolution)
@@ -55,6 +72,11 @@ func save_profile() -> void:
 	config.set_value("display", "fullscreen", fullscreen)
 	config.set_value("display", "resolution", resolution)
 	config.set_value("record", "best", best)
+	config.set_value("visual", "quality", fx_quality)
+	config.set_value("visual", "particles", fx_particles)
+	config.set_value("visual", "flash", fx_flash)
+	config.set_value("visual", "shake", fx_shake)
+	config.set_value("visual", "dim", fx_dim)
 	var temp := file_path + ".tmp"
 	var error := config.save(temp)
 	if error == OK:

@@ -1,0 +1,8 @@
+{
+  "shock_duration": 0.2,
+  "shock_multiplier": 0.7,
+  "shock_minimum": 0.03,
+  "shock_recovery_delay": 1.8,
+  "shock_recovery_rate": 2,
+  "shock_move_window": 0.085
+}

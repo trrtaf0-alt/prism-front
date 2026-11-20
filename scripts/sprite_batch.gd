@@ -39,7 +39,8 @@ func item(index: int, at: Vector2, heading: Vector2, tint: Color, vertical_scale
 	_buffer[i + 10] = tint.b
 	_buffer[i + 11] = tint.a
 
-func finish() -> void:
-	multimesh.visible_instance_count = _count
-	if _count > 0:
+func finish(used: int = -1) -> void:
+	var visible_count := _count if used < 0 else used
+	multimesh.visible_instance_count = visible_count
+	if visible_count > 0:
 		multimesh.buffer = _buffer

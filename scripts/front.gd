@@ -21,6 +21,13 @@ var modal_kind := ""
 var game := false
 var selected := NONE
 var building := false
+var build_id := TowerRegistry.BASE
+var rp_label: Label
+var catalog_button: Button
+var research_button: Button
+var research_screen: ResearchScreen
+var research_view: Dictionary = {}
+var settings_origin := "menu"
 
 var wave_label: Label
 var health_label: Label
@@ -55,6 +62,8 @@ func _ready() -> void:
 	if not FileAccess.file_exists(map_path):
 		map_path = "res://data/sample_map.json"
 	map_error = map.load_map(BattleData.read_json(map_path))
+	if not data.towers.error.is_empty() or not data.research.error.is_empty():
+		map_error = "%s %s" % [data.towers.error, data.research.error]
 	if not map_error.is_empty():
 		push_error(map_error)
 	show_menu()
@@ -171,7 +180,7 @@ func show_menu() -> void:
 	button_at(screen, "종료", Rect2(132, 775, 418, 62), get_tree().quit)
 	if not map_error.is_empty():
 		text_at(screen, "맵 오류 · " + map_error, 132, 859, 21, PINK)
-	text_at(screen, "v0.1", 132, 977, 19, MUTED)
+	text_at(screen, "v0.2", 132, 977, 19, MUTED)
 	play.grab_focus()
 
 func start_game() -> void:
@@ -181,6 +190,8 @@ func start_game() -> void:
 	game = true
 	selected = NONE
 	building = false
+	build_id = TowerRegistry.BASE
+	research_view.clear()
 	_credits_shown = -1
 	_credit_flash = 0.0
 	flash = 0.0
@@ -192,6 +203,7 @@ func start_game() -> void:
 	battle.wave_started.connect(_wave_started)
 	battle.wave_finished.connect(_wave_finished)
 	battle.defeated.connect(_defeated)
+	battle.research.purchased.connect(_research_purchased)
 	field = FieldView.new()
 	field.battle = battle
 	add_child(field)
@@ -212,7 +224,9 @@ func _make_hud() -> void:
 	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	place(health_bar, screen, Rect2(1030, 77, 140, 8))
 	text_at(screen, "재화", 1230, 31, 18, MUTED)
-	credits_label = text_at(screen, "", 1230, 56, 32, GOLD, 390)
+	credits_label = text_at(screen, "", 1230, 56, 29, GOLD, 246)
+	text_at(screen, "연구 포인트", 1495, 31, 18, MUTED)
+	rp_label = text_at(screen, "0", 1495, 56, 29, Color("#b4a0ff"), 151)
 	button_at(screen, "일시정지  ·  Esc", Rect2(1660, 45, 212, 57), show_pause)
 
 	panel_at(screen, Rect2(1527, 147, 345, 235))
@@ -222,9 +236,11 @@ func _make_hud() -> void:
 	result = text_at(screen, "", 1550, 323, 19, GOLD, 299)
 
 	panel_at(screen, Rect2(1527, 400, 345, 185))
-	text_at(screen, "포탑 설치", 1550, 420, 21, MUTED)
+	text_at(screen, "타워 설치", 1550, 420, 21, MUTED)
+	catalog_button = button_at(screen, "목록", Rect2(1750, 412, 99, 40), show_catalog)
 	build_button = button_at(screen, "", Rect2(1550, 467, 299, 61), toggle_build, true)
 	text_at(screen, "1  설치 선택   /   우클릭  취소", 1550, 540, 17, MUTED)
+	research_button = button_at(screen, "연구 그물망  ·  R", Rect2(1527, 890, 345, 65), show_research, true)
 
 	panel_at(screen, Rect2(1527, 603, 345, 265))
 	tower_heading = text_at(screen, "", 1550, 624, 23, LIGHT, 299)
@@ -261,23 +277,39 @@ func _update_hud() -> void:
 	else:
 		status.text = "다음 적  %d" % data.wave_count(battle.wave + 1)
 	wave_button.text = "교전 중" if battle.active else "웨이브 %d 시작" % (battle.wave + 1)
-	var cost := int(data.turret.cost)
+	var blueprint := data.towers.lookup(build_id)
+	var cost := int(blueprint.cost)
+	rp_label.text = str(battle.research.points)
+	research_button.disabled = not can_open_research()
+	catalog_button.disabled = battle.lost
+	catalog_button.text = "목록 %d" % battle.research.unlocked.size()
 	build_button.disabled = battle.lost or battle.credits < cost
 	if building:
 		build_button.text = "설치할 타일 선택  ·  %d" % cost
 	elif battle.credits < cost:
 		build_button.text = "재화 부족  ·  %d 필요" % cost
 	else:
-		build_button.text = "%s  ·  %d" % [data.turret.name, cost]
+		build_button.text = "%s  ·  %d" % [blueprint.name, cost]
 	var has_tower := battle.occupied.has(selected)
-	tower_heading.text = data.turret.name if has_tower else "선택한 포탑"
-	tower_stats.text = "공격력  %d    연사  초당 %d발\n사거리  %d칸    탄속  초당 %d칸" % [
-		data.turret.damage, data.turret.shots_per_second, data.turret.range, data.turret.projectile_speed
-	] if has_tower else "전장 위에 배치된 포탑을\n클릭하면 능력치를 볼 수 있습니다."
+	if has_tower:
+		var definition: Dictionary = battle.occupied[selected].definition
+		tower_heading.text = definition.name
+		var damage: String = "%d 피해" % int(definition.damage) if definition.damage > 0 else TowerRegistry.ATTACK_NAMES[definition.attack]
+		tower_stats.text = "%s  ·  %s초 주기\n범위  %s%s" % [
+			damage, definition.interval, TowerRegistry.reach_text(definition),
+			"  ·  반경 %s칸" % definition.radius if definition.radius > 0 else "",
+		]
+		tower_stats.tooltip_text = definition.description
+		sell_button.text = "타워 판매  +%d" % int(definition.refund)
+	else:
+		tower_heading.text = "선택한 타워"
+		tower_stats.text = "전장 위에 배치된 타워를\n클릭하면 능력치를 볼 수 있습니다."
+		tower_stats.tooltip_text = ""
+		sell_button.text = "타워 판매"
 	sell_button.disabled = not has_tower or battle.lost
 
 func toggle_build() -> void:
-	if battle.lost or battle.credits < int(data.turret.cost):
+	if battle.lost or battle.credits < int(data.towers.lookup(build_id).cost):
 		return
 	building = not building
 	selected = NONE
@@ -294,10 +326,12 @@ func start_wave() -> void:
 func _sync_selection() -> void:
 	field.selected = selected
 	field.building = building
+	field.build_id = build_id
 	_update_hud()
 
 func _physics_process(delta: float) -> void:
-	if game and modal == null and not battle.lost:
+	var live_research := modal_kind == "research" and not bool(data.balance.research_pauses_battle)
+	if game and (modal == null or live_research) and not battle.lost:
 		battle.tick(delta)
 
 func _process(delta: float) -> void:
@@ -324,13 +358,22 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		match modal_kind:
-			"pause":
+			"pause", "research", "catalog":
 				close_modal()
+			"effects_settings":
+				show_settings(settings_origin)
 			"menu", "pause_settings":
 				_leave_settings()
 			"":
 				if game and not battle.lost:
 					show_pause()
+		get_viewport().set_input_as_handled()
+		return
+	if game and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R:
+		if modal_kind == "research":
+			close_modal()
+		elif modal == null:
+			show_research()
 		get_viewport().set_input_as_handled()
 		return
 	if not game or modal != null or battle.lost:
@@ -348,7 +391,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				selected = cell
 				building = false
 			elif building:
-				if battle.install(cell) and battle.credits < int(data.turret.cost):
+				if battle.install(cell, build_id) and battle.credits < int(data.towers.lookup(build_id).cost):
 					building = false
 					selected = cell
 			else:
@@ -374,6 +417,8 @@ func _wave_finished(number: int, amount: int) -> void:
 	Sound.cue(&"clear")
 
 func _defeated(_number: int) -> void:
+	if modal_kind == "research":
+		close_modal()
 	building = false
 	selected = NONE
 	_sync_selection()
@@ -383,6 +428,9 @@ func _defeated(_number: int) -> void:
 	defeat_delay = 0.95
 
 func close_modal() -> void:
+	if is_instance_valid(research_screen):
+		research_view = research_screen.view_state()
+		research_screen = null
 	_drop(modal)
 	modal = null
 	modal_kind = ""
@@ -430,6 +478,7 @@ func show_game_over() -> void:
 	button_at(panel, "메인 메뉴", Rect2(36, 301, 450, 59), show_menu)
 
 func show_settings(return_to: String) -> void:
+	settings_origin = return_to
 	var panel := _open_modal(return_to, Vector2(620, 608))
 	text_at(panel, "설정", 35, 24, 42)
 	_settings_slider(panel, "마스터 볼륨", 124, Profile.master, true)
@@ -455,7 +504,103 @@ func show_settings(return_to: String) -> void:
 	var message := text_at(panel, "", 36, 467, 17, PINK, 548)
 	if Profile.save_error:
 		message.text = "설정을 저장할 수 없습니다."
-	button_at(panel, "닫기", Rect2(36, 514, 548, 56), _leave_settings, true).grab_focus()
+	button_at(panel, "전투 효과 설정", Rect2(36, 514, 266, 56), show_effect_settings)
+	button_at(panel, "닫기", Rect2(318, 514, 266, 56), _leave_settings, true).grab_focus()
+
+func can_open_research() -> bool:
+	return game and not battle.lost and (not battle.active or bool(data.balance.research_available_during_wave))
+
+func show_research(tower_id: String = "") -> void:
+	if not can_open_research():
+		return
+	var panel := _open_modal("research", Vector2(1848, 1002))
+	research_screen = ResearchScreen.new()
+	place(research_screen, panel, Rect2(Vector2.ZERO, panel.size))
+	research_screen.setup(self, battle.research, data.towers, research_view, tower_id)
+	field.frozen = bool(data.balance.research_pauses_battle)
+
+func _research_purchased(_id: String, tower_id: String) -> void:
+	if not tower_id.is_empty():
+		wave_callout = data.towers.lookup(tower_id).name + " 해금"
+		callout_time = 2.0
+		Sound.cue(&"clear")
+	_update_hud()
+
+func show_catalog() -> void:
+	if battle.lost:
+		return
+	var panel := _open_modal("catalog", Vector2(1350, 838))
+	text_at(panel, "타워 목록", 33, 26, 38)
+	text_at(panel, "타워를 선택해 배치하거나 해금 연구로 이동하세요.", 35, 82, 20, MUTED)
+	button_at(panel, "닫기", Rect2(1116, 30, 200, 54), close_modal)
+	for i in data.towers.ids.size():
+		var id := data.towers.ids[i]
+		var def := data.towers.lookup(id)
+		var ready := battle.research.unlocked.has(id)
+		var affordable := battle.credits >= int(def.cost)
+		var at := Vector2(34 + (i % 5) * 259, 131 + floori(i / 5.0) * 110)
+		var subtitle := ("%d 재화" % int(def.cost) if affordable else "%d 재화 필요" % int(def.cost)) if ready else "연구 필요"
+		var tile := button_at(panel, "%s\n%s" % [def.name, subtitle], Rect2(at, Vector2(241, 91)), _choose_tower.bind(id), ready and affordable)
+		tile.add_theme_color_override("font_color", def.tint if ready else MUTED)
+		tile.disabled = (ready and not affordable) or (not ready and not can_open_research())
+		tile.tooltip_text = def.description
+
+func _choose_tower(id: String) -> void:
+	if not battle.research.unlocked.has(id):
+		show_research(id)
+		return
+	if battle.credits < int(data.towers.lookup(id).cost):
+		return
+	build_id = id
+	close_modal()
+	selected = NONE
+	building = true
+	_sync_selection()
+
+func show_effect_settings() -> void:
+	var panel := _open_modal("effects_settings", Vector2(692, 638))
+	text_at(panel, "전투 효과 설정", 35, 24, 39)
+	text_at(panel, "효과 품질", 38, 108, 22, MUTED)
+	var quality := OptionButton.new()
+	for label in ["낮음", "중간", "높음"]:
+		quality.add_item(label)
+	quality.select(Profile.fx_quality)
+	quality.item_selected.connect(_set_fx_quality)
+	place(quality, panel, Rect2(320, 104, 334, 46))
+	_visual_slider(panel, "파티클 밀도", "fx_particles", 174)
+	_visual_slider(panel, "화면 섬광", "fx_flash", 262)
+	_visual_slider(panel, "화면 흔들림", "fx_shake", 350)
+	var dim := CheckButton.new()
+	dim.text = "강한 밝기 낮추기"
+	dim.button_pressed = Profile.fx_dim
+	dim.toggled.connect(_set_fx_dim)
+	place(dim, panel, Rect2(36, 438, 618, 55))
+	button_at(panel, "설정으로 돌아가기", Rect2(36, 550, 618, 54), show_settings.bind(settings_origin), true).grab_focus()
+
+func _visual_slider(parent: Control, title: String, key: String, y: float) -> void:
+	var value := float(Profile.get(key))
+	text_at(parent, title, 38, y, 21, MUTED)
+	var percent := text_at(parent, "%d%%" % roundi(value * 100), 534, y, 21, MINT, 120)
+	percent.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	var slider := HSlider.new()
+	slider.max_value = 100.0
+	slider.step = 1.0
+	slider.value = value * 100.0
+	slider.value_changed.connect(_set_fx_value.bind(key, percent))
+	place(slider, parent, Rect2(38, y + 37, 616, 25))
+
+func _set_fx_quality(index: int) -> void:
+	Profile.fx_quality = index
+	Profile.save_profile()
+
+func _set_fx_dim(enabled: bool) -> void:
+	Profile.fx_dim = enabled
+	Profile.save_profile()
+
+func _set_fx_value(value: float, key: String, percent: Label) -> void:
+	Profile.set(key, value / 100.0)
+	percent.text = "%d%%" % roundi(value)
+	Profile.save_profile()
 
 func _settings_slider(parent: Node, name_text: String, y: float, value: float, master: bool) -> void:
 	text_at(parent, name_text, 36, y - 20, 21, MUTED)

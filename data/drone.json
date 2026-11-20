@@ -3,5 +3,6 @@
   "health": 5,
   "speed": 1,
   "reward": 3,
+  "reward_rp": 1,
   "color": "#ff467d"
 }
