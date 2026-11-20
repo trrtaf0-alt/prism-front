@@ -33,7 +33,6 @@ const VOICES := {
 	&"nova": [1.37, 250, 33, 0.65, 0.76, 1.55, 0.64, 460],
 	&"charge_doom": [0.80, 112, 555, 0.72, 0.46, 0.80, 0.38, 390],
 	&"doom": [0.99, 350, 45, 0.83, 0.56, 1.53, 0.58, 440],
-	&"holo": [0.42, 374, 698, 0.86, 0.21, 0.36, 0.24, 260],
 	&"singularity": [1.74, 129, 36, 0.65, 0.57, 1.53, 0.48, 770],
 	&"gravity_end": [1.16, 159, 30, 0.73, 0.63, 1.64, 0.64, 530],
 	&"spectrum": [0.69, 760, 254, 0.99, 0.14, 0.96, 0.44, 385],
@@ -52,7 +51,7 @@ const ATTACKS := {
 	"split": &"split", "charge_orbit": &"charge_orbit", "orbit": &"orbit",
 	"prism_source": &"prism", "gravity": &"gravity", "vortex": &"vortex", "pulse": &"pulse",
 	"storm_source": &"storm", "photon_source": &"photon", "charge_nova": &"charge_nova",
-	"nova": &"nova", "charge_doom": &"charge_doom", "doom": &"doom", "holo": &"holo",
+	"nova": &"nova", "charge_doom": &"charge_doom", "doom": &"doom",
 	"singularity": &"singularity", "collapse_gravity": &"gravity_end", "spectrum_source": &"spectrum",
 	"charge_cataclysm": &"charge_cataclysm", "cataclysm": &"cataclysm",
 }

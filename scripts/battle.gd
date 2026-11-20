@@ -74,8 +74,6 @@ class Turret:
 	var range_multiplier := 1.0
 	var damage_remainder := 0.0
 	var field_age := 0.0
-	var mirror_timers: Dictionary = {}
-	var mirror_fields: Dictionary = {}
 
 class Bolt:
 	var position: Vector2
@@ -152,7 +150,6 @@ var _impact_budget := 64
 var _advanced_impact_budget := 4
 var _needs_cleanup := false
 var _maximum_step := 0.0
-var _copy_neighbors: Dictionary = {}
 
 func _init(map: FieldMap, rules: BattleData, mode: StringName = &"easy") -> void:
 	field = map
@@ -208,7 +205,6 @@ func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	if int(tower.definition.stage) == 5 and tower.definition.support == TowerSupport.Kind.NONE:
 		terminal_used[id] = tower.definition.name
 	support.rebuild(self)
-	_refresh_copies()
 	effect.emit(&"install", tower.position, Vector2.ZERO)
 	tower_installed.emit(int(tower.definition.stage), int(tower.definition.support))
 	return true
@@ -224,7 +220,6 @@ func sell(cell: Vector2i) -> bool:
 		tower.damage_multiplier = 1.0
 	support.rebuild(self)
 	_credit(int(tower.definition.refund))
-	_refresh_copies()
 	effect.emit(&"sell", tower.position, Vector2.ZERO)
 	return true
 
@@ -488,9 +483,6 @@ func _update_towers(delta: float) -> void:
 		var due := tower.cooldown - delta * tower.speed_multiplier
 		var cadence_carry := minf(0.0, due) if tower.cooldown > 0.0 and tower.speed_multiplier > 1.0 else 0.0
 		tower.cooldown = maxf(0.0, due)
-		if tower.definition.attack == "copy":
-			_update_copy(tower, delta)
-			continue
 		if enemies.is_empty():
 			tower.field_age = 0.0
 			continue
@@ -519,56 +511,6 @@ func target_direction(tower: Turret, target: Drone, def: Dictionary, predict: bo
 		return aim_at(tower.position, target, float(def.projectile_speed))
 	var direction := tower.position.direction_to(target.position)
 	return Vector2.RIGHT if direction.is_zero_approx() else direction
-
-func _refresh_copies() -> void:
-	_copy_neighbors.clear()
-	for tower in towers:
-		if tower.definition.attack != "copy":
-			continue
-		var neighbors: Array[Turret] = []
-		var radius := float(tower.effective.range)
-		for other in towers:
-			if other.definition.support == TowerSupport.Kind.NONE and other.definition.attack != "copy" and other.position.distance_squared_to(tower.position) <= radius * radius:
-				neighbors.append(other)
-		neighbors.sort_custom(func(a: Turret, b: Turret): return tower.position.distance_squared_to(a.position) < tower.position.distance_squared_to(b.position))
-		neighbors.resize(mini(neighbors.size(), int(tower.definition.max_targets)))
-		for prior: Variant in tower.mirror_timers.keys():
-			if not neighbors.has(prior):
-				tower.mirror_timers.erase(prior)
-				tower.mirror_fields.erase(prior)
-		_copy_neighbors[tower] = neighbors
-
-func _update_copy(tower: Turret, delta: float) -> void:
-	for other: Turret in _copy_neighbors.get(tower, []):
-		var timer := maxf(0.0, float(tower.mirror_timers.get(other, 0.0)) - delta * tower.speed_multiplier)
-		tower.mirror_timers[other] = timer
-		if timer > 0.000001 or enemies.is_empty():
-			continue
-		var def := other.definition
-		if not def.global and tower.range_multiplier > 1.0:
-			def = def.duplicate()
-			def.range *= tower.range_multiplier
-			if def.center == "self" and def.attack in ["field", "pulse"]:
-				def.radius *= tower.range_multiplier
-		var target := _select_target(tower, def, false)
-		if target == null:
-			tower.mirror_fields.erase(other)
-			continue
-		var final_weapon := int(def.stage) == 5
-		var efficiency := float(tower.definition.terminal_efficiency if final_weapon else tower.definition.copy_efficiency)
-		var cadence := float(tower.definition.terminal_cadence if final_weapon else tower.definition.copy_cadence)
-		var override: Dictionary = tower.definition.copy_overrides.get(def.id, {})
-		efficiency = float(override.get("damage", efficiency))
-		cadence = float(override.get("interval", cadence))
-		var direction := target_direction(tower, target, def, true)
-		tower.angle = direction.angle()
-		tower.recoil = 0.12
-		tower.mirror_timers[other] = maxf(float(def.interval) * cadence, _sequence_span(def) * tower.speed_multiplier)
-		attack_visual.emit("holo", tower.position, other.position, 0, tower.definition.tint, 0.25, 4)
-		tower.field_age = float(tower.mirror_fields.get(other, 0.0))
-		arsenal.attack(self, tower, target, def, direction, efficiency)
-		if def.ramp > 0.0:
-			tower.mirror_fields[other] = tower.field_age
 
 func _select_target(tower: Turret, def: Dictionary, cached: bool) -> Drone:
 	if def.get("detect_cloak", false):

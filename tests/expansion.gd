@@ -48,13 +48,19 @@ func _tower_art() -> void:
 func _research() -> void:
 	var graph := rules.research
 	check(graph.ids.size() == 100 and graph.ordered.size() == 100, "100 unique reachable nodes")
-	check(graph.unlocks.size() == 35 and graph.ids.size() - graph.unlocks.size() == 65 and rules.towers.ids.size() == 36, "35 unlocks, 65 junctions and 36 towers")
+	check(graph.unlocks.size() == 34 and graph.ids.size() - graph.unlocks.size() == 66 and rules.towers.ids.size() == 35, "34 unlocks, 66 junctions and 35 towers")
 	var distribution := [Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO]
 	for id in graph.ids:
 		var node: Dictionary = graph.nodes[id]
 		distribution[int(node.stage)] += Vector2i(1, int(node.has("unlock")))
 		check(node.has("unlock") or not graph.children[id].is_empty(), "junction opens a detectable route: " + id)
-	check(distribution == [Vector2i(6, 0), Vector2i(14, 4), Vector2i(24, 8), Vector2i(26, 10), Vector2i(19, 8), Vector2i(11, 5)], "tier distribution")
+	check(distribution == [Vector2i(6, 0), Vector2i(14, 4), Vector2i(24, 8), Vector2i(26, 10), Vector2i(19, 7), Vector2i(11, 5)], "tier distribution")
+	var bridge: Dictionary = graph.nodes["phase_bridge"]
+	check(not graph.nodes.has("replica") and rules.towers.lookup("tower_27").is_empty(), "replica research and tower were removed")
+	check(not bridge.has("unlock") and graph.children[bridge.id].has("white_web") and graph.children[bridge.id].has("interlock"), "phase bridge connects both terminal branches")
+	check(ResearchGraph.satisfied(bridge.requirements, {"phase_alignment": true, "storm": true}), "storm satisfies the cross-branch input")
+	check(ResearchGraph.satisfied(bridge.requirements, {"phase_alignment": true, "doom": true}), "doom satisfies the cross-branch input")
+	check(not ResearchGraph.satisfied(bridge.requirements, {"storm": true, "doom": true}), "phase alignment is required for either input")
 	var nested := {"all": [{"any": ["a", {"all": ["b", "c"]}]}, "d"]}
 	check(not ResearchGraph.satisfied(nested, {"a": true}) and not ResearchGraph.satisfied(nested, {"b": true, "d": true}), "AND and nested conditions reject incomplete plans")
 	check(ResearchGraph.satisfied(nested, {"a": true, "d": true}) and ResearchGraph.satisfied(nested, {"b": true, "c": true, "d": true}), "either nested OR path works")
@@ -69,7 +75,7 @@ func _research() -> void:
 		full_cost += int(graph.nodes[id].cost_rp)
 		if id != "survey":
 			check(run.purchase(id), "can purchase " + id)
-	check(run.completed.size() == 100 and run.unlocked.size() == 36 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
+	check(run.completed.size() == 100 and run.unlocked.size() == 35 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
 	for pair: Array in [["singularity", 19360], ["spectrum", 27080], ["cataclysm", 42260]]:
 		var cost := graph.minimum_cost(pair[0])
 		check(cost == pair[1], "minimum unique RP cost for %s = %d" % [pair[0], cost])
@@ -144,6 +150,9 @@ func _status_and_economy() -> void:
 func _all_towers() -> void:
 	var armored := rules.drone.duplicate()
 	armored.health = 50_000
+	var removed := _new_battle()
+	_unlock(removed)
+	check(not removed.install(Vector2i(2, 4), "tower_27") and removed.credits == 5_000_000, "removed tower cannot be installed")
 	for id in rules.towers.ids:
 		var sim := _new_battle()
 		sim.credits = 1_000_000
@@ -159,9 +168,6 @@ func _all_towers() -> void:
 		var fixture: Array[Battle.Drone] = []
 		for i in 11:
 			fixture.append(sim.spawn(1.5 + i * 0.11, armored))
-		if def.attack == "copy":
-			sim.install(Vector2i(3, 4), "tower_09")
-			sim.install(Vector2i(3, 5), "tower_27")
 		var fx: Array[String] = []
 		sim.attack_visual.connect(func(style, _a, _b, _c, _d, _e, _f): fx.append(style))
 		for i in 262:
@@ -174,8 +180,6 @@ func _all_towers() -> void:
 		check(marked if def.attack == "mark" else damage > 0, "real hit or mark from " + id)
 		if id != TowerRegistry.BASE:
 			check(not fx.is_empty(), "attack sends visual events " + id)
-		if def.attack == "copy":
-			check(fx.has("holo") and sim._copy_neighbors[sim.occupied[cell]].size() == 1, "copy emits and ignores other copies")
 		var cash := sim.credits
 		check(sim.sell(cell) and sim.credits == cash + int(def.refund), "refund " + id)
 
@@ -200,17 +204,6 @@ func _attack_details() -> void:
 	for i in 211:
 		sim.tick(STEP)
 	check(far.health == 988000, "cataclysm lands 12000 at remote location after windup")
-	sim = _new_battle()
-	_unlock(sim)
-	var cat_site := Vector2i(2, 4)
-	var copy_site := Vector2i(3, 4)
-	sim.install(cat_site, "tower_30")
-	sim.install(copy_site, "tower_27")
-	far = sim.spawn(50.0, armored)
-	for i in 211:
-		sim.tick(STEP)
-	check(far.health == 986200, "mirrored cataclysm applies its per-weapon 15 percent rate")
-	check(is_equal_approx(sim.occupied[copy_site].mirror_timers[sim.occupied[cat_site]], 36.5), "mirrored cataclysm uses a 40 second cadence")
 	sim = _new_battle()
 	_unlock(sim)
 	sim.install(Vector2i(2, 4), "tower_28")
@@ -357,6 +350,9 @@ func _interface() -> void:
 	check(board.zoom > old_zoom, "research board zooms with scroll wheel")
 	board.overview()
 	await _capture("research-overview")
+	board.select_node("phase_bridge", true)
+	check(ui.research_screen.description.text == rules.research.nodes["phase_bridge"].description and ui.research_screen.link_summary.text.contains("대격변 격발 연동"), "bridge detail describes its role and links")
+	await _capture("research-phase-bridge")
 	board.select_node("cataclysm", true)
 	check(board.highlighted.size() > 65 and ui.research_screen.buy.disabled, "terminal path and locked condition display")
 	await _capture("research-network")
@@ -380,7 +376,7 @@ func _interface() -> void:
 			_click(ui, button.get_global_rect().get_center())
 			break
 	var all_cards := _catalog_cards(ui)
-	check(all_cards.size() == 36, "catalog can show every tower on demand")
+	check(all_cards.size() == 35, "catalog can show every tower on demand")
 	_click(ui, all_cards[2].get_global_rect().get_center())
 	check(ui.modal_kind == "research" and ui.research_screen.board.focus_id == "pierce", "locked tower links to its research")
 	ui.close_modal()
@@ -660,7 +656,7 @@ func _visual_preview(ui) -> void:
 	check(sample_cells.size() >= rules.towers.ids.size(), "all tower art fits on the sample field")
 	for i in mini(sample_cells.size(), rules.towers.ids.size()):
 		sim.install(sample_cells[i], rules.towers.ids[i])
-	check(sim.towers.size() == 36, "all 36 tower silhouettes are installed for visual QA")
+	check(sim.towers.size() == 35, "all 35 tower silhouettes are installed for visual QA")
 	ui.callout_time = 0.0
 	await _capture("tower-lineup")
 	await _attack_showcase(ui)

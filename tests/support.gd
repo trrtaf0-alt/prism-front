@@ -113,12 +113,12 @@ func _range_and_speed() -> void:
 func _quantum() -> void:
 	var sim := _new_battle()
 	sim.install(HOST)
-	sim.install(Vector2i(1, 4), "tower_27")
+	sim.install(Vector2i(1, 4), "tower_09")
 	sim.install(Vector2i(3, 4), "tower_35")
 	sim.install(Vector2i(4, 4), "tower_35")
 	var owner: Battle.Turret = sim.occupied[HOST]
-	var copied: Battle.Turret = sim.occupied[Vector2i(1, 4)]
-	check(sim.support.linked.size() == 2 and sim._copy_neighbors[copied].size() == 1, "copy links to quantum and never copies support")
+	var partner: Battle.Turret = sim.occupied[Vector2i(1, 4)]
+	check(sim.support.linked.size() == 2 and sim.support.linked.has(owner) and sim.support.linked.has(partner), "quantum links both attack towers")
 	var hits: Array[Vector2] = []
 	sim.support_visual.connect(func(event, _kind, _from, target):
 		if event == &"quantum":
@@ -131,7 +131,7 @@ func _quantum() -> void:
 	sim.barrage([target_1, target_2], weapon, 1.0, -1.0, owner)
 	weapon.damage = 40
 	sim.damage(target_1, weapon, 1.0, -1.0, owner)
-	sim.damage(target_2, weapon, 1.0, -1.0, copied)
+	sim.damage(target_2, weapon, 1.0, -1.0, partner)
 	sim.damage(doomed, weapon, 1.0, -1.0, owner)
 	sim.support.tick(sim, 1.99)
 	check(hits.is_empty(), "quantum waits for the two-second window")
@@ -145,7 +145,7 @@ func _quantum() -> void:
 	check(owner.buffs.has(Kind.QUANTUM) and owner.buffs[Kind.QUANTUM] != original, "duplicate quantum providers are nonstacking and hand off")
 	for i in 90:
 		sim.tick(STEP)
-	check(not sim.support.linked[copied].hits.is_empty(), "real copied firing participates in quantum")
+	check(not sim.support.linked[partner].hits.is_empty(), "real partner firing participates in quantum")
 	sim.sell(Vector2i(4, 4))
 	check(sim.support.linked.is_empty(), "quantum sale clears windows")
 	var lone := _new_battle()

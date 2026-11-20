@@ -38,7 +38,7 @@ static func size_for_stage(stage: int) -> float:
 
 static func rotation_offset(id: String, elapsed: float) -> float:
 	match id:
-		"tower_14", "tower_20", "tower_27", "tower_28", "tower_32", "tower_35":
+		"tower_14", "tower_20", "tower_28", "tower_32", "tower_35":
 			return elapsed * -0.65
 		"tower_21", "tower_34":
 			return elapsed * 2.0

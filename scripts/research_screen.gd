@@ -128,7 +128,7 @@ func _refresh() -> void:
 	cost.text = "%d RP    ·    남은 최소 %d RP" % [int(node.cost_rp), _minimum]
 	requirements.text = run.graph.requirement_text(node.requirements, run.completed)
 	if def.is_empty():
-		description.text = "%s 계열의 연결 연구입니다." % ResearchGraph.LANES[int(node.lane)]
+		description.text = node.get("description", "%s 계열의 연결 연구입니다." % ResearchGraph.LANES[int(node.lane)])
 		outcome.text = "연결된 후속 연구의 선행 조건을 충족합니다."
 	else:
 		description.text = def.description

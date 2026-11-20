@@ -9,9 +9,9 @@ const STARTS: Array[Vector2i] = [
 	Vector2i(8, 12), Vector2i(9, 12), Vector2i(10, 12), Vector2i(11, 12), Vector2i(12, 12),
 ]
 const IDS := [
-	"tower_16", "tower_23", "tower_25", "tower_27", "tower_28",
+	"tower_16", "tower_23", "tower_25", "tower_26", "tower_28",
 	"tower_29", "tower_30", "tower_22", "tower_24", "tower_26",
-	"tower_30", "tower_29", "tower_27", "tower_23", "tower_16",
+	"tower_30", "tower_29", "tower_25", "tower_23", "tower_16",
 	"tower_30", "tower_29", "tower_28", "tower_26", "tower_23",
 	"tower_16", "tower_25", "tower_12", "tower_21", "tower_14",
 ]

@@ -7,7 +7,7 @@ const SEATS: Array[Vector2i] = [
 	Vector2i(7, 5), Vector2i(8, 5), Vector2i(12, 9), Vector2i(5, 12),
 ]
 const GEAR := [
-	"tower_16", "tower_23", "tower_25", "tower_27", "tower_28", "tower_29", "tower_30", "tower_22",
+	"tower_16", "tower_23", "tower_25", "tower_26", "tower_28", "tower_29", "tower_30", "tower_22",
 	"tower_30", "tower_29", "tower_07", "tower_18", "tower_20", "tower_24", "tower_26", "tower_14",
 ]
 const SIZES := [100, 500, 1000, 5000]

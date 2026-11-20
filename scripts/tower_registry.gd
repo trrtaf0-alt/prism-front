@@ -9,13 +9,12 @@ const DEFAULTS := {
 	"windup": 0.0, "ramp": 0.0, "duration": 0.0, "tick": 0.0, "guided": false,
 	"returning": false, "split": 0, "fragment_damage": 0, "fragment_range": 0.0,
 	"slow": 0.0, "pull": 0.0, "shock": false, "status_time": 0.0, "mark_bonus": 0.0,
-	"mark_cap": 0, "copy_efficiency": 0.0, "terminal_efficiency": 0.0,
-	"copy_cadence": 1.0, "terminal_cadence": 1.0, "copy_overrides": {},
+	"mark_cap": 0,
 }
 const ATTACK_NAMES := {
 	"support": "지원", "bolt": "투사체", "line": "직선 관통", "chain": "연쇄", "strike": "지연 타격",
 	"cone": "부채꼴", "beam": "광선", "mark": "피해 증폭 표식", "field": "지속 광역",
-	"multi": "동시 조준", "pulse": "확산 충격파", "copy": "패턴 복제", "singularity": "전역 지속장",
+	"multi": "동시 조준", "pulse": "확산 충격파", "singularity": "전역 지속장",
 }
 
 var definitions: Dictionary = {}

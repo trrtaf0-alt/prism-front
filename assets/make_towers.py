@@ -1,4 +1,4 @@
-"""Paint the 30 original tower chassis and rotating weapon heads. Requires Pillow."""
+"""Paint tower chassis and rotating weapon heads. Requires Pillow."""
 import json
 from math import cos, pi, sin
 from pathlib import Path
@@ -250,12 +250,6 @@ class Sprite:
                 self.gem(-11, 0, 10, 6)
                 self.line([(0, 0), (52, 0)], self.tint, 5)
                 self.line([(27, 0), (50, 0)], self.lit, 2)
-            case 27:  # Three offset holographic frames.
-                for a in [30, 150, 270]:
-                    x, y = orbit(25, a)
-                    self.regular(4, 13, a, None, self.tint, 3, x, y)
-                    self.regular(4, 8, a, self.steel, self.lit, 2, x, y)
-                self.gem(0, 0, 10, 3)
             case 28:  # Dark core, warped accretion arcs and a segmented outer cage.
                 for a in [0, 90, 180, 270]:
                     self.arc(39, a + 4, a + 70, self.rim, 6)
@@ -370,9 +364,12 @@ def support_atlas():
 def main():
     extra = json.loads((ROOT.parent / "data" / "towers.json").read_text(encoding="utf-8"))
     base = json.loads((ROOT.parent / "data" / "turret.json").read_text(encoding="utf-8"))
-    definitions = [base, *extra["towers"]]
-    atlas = Image.new("RGBA", (CELL * SIDE, CELL * ((len(definitions) * 2 + SIDE - 1) // SIDE)))
-    for i, (definition, chassis) in enumerate(zip(definitions, BASES, strict=True)):
+    definitions = [{"id": "tower_01", **base}, *extra["towers"]]
+    # Keep atlas slots tied to tower IDs so a gap never shifts the remaining art.
+    atlas = Image.new("RGBA", (CELL * SIDE, CELL * ((len(BASES) * 2 + SIDE - 1) // SIDE)))
+    for definition in definitions:
+        i = int(definition["id"].removeprefix("tower_")) - 1
+        chassis = BASES[i]
         color = ImageColor.getrgb(definition["color"])
         base_art, head_art = Sprite(color), Sprite(color)
         base_art.chassis(i + 1, *chassis)

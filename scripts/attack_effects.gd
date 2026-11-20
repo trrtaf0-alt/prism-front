@@ -284,7 +284,7 @@ func _render(fx: Effect) -> void:
 				_line(at + Vector2(17, -440), at + Vector2(3, -6), 4.0, fall)
 			_stamp(3, at, minf(reach * 1.24, 365.0), -t * 0.6, fade * 0.86)
 			_blast(at, reach, tint, t)
-		"rail", "sniper", "laser", "mark", "holo":
+		"rail", "sniper", "laser", "mark":
 			_precision(fx, tint, t)
 		"flame":
 			_plume(at, fx.end, tint, t)
@@ -423,9 +423,6 @@ func _precision(fx: Effect, tint: Color, t: float) -> void:
 		"mark":
 			_hoop(end, 16.0 + 11.0 * t, 4, _time * 1.6, tint)
 			_line(at, end, 1.7, Color(tint, tint.a * 0.65))
-		"holo":
-			_beam(at, end, 3.4, tint)
-			_stamp(10, at, 74.0 + t * 72.0, _time, tint.a)
 	_ring(end, 6.5 + t * 16.0, tint)
 
 func _launch(fx: Effect, tint: Color, t: float) -> void:
