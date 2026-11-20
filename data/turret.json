@@ -1,0 +1,10 @@
+{
+  "name": "네온 자동 포탑",
+  "damage": 1,
+  "shots_per_second": 1,
+  "range": 4,
+  "projectile_speed": 12,
+  "cost": 10,
+  "refund": 10,
+  "color": "#50f6ed"
+}

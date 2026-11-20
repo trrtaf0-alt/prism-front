@@ -1,0 +1,8 @@
+{
+  "base_health": 100,
+  "starting_credits": 50,
+  "first_wave_count": 10,
+  "first_wave_reward": 10,
+  "wave_growth": 1.2,
+  "temporary_spawn_interval": 0.5
+}

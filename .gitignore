@@ -1,0 +1,6 @@
+.godot/
+/dist/
+/reports/
+*.tmp
+*.log
+Thumbs.db
