@@ -30,9 +30,14 @@ func _init(base: Dictionary, content: Dictionary) -> void:
 	if normal_weight <= 0.0:
 		error = "일반형 출현 가중치는 양수여야 합니다."
 		return
-	var normal := base.duplicate()
-	normal.merge({"id": "normal", "weight": normal_weight}, true)
-	_register(normal)
+	var normal := {
+		"id": "normal", "weight": normal_weight, "name": base.get("name"),
+		"color": base.get("color"), "health": base.health, "speed": base.speed,
+		"reward": base.reward, "reward_rp": base.get("reward_rp", 1),
+	}
+	if not _register(normal):
+		error = "일반형 표시 정보 또는 보상이 잘못되었습니다."
+		return
 	for row: Variant in rows:
 		if not row is Dictionary or not _register(row):
 			error = "몹 정의를 확인하세요 · " + str(row.get("id", "") if row is Dictionary else row)
@@ -50,8 +55,13 @@ func _init(base: Dictionary, content: Dictionary) -> void:
 			if child.is_empty() or not child.child or not child.brood.is_empty() or not child.split_to.is_empty() or child.reward_rp != 0:
 				error = "재귀 증식 또는 생성체 RP를 확인하세요 · " + def.id
 				return
-	if definitions.get("split", {}).get("split_to") != "split_1" or definitions.get("split_1", {}).get("split_to") != "split_2":
+	var original: Dictionary = definitions.get("split", {})
+	if original.get("child", true) or original.get("split_to") != "split_1" or definitions.get("split_1", {}).get("split_to") != "split_2":
 		error = "분열형은 원본, 1차, 2차가 모두 필요합니다."
+		return
+	var guardian: Dictionary = definitions.get("guardian", {})
+	if guardian.get("child", true) or guardian.get("guardian", {}).is_empty():
+		error = "수호형에는 지속 보호막 공급이 필요합니다."
 
 func _register(raw: Dictionary) -> bool:
 	var def := DEFAULTS.duplicate()

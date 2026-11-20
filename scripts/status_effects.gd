@@ -64,9 +64,15 @@ func boosted_damage(amount: int) -> int:
 	return ceili(amount * (1.0 + mark_bonus * mark_stacks)) if mark_left > 0.0 else amount
 
 func step(progress: float, speed: float, delta: float, rules: Dictionary) -> float:
-	shock_age += delta
-	if resistance > 0.0 and shock_age >= float(rules.shock_recovery_delay):
-		resistance = maxf(0.0, resistance - float(rules.shock_recovery_rate) * delta)
+	if resistance <= 0 and stun_left <= 0 and move_window <= 0 and slow_left <= 0 and mark_left <= 0 and pull_left > 0:
+		var pulling := minf(delta, pull_left)
+		pull_left -= pulling
+		engaged = pull_left > 0
+		return speed * delta + move_toward(progress, anchor, pull * pulling) - progress
+	if resistance > 0.0:
+		shock_age += delta
+		if shock_age >= float(rules.shock_recovery_delay):
+			resistance = maxf(0.0, resistance - float(rules.shock_recovery_rate) * delta)
 	var stopped := minf(delta, stun_left)
 	var movable := delta - stopped
 	stun_left -= stopped

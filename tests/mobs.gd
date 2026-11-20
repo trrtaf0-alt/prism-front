@@ -24,6 +24,7 @@ func _run() -> void:
 		return
 	_registry()
 	_damage_and_control()
+	_exit_collision()
 	_guardian()
 	_split()
 	_periodic()
@@ -115,6 +116,18 @@ func _damage_and_control() -> void:
 	armored.give_shield(3, 7, 5)
 	sim._apply_damage(armored, 13, Vector2.ZERO)
 	_check(armored.shield_hp == 0 and armored.health == 14, "armor applies to body overflow only")
+
+func _exit_collision() -> void:
+	var exit := map.path[map.path.size() - 1]
+	var direction := map.heading_at(map.length())
+	for distance in [0.22, 0.27]:
+		var sim := _fresh()
+		var unit := sim.spawn(map.length() - 0.001)
+		unit.health = 1
+		sim._fire(exit - direction * float(distance), direction)
+		sim.tick(STEP)
+		var early: bool = distance < 0.25
+		_check(sim.health == (100 if early else 99) and sim.credits == (53 if early else 50), "projectile causality at exit " + str(distance))
 
 func _guardian() -> void:
 	var sim := _fresh()

@@ -1,6 +1,6 @@
-# 프리즘 방어선 v0.2
+# 프리즘 방어선 v0.3
 
-Windows용 2D 타워 디펜스입니다. 일반 재화로 타워를 배치하고 적을 처치해 연구 포인트(RP)를 모으세요. 총 100개 연구에서 타워 29종을 해금할 수 있습니다. 기본 포탑을 포함한 전체 타워는 30종입니다.
+Windows용 2D 타워 디펜스입니다. 일반 재화로 타워를 배치하고 적을 처치해 연구 포인트(RP)를 모으세요. 총 100개 연구에서 타워 29종을 해금할 수 있습니다. 기본 포탑을 포함한 전체 타워는 30종입니다. v0.3은 기본 편성 18종과 분열·증식 생성체, 보호막 공급, 단계별 보스를 추가합니다. [몹 능력치 및 편성 안내](MOBS.md)
 
 ## 실행과 조작
 
@@ -39,7 +39,7 @@ Windows 10/11 x64에서 `dist/PrismFront.exe`를 실행합니다. 게임 리소�
 | --- | --- |
 | `data/research.json` | 연구 이름, 비용, 분기·교차 조건, 위치, 해금 타워 |
 | `data/turret.json`, `data/towers.json` | 기본 포탑과 추가 타워의 공격 형태 및 수치 |
-| `data/drone.json`, `data/status.json` | 일반 적 보상과 상태 효과 조정 |
+| `data/drone.json`, `data/enemies.json`, `data/status.json` | 몹 능력·보상·편성과 상태 효과 조정 |
 | `data/balance.json` | 웨이브 수식 계수, 임시 등장 간격 및 연구 화면 정책 |
 | `data/sample_map.json` | 30×18 샘플 맵과 원래 경로·장애물 |
 | `scripts/research_graph.gd`, `scripts/research_run.gd` | DAG 검증, 재귀 선행 조건, 최소 비용 및 한 판의 연구 상태 |
@@ -48,7 +48,7 @@ Windows 10/11 x64에서 `dist/PrismFront.exe`를 실행합니다. 게임 리소�
 | `scripts/field_view.gd`, `scripts/attack_effects.gd`, `scripts/sprite_batch.gd` | 전장 렌더링, 타워 이펙트 및 배치 |
 | `scripts/profile.gd`, `scripts/sound.gd` | 설정·최고 기록 저장과 합성 효과음 |
 
-새 타워는 기존 공격 구성요소와 파라미터를 재사용하고, 새 연구 노드에서 해당 ID를 참조합니다. 조건은 ID 문자열, `all`, `any`의 재귀 조합으로 작성합니다. 조건식이 올바르지 않거나 해금 관계에 오류가 있으면 시작 화면에서 표시합니다. 새 적 정의는 `Battle.spawn`에 전달할 수 있으며 웨이브 구성에는 현재 일반 적만 사용합니다.
+새 타워는 기존 공격 구성요소와 파라미터를 재사용하고, 새 연구 노드에서 해당 ID를 참조합니다. 조건은 ID 문자열, `all`, `any`의 재귀 조합으로 작성합니다. 조건식이 올바르지 않거나 해금 관계에 오류가 있으면 시작 화면에서 표시합니다. 새 적과 편성은 `data/enemies.json`에 정의합니다. `EnemyRegistry`는 생성 관계를 검증하고 `WaveRoster`는 각 웨이브의 슬롯을 순서대로 추첨합니다.
 
 최종 사용자 맵은 같은 스키마로 `data/map.json`을 추가하면 적용됩니다. 좌표는 0부터 시작하는 `[x, y]`입니다. `.`는 빈칸, `#`는 장애물, `=`는 경로, `S`는 시작, `E`는 출구입니다. 30자씩 18행을 작성하고 연결된 `path`를 선언합니다.
 
