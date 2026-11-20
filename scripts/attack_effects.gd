@@ -8,6 +8,8 @@ const REFRESHABLE := ["vortex", "plasma", "gravity", "spectrum_source", "prism_s
 const FOLLOWING_BEAMS := ["spectrum", "prism", "photon", "storm", "storm_column"]
 const TRACK_CELL := 24.0
 const PLATES := preload("res://assets/attack_atlas.png")
+const PLATE_FRAME := 512.0
+const RING_SHADER := preload("res://assets/attack_ring.gdshader")
 const PLATE_LIMIT := 60
 
 class Effect:
@@ -61,9 +63,13 @@ func setup(glow: Texture2D, preferences: Node, sound: Node, bounds: Rect2, cell:
 	var beam_texture := ImageTexture.create_from_image(beam)
 	var plate_material := ShaderMaterial.new()
 	plate_material.shader = TowerArt.SHADER
+	plate_material.set_shader_parameter("frame_side", PLATE_FRAME)
 	_plates = SpriteBatch.new(PLATES, 1.0, plate_material)
+	_plates.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	_lines = SpriteBatch.new(beam_texture, 1.0, null)
-	_rings = SpriteBatch.new(beam_texture, 2.0, null, _annulus())
+	var ring_material := ShaderMaterial.new()
+	ring_material.shader = RING_SHADER
+	_rings = SpriteBatch.new(null, 2.0, ring_material, _annulus())
 	_glows = SpriteBatch.new(glow, 2.0, null)
 	_particles = SpriteBatch.new(dot, 1.0, null)
 	for batch: SpriteBatch in [_glows, _plates, _rings, _lines, _particles]:
@@ -76,10 +82,13 @@ static func _annulus() -> ArrayMesh:
 	var indices := PackedInt32Array()
 	for i in SEGMENTS:
 		var edge := Vector2.from_angle(i * TAU / SEGMENTS)
-		points.append(Vector3(edge.x, edge.y, 0.0) * 0.968)
-		points.append(Vector3(edge.x, edge.y, 0.0))
-		uv.append(Vector2(0.5, 0.0))
-		uv.append(Vector2(0.5, 1.0))
+		# Cover the analytic stroke and halo with a narrow strip, even between vertices.
+		var inner := edge * 0.965
+		var outer := edge * 1.003
+		points.append(Vector3(inner.x, inner.y, 0.0))
+		points.append(Vector3(outer.x, outer.y, 0.0))
+		uv.append(inner * 0.5 + Vector2.ONE * 0.5)
+		uv.append(outer * 0.5 + Vector2.ONE * 0.5)
 		var a := i * 2
 		var b := ((i + 1) % SEGMENTS) * 2
 		indices.append_array(PackedInt32Array([a, a + 1, b, b, a + 1, b + 1]))
@@ -317,7 +326,7 @@ func _render(fx: Effect) -> void:
 			_blast(at, reach, tint, t)
 
 func _stamp(frame: int, at: Vector2, diameter: float, angle: float, opacity: float) -> void:
-	if _preferences.fx_quality < 2 or _plate_count >= PLATE_LIMIT:
+	if _preferences.fx_quality < 2 or _plate_count >= PLATE_LIMIT or diameter < 12.0:
 		return
 	_plates.item(_plate_count, at, Vector2.from_angle(angle) * diameter, Color(TowerArt.batch_color(frame), clampf(opacity, 0.0, 1.0)))
 	_plate_count += 1

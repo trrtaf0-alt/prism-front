@@ -25,6 +25,8 @@ func _run() -> void:
 	_status_and_economy()
 	_all_towers()
 	_tower_art()
+	var plate_atlas := AttackEffects.PLATES.get_image()
+	check(plate_atlas.get_size() == Vector2i(4096, 1024) and plate_atlas.has_mipmaps(), "large effect plates import at full size with lower-resolution levels")
 	_attack_details()
 	_projectile_behaviors()
 	await _interface()

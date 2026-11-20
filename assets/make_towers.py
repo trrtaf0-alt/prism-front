@@ -30,8 +30,10 @@ def orbit(radius, angle):
 
 
 class Sprite:
-    def __init__(self, tint):
-        self.image = Image.new("RGBA", (CELL * SCALE, CELL * SCALE))
+    def __init__(self, tint, *, pixels=CELL):
+        self.pixels = pixels
+        self.scale = pixels * SCALE / CELL
+        self.image = Image.new("RGBA", (pixels * SCALE, pixels * SCALE))
         self.pen = ImageDraw.Draw(self.image)
         self.tint = tint
         self.lit = blend(tint, (255, 249, 228), 0.56)
@@ -39,21 +41,21 @@ class Sprite:
         self.rim = blend((157, 166, 169), tint, 0.33)
 
     def xy(self, point):
-        return tuple(round((axis + CELL / 2) * SCALE) for axis in point)
+        return tuple(round((axis + CELL / 2) * self.scale) for axis in point)
 
     def polygon(self, points, fill, edge=None, width=2):
-        self.pen.polygon([self.xy(p) for p in points], fill=fill, outline=edge, width=width * SCALE)
+        self.pen.polygon([self.xy(p) for p in points], fill=fill, outline=edge, width=round(width * self.scale))
 
     def line(self, points, color, width=2):
-        self.pen.line([self.xy(p) for p in points], fill=color, width=width * SCALE, joint="curve")
+        self.pen.line([self.xy(p) for p in points], fill=color, width=round(width * self.scale), joint="curve")
 
     def circle(self, x, y, radius, fill=None, edge=None, width=2):
         self.pen.ellipse([self.xy((x - radius, y - radius)), self.xy((x + radius, y + radius))],
-                         fill=fill, outline=edge, width=width * SCALE)
+                         fill=fill, outline=edge, width=round(width * self.scale))
 
     def arc(self, radius, start, end, color, width=2):
         self.pen.arc([self.xy((-radius, -radius)), self.xy((radius, radius))],
-                     start, end, color, width * SCALE)
+                     start, end, color, round(width * self.scale))
 
     def regular(self, sides, radius, phase, fill, edge=None, width=2, x=0, y=0):
         points = [orbit(radius, phase + i * 360 / sides) for i in range(sides)]
@@ -317,7 +319,7 @@ class Sprite:
                 self.circle(0, 0, 6, "#fff9e5")
 
     def render(self):
-        return self.image.resize((CELL, CELL), Image.Resampling.LANCZOS)
+        return self.image.resize((self.pixels, self.pixels), Image.Resampling.LANCZOS)
 
 
 def support_atlas():

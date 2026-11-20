@@ -3,7 +3,9 @@ from math import sin
 
 from PIL import Image, ImageColor
 
-from make_towers import CELL, ROOT, SIDE, Sprite, orbit
+from make_towers import ROOT, SIDE, Sprite, orbit
+
+FRAME = 512
 
 PALETTE = [
     "#8f66ff", "#a477ff", "#ffb727", "#ffc568", "#a75bfd", "#9ee7ff", "#9391dd",
@@ -119,11 +121,11 @@ def plate(index, sprite):
 
 
 def main():
-    atlas = Image.new("RGBA", (CELL * SIDE, CELL * 2))
+    atlas = Image.new("RGBA", (FRAME * SIDE, FRAME * 2))
     for i, color in enumerate(PALETTE):
-        sprite = Sprite(ImageColor.getrgb(color))
+        sprite = Sprite(ImageColor.getrgb(color), pixels=FRAME)
         plate(i, sprite)
-        atlas.paste(sprite.render(), (i % SIDE * CELL, i // SIDE * CELL))
+        atlas.paste(sprite.render(), (i % SIDE * FRAME, i // SIDE * FRAME))
     atlas.save(ROOT / "attack_atlas.png", optimize=True)
 
 
