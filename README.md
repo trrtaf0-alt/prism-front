@@ -1,10 +1,10 @@
-# 프리즘 방어선 v0.5
+# 프리즘 방어선 v0.6
 
 Windows용 2D 타워 디펜스입니다. 일반 재화로 타워를 배치하고 적을 처치해 연구 포인트(RP)를 모으세요. 총 100개 연구에서 타워 34종을 해금할 수 있습니다. 기본 포탑을 포함한 공격·특수 타워 29종과 지원 타워 6종이 있습니다. 캠페인은 50웨이브로 구성되며 보스는 마지막 웨이브에 한 번 등장합니다. [몹 능력치와 출현 비율](MOBS.md) · [캠페인 밸런스](BALANCE.md) · [지원 타워](SUPPORT.md)
 
 ## 실행과 조작
 
-Windows 10/11 64비트에서는 `dist/PrismFront-Setup-Windows-x64.exe`로 설치하거나 `dist/PrismFront.exe`를 바로 실행합니다. 설치판은 현재 사용자 계정에 설치하고 기본으로 바탕화면 바로가기를 만듭니다. ZIP 배포판은 모두 압축을 푼 뒤 실행 파일을 더블 클릭합니다. 게임 리소스와 한글 글꼴은 EXE에 내장됩니다.
+Windows 10/11 64비트용 설치판과 무설치판은 [GitHub 릴리즈](https://github.com/trrtaf0-alt/prism-front/releases/latest)에서 받을 수 있습니다. `PrismFront-Setup-Windows-x64.exe`로 설치하거나 `PrismFront.exe`를 바로 실행합니다. 설치판은 현재 사용자 계정에 설치하고 기본으로 바탕화면 바로가기를 만듭니다. ZIP 배포판은 모두 압축을 푼 뒤 실행 파일을 더블 클릭합니다. 게임 리소스와 한글 글꼴은 EXE에 내장됩니다.
 
 소스를 실행하려면 Godot 4.7.2에서 `project.godot`을 가져온 뒤 F5로 실행하세요. Windows Desktop 릴리스 내보내기 뒤 [Inno Setup 6](https://jrsoftware.org/inno-setup/downloads)의 `ISCC.exe`로 `packaging/Windows.iss`를 컴파일하면 설치용 EXE를 다시 만들 수 있습니다.
 

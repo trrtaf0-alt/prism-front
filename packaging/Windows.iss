@@ -1,5 +1,5 @@
-﻿#ifndef AppVersion
-  #define AppVersion "0.5"
+#ifndef AppVersion
+  #define AppVersion "0.6.0"
 #endif
 #ifndef AppId
   #define AppId "PrismFront"
@@ -9,6 +9,10 @@
 #endif
 #ifndef OutputName
   #define OutputName "PrismFront-Setup-Windows-x64"
+#endif
+
+#ifndef GameExe
+  #define GameExe "..\dist\PrismFront.exe"
 #endif
 
 [Setup]
@@ -41,7 +45,7 @@ Name: "ko"; MessagesFile: "compiler:Languages\Korean.isl"
 Name: "desktopicon"; Description: "바탕화면 바로가기 만들기"
 
 [Files]
-Source: "..\dist\PrismFront.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#GameExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Play.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\Godot-LICENSE.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 Source: "..\assets\OFL.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
