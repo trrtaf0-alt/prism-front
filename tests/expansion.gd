@@ -229,8 +229,8 @@ func _attack_details() -> void:
 	sim.tick(STEP)
 	var struck := 0
 	for drone in distant:
-		struck += int(drone.health == 999920)
-	check(struck == 1000, "spectrum hits 1000 enemies despite sampled visuals")
+		struck += int(drone.health == 999880)
+	check(struck == 1000, "spectrum deals 120 damage each to 1000 enemies despite sampled visuals")
 
 func _projectile_behaviors() -> void:
 	var stationary := rules.drone.duplicate()
@@ -295,7 +295,19 @@ func _projectile_behaviors() -> void:
 	touched = 0
 	for drone in row:
 		touched += int(drone.health == 952)
-	check(touched == 64, "photon cap counts hits instead of visible beams")
+	check(touched == 12 and row.back().health == 952 and row.front().health == 1000, "photon hits the leading twelve enemies globally")
+	sim = _new_battle()
+	_unlock(sim)
+	sim.install(Vector2i(2, 4), "tower_19")
+	row.clear()
+	for i in 10:
+		row.append(sim.spawn(1.0 + i * 0.50, stationary))
+	var beyond := sim.spawn(73.0, stationary)
+	sim.tick(STEP)
+	touched = 0
+	for drone in row:
+		touched += int(drone.health == 990)
+	check(touched == 4 and row.back().health == 990 and row.front().health == 1000 and beyond.health == 1000, "prism hits the leading four enemies within range")
 
 func _interface() -> void:
 	var packed := load("res://scenes/Front.tscn") as PackedScene
