@@ -35,7 +35,7 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	run = session
 	registry = tower_registry
 	mouse_filter = MOUSE_FILTER_IGNORE
-	_title = front.text_at(self, "연구 그물망", 36, 23, 43)
+	_title = front.text_at(self, "연구", 36, 23, 43)
 	front.text_at(self, "드래그로 이동  ·  휠로 확대/축소  ·  R / Esc 닫기", 39, 82, 18, MUTED)
 	balance_label = front.text_at(self, "", 875, 40, 25, GOLD, 540)
 	balance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT

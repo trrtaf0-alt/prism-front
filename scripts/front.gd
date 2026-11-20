@@ -272,7 +272,7 @@ func _make_hud() -> void:
 	build_button.toggle_mode = true
 	build_button.tooltip_text = "같은 타워 배치 · 1"
 	catalog_button = _hud_button("타워 선택", Rect2(1496, 998, 148, 44), show_catalog)
-	research_button = _hud_button("연구 그물망 · R", Rect2(1658, 998, 204, 44), show_research)
+	research_button = _hud_button("연구 · R", Rect2(1658, 998, 204, 44), show_research)
 	build_hint = _right_hud_text("", 1100, 1046, 16, MUTED, 762)
 	placement_label = _hud_text(screen, "", 0, 0, 18, LIGHT, 0)
 	placement_label.add_theme_stylebox_override("normal", box("#121a22f0", "#536b70ad"))
