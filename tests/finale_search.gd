@@ -75,11 +75,18 @@ func _run() -> void:
 	boss.health = int(HP[snapshot.difficulty])
 	boss.maximum_health = boss.health
 	boss.armor = 0.10
+	var exit_position := map.position_at(map.length())
+	var furthest_progress := boss.progress
+	var nearest_direct := boss.position.distance_to(exit_position)
 	var ticks := 0
 	var next_progress := 300
 	while sim.active and ticks < time_limit * 60:
+		var track_boss := not sim.boss_killed and not sim.boss_escaped
 		sim.tick(STEP)
 		ticks += 1
+		if track_boss:
+			furthest_progress = maxf(furthest_progress, boss.progress)
+			nearest_direct = minf(nearest_direct, boss.position.distance_to(exit_position))
 		if ticks == next_progress * 60:
 			print("t=%ds boss_hp=%d base=%d" % [next_progress, 0 if sim.boss_killed else boss.health, sim.health])
 			next_progress += 300
@@ -88,6 +95,9 @@ func _run() -> void:
 		"boss_left": 0 if sim.boss_killed else boss.health, "time": ticks * STEP,
 		"boss_time": sim.finale_boss_time, "base": sim.health, "queued": sim.queued,
 		"live": sim.enemies.size(),
+		"closest_path_tiles": maxf(0.0, map.length() - furthest_progress),
+		"closest_direct_tiles": nearest_direct,
+		"furthest_tile": Vector2i(map.position_at(furthest_progress).floor()) + Vector2i.ONE,
 	}))
 	quit()
 
