@@ -199,7 +199,7 @@ func _attack_details() -> void:
 	var far := sim.spawn(50.0, armored)
 	for i in 211:
 		sim.tick(STEP)
-	check(far.health == 995000, "cataclysm lands 5000 at remote location after windup")
+	check(far.health == 988000, "cataclysm lands 12000 at remote location after windup")
 	sim = _new_battle()
 	_unlock(sim)
 	var cat_site := Vector2i(2, 4)
@@ -209,8 +209,8 @@ func _attack_details() -> void:
 	far = sim.spawn(50.0, armored)
 	for i in 211:
 		sim.tick(STEP)
-	check(far.health == 994250, "mirrored cataclysm applies its per-weapon 15 percent rate")
-	check(is_equal_approx(sim.occupied[copy_site].mirror_timers[sim.occupied[cat_site]], 46.5), "mirrored cataclysm uses a 50 second cadence")
+	check(far.health == 986200, "mirrored cataclysm applies its per-weapon 15 percent rate")
+	check(is_equal_approx(sim.occupied[copy_site].mirror_timers[sim.occupied[cat_site]], 36.5), "mirrored cataclysm uses a 40 second cadence")
 	sim = _new_battle()
 	_unlock(sim)
 	sim.install(Vector2i(2, 4), "tower_28")
@@ -218,7 +218,7 @@ func _attack_details() -> void:
 	far = sim.spawn(50.0, armored)
 	for i in 254:
 		sim.tick(STEP)
-	check(near.health == 998000 and far.health == 998000, "singularity delivers 20 global damage ticks")
+	check(near.health == 996600 and far.health == 996600, "singularity delivers twenty global ticks of 170 damage")
 	check(far.position.is_equal_approx(map.position_at(far.progress)) and absf(far.progress - 50.0) < 16.0, "gravity keeps exact path coordinates")
 	sim = _new_battle()
 	_unlock(sim)
@@ -229,8 +229,8 @@ func _attack_details() -> void:
 	sim.tick(STEP)
 	var struck := 0
 	for drone in distant:
-		struck += int(drone.health == 999880)
-	check(struck == 1000, "spectrum deals 120 damage each to 1000 enemies despite sampled visuals")
+		struck += int(drone.health == 999840)
+	check(struck == 1000, "spectrum deals 160 damage each to 1000 enemies despite sampled visuals")
 
 func _projectile_behaviors() -> void:
 	var stationary := rules.drone.duplicate()

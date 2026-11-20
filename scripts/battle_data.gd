@@ -3,7 +3,7 @@ extends RefCounted
 
 const NUMBER_LIMIT: int = 9_000_000_000_000_000
 const FINAL_WAVE := 50
-const CAMPAIGN_RECORD := "campaign_08"
+const CAMPAIGN_RECORD := "campaign_09"
 const DIFFICULTIES := {&"easy": "쉬움", &"normal": "보통", &"hard": "어려움"}
 
 static func read_json(path: String) -> Dictionary:

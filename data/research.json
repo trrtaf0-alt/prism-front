@@ -98,7 +98,7 @@
     {"id":"convergence","name":"전장 규모 에너지 수렴","cost_rp":800,"stage":5,"lane":3,"requirements":{"all":["weapon_frame","singularity","spectrum"]},"position":[7691,760]},
     {"id":"interlock","name":"대격변 격발 연동","cost_rp":900,"stage":5,"lane":1,"requirements":{"all":["convergence",{"any":["replica",{"all":["vortex","pulse"]}]}]},"position":[7954,320]},
     {"id":"cataclysm","name":"대격변 인가","cost_rp":1447,"stage":5,"lane":0,"requirements":"interlock","position":[8217,100],"unlock":{"type":"tower","id":"tower_30"}},
-    {"id":"capture","name":"양자 연결망 설계","cost_rp":1400,"stage":5,"lane":4,"requirements":{"all":["white_web",{"any":["prism","railgun"]}]},"position":[7440,1090],"unlock":{"type":"tower","id":"tower_35"},"description":"2초마다 최대 단일 표적 피해의 30%"},
-    {"id":"spectral_clock","name":"전장 지휘 코어 설계","cost_rp":2500,"stage":5,"lane":4,"requirements":{"all":["weapon_frame","grav_circuit",{"any":["shear","capture"]},{"any":["nova","storm"]}]},"position":[7970,1090],"unlock":{"type":"tower","id":"tower_36"},"description":"전역 피해 +20% · 속도 +15% · 동기화 중 추가 +20%"}
+    {"id":"capture","name":"양자 연결망 설계","cost_rp":1400,"stage":5,"lane":4,"requirements":{"all":["white_web",{"any":["prism","railgun"]}]},"position":[7440,1090],"unlock":{"type":"tower","id":"tower_35"},"description":"2초마다 최대 단일 표적 피해의 40%"},
+    {"id":"spectral_clock","name":"전장 지휘 코어 설계","cost_rp":2500,"stage":5,"lane":4,"requirements":{"all":["weapon_frame","grav_circuit",{"any":["shear","capture"]},{"any":["nova","storm"]}]},"position":[7970,1090],"unlock":{"type":"tower","id":"tower_36"},"description":"전역 피해 +20% · 속도 +15% · 15초마다 5초간 속도 추가 +20%"}
   ]
 }
