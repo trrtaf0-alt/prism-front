@@ -25,6 +25,7 @@ var selected := Vector2i(-1, -1)
 var building := false
 var build_id := TowerRegistry.BASE
 var advanced_fx := AttackEffects.new()
+var support_fx := SupportView.new()
 var _preferences
 var frozen := false
 var elapsed := 0.0
@@ -80,7 +81,10 @@ func _ready() -> void:
 		add_child(batch)
 	var bounds := Rect2(ORIGIN, Vector2(battle.field.size) * CELL)
 	advanced_fx.setup(_glow, _preferences, get_tree().root.get_node("Sound"), bounds, CELL)
+	support_fx.setup(self, battle, _preferences)
+	add_child(support_fx)
 	add_child(advanced_fx)
+	battle.support_visual.connect(_support_effect)
 	battle.attack_visual.connect(advanced_fx.capture)
 	battle.mob_visual.connect(advanced_fx.capture_mob)
 	battle.effect.connect(impact)
@@ -186,6 +190,7 @@ func _process(delta: float) -> void:
 	position = advanced_fx.update(delta)
 	queue_redraw()
 	_overlay.queue_redraw()
+	support_fx.queue_redraw()
 
 func _update_batches() -> void:
 	_bases.begin(battle.towers.size())
@@ -209,10 +214,11 @@ func _update_batches() -> void:
 	_bolts.finish()
 
 func path_in_range(cell: Vector2i, def: Dictionary) -> float:
-	if cell == _aim_cell and def.id == _aim_tower:
+	var range_key := "%s:%s" % [def.id, def.range]
+	if cell == _aim_cell and range_key == _aim_tower:
 		return _aim_length
 	_aim_cell = cell
-	_aim_tower = def.id
+	_aim_tower = range_key
 	_aim_lines.clear()
 	_aim_length = 0.0
 	var center := Vector2(cell) + Vector2(0.5, 0.5)
@@ -247,7 +253,10 @@ func _draw() -> void:
 	var focus := selected if map.contains(selected) else (hovered if building and battle.can_install(hovered, build_id) else Vector2i(-1, -1))
 	if map.contains(focus):
 		var at := pixel(Vector2(focus) + Vector2(0.5, 0.5))
-		var def: Dictionary = battle.occupied[focus].definition if battle.occupied.has(focus) else battle.data.towers.lookup(build_id)
+		var turret = battle.occupied.get(focus)
+		var def: Dictionary = turret.effective if turret != null else battle.data.towers.lookup(build_id)
+		if turret != null and turret.range_multiplier > 1.0:
+			draw_arc(at, float(turret.definition.range) * CELL, 0, TAU, 96, Color("#82948082"), 1.2, true)
 		var tint: Color = def.tint
 		if def.global:
 			var area := Rect2(ORIGIN, Vector2(battle.field.size) * CELL).grow(-2.0)
@@ -257,8 +266,9 @@ func _draw() -> void:
 			var radius := float(def.range) * CELL
 			draw_circle(at, radius, Color(tint, 0.075), true, -1.0, true)
 			draw_arc(at, radius, 0, TAU, 96, Color(tint, 0.6), 1.6, true)
-		path_in_range(focus, def)
-		if not _aim_lines.is_empty():
+		if def.support == TowerSupport.Kind.NONE:
+			path_in_range(focus, def)
+		if def.support == TowerSupport.Kind.NONE and not _aim_lines.is_empty():
 			draw_multiline(_aim_lines, Color(tint, 0.34), 15.0, true)
 			draw_multiline(_aim_lines, Color(tint, 0.95), 4.0, true)
 	if map.contains(hovered) and not battle.lost:
@@ -275,6 +285,25 @@ func _draw() -> void:
 			draw_texture_rect(TowerArt.icon(frame + 1), silhouette, false, Color(1, 1, 1, 0.84))
 	if battle.occupied.has(selected):
 		draw_arc(pixel(battle.occupied[selected].position), 21.0, 0, TAU, 32, battle.occupied[selected].definition.tint, 2.0, true)
+
+func _support_effect(event: StringName, kind: int, start: Vector2, finish: Vector2) -> void:
+	if _preferences.fx_quality == 0:
+		return
+	var life := 0.38
+	var radius := 0.55
+	match event:
+		&"sync":
+			life = 1.5
+			radius = battle.field_diagonal
+		&"quantum":
+			life = 0.32
+			var receiver: Battle.Turret = battle.occupied.get(Vector2i(start.floor()))
+			if receiver != null and receiver.buffs.has(kind):
+				var provider: Battle.Turret = receiver.buffs[kind]
+				advanced_fx.capture("support_link", provider.position, start, 0.35, SupportView.AQUA, life, 0)
+		&"impact":
+			life = 0.16
+	advanced_fx.capture("support_" + str(event), start, finish, radius, SupportView.COLORS[kind], life, 0)
 
 func _draw_overlay() -> void:
 	for tower in battle.towers:

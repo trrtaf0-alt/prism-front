@@ -104,6 +104,12 @@ func _drain(sim: Battle) -> void:
 func _ui_and_record() -> void:
 	var profile = root.get_node("Profile")
 	profile.file_path = "user://campaign_qa_profile.cfg"
+	var old := ConfigFile.new()
+	old.set_value("campaign_04", "fastest_clear", 900.0)
+	old.set_value("visual", "quality", 1)
+	old.save(profile.file_path)
+	profile.load_profile()
+	check(profile.fx_quality == 2 and profile.fastest_clear == 0.0, "legacy quality migrates without mixing campaign records")
 	profile.best = 90
 	profile.campaign_best = 0
 	profile.best_clear = {}
@@ -149,6 +155,8 @@ func _ui_and_record() -> void:
 	shorter.health = 85
 	profile.record_clear(shorter)
 	profile.load_profile()
+	old.load(profile.file_path)
+	check(old.get_value("campaign_04", "fastest_clear") == 900.0, "previous campaign record stays on disk")
 	check(profile.best == 90 and profile.campaign_best == 50 and profile.fastest_clear == 1500.0 and profile.best_clear.health == 100 and profile.master == 0.42, "best defense, fastest time and settings persist")
 	ui.start_game()
 	check(ui.battle.wave == 0 and ui.battle.credits == 50 and ui.battle.research.points == 0 and ui.battle.total_kills == 0 and ui.battle.total_installs == 0 and not ui.battle.won and profile.fastest_clear == 1500.0, "restart resets campaign but retains saved record")

@@ -1,3 +1,26 @@
+# v0.5 지원 타워 검증
+
+Windows 11, Godot 4.7.2와 GeForce RTX 2060에서 실행했습니다. [지원 타워 수치·연구·밸런스 결과](SUPPORT.md)
+
+- Windows 렌더링에서 지원 전용 70개, 기본 108개, 연구·타워 504개, 몹 293개, 캠페인 92개 검사를 통과했습니다.
+- 실제 포탑 발사 간격, 4칸 바깥의 적을 5칸 사거리로 탐색하고 사격하는 동작, 자기 중심 장의 확대, 1피해 단위의 소수 누적, 지원 판매와 공급자 인계, 전역 15초·3초 주기를 검증했습니다.
+- 양자는 공격 타워별 표적 분리, 살아 있는 단일 표적의 30%만 추가 반영, 복제 공격 귀속, 중복 연결과 재귀 방지를 검증했습니다. 낮은 품질과 밝기 감소 상태에서도 배율과 동기화 상태가 유지됐습니다.
+- 초기 조준 증폭 검증에서 경계 칸이 이전 사거리를 참조하는 오류를 발견했습니다. 캐시를 새 범위로 다시 만들고 경계 비교도 같은 실효 범위를 쓰게 수정했습니다. 공급자 중복·인계 시 가속 시계와 양자 기록을 유지했습니다.
+- 지원 시설별 렌더링 캡처는 `reports/support-31.png`부터 `reports/support-36.png`까지 저장합니다. `support-stacked.png`와 `support-stacked-details.png`는 여섯 효과가 동시에 적용된 장면입니다.
+- Windows 렌더러로 1~50웨이브를 자동 진행한 전체 지원 조합에서도 승리 화면을 확인했습니다. 50웨이브에서 양자 타격 2,407회와 동기화 22회를 기록했습니다. 캡처는 `reports/support-campaign-victory.png`입니다.
+- 지원 타워를 포함해 동시 적 1,000기 표본을 30초(게임 시간)씩 6판 실행하고 해제했습니다. 해제 뒤 정적 메모리는 각 판 32.67 MiB, 객체 수 증가는 시작 대비 최대 3개였습니다.
+- 새 Windows x64 릴리스 EXE의 v0.5 메뉴 렌더링과 정상 종료를 확인했습니다. SHA-256은 `2EF487529C565381518E00025C55ACCF8443DF684EC9728104A4DBFBA9D163E5`입니다.
+
+```powershell
+& $Godot --path . --script tests/support.gd -- --qa --visual
+& $Godot --headless --path . --script tests/campaign_run.gd -- --qa --support=all
+& $Godot --path . --script tests/campaign_run.gd -- --qa --visual --support=all
+& $Godot --path . --script tests/mob_benchmark.gd -- --benchmark --support-stress
+& $Godot --headless --path . --script tests/mob_benchmark.gd -- --benchmark --support-stress --soak
+```
+
+`--support=`에는 `none`, `pair`, `overdrive`, `quantum`, `command`, `all`을 지정합니다.
+
 # v0.4 50웨이브 캠페인 검증
 
 Windows 11 Pro, Core i7-10750H, GeForce RTX 2060, Godot 4.7.2에서 실행했습니다. [수식과 타워 수치](BALANCE.md) · [18종 몹과 생성체 수치 및 능력](MOBS.md) · [웨이브별 편성](WAVES.md)

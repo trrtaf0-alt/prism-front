@@ -42,6 +42,7 @@ var _forecast_seed := 0
 var tower_heading: Label
 var tower_stats: Label
 var sell_button: Button
+var support_button: Button
 var build_button: Button
 var wave_button: Button
 var boss_panel: Panel
@@ -192,7 +193,7 @@ func show_menu() -> void:
 	button_at(screen, "종료", Rect2(132, 775, 418, 62), get_tree().quit)
 	if not map_error.is_empty():
 		text_at(screen, "맵 오류 · " + map_error, 132, 859, 21, PINK)
-	text_at(screen, "v0.4", 132, 977, 19, MUTED)
+	text_at(screen, "v0.5", 132, 977, 19, MUTED)
 	play.grab_focus()
 
 func start_game() -> void:
@@ -261,6 +262,7 @@ func _make_hud() -> void:
 	tower_heading = text_at(screen, "", 1630, 580, 21, LIGHT, 240)
 	tower_stats = text_at(screen, "", 1630, 627, 17, MUTED, 240)
 	sell_button = button_at(screen, "포탑 판매  +%d" % int(data.turret.refund), Rect2(1630, 755, 240, 49), sell_selected)
+	support_button = button_at(screen, "지원 상태", Rect2(1630, 819, 240, 49), show_support_details)
 	text_at(screen, "경로", 70, 1028, 17, MUTED)
 	text_at(screen, "장애물", 170, 1028, 17, MUTED)
 	text_at(screen, "생성 지점", 286, 1028, 17, MUTED)
@@ -331,9 +333,13 @@ func _update_hud() -> void:
 	var hint := "1  설치 선택   /   우클릭  취소"
 	if building:
 		if battle.can_install(field.hovered, build_id):
-			var reach := field.path_in_range(field.hovered, blueprint)
-			hint = "조준 가능한 경로  %.1f칸" % reach if reach > 0.0 else "이 위치에서는 경로에 닿지 않음"
-			build_hint.modulate = Color.WHITE if reach > 0.0 else PINK
+			if blueprint.support != TowerSupport.Kind.NONE:
+				hint = "지원 범위  " + TowerRegistry.reach_text(blueprint)
+				build_hint.modulate = Color.WHITE
+			else:
+				var reach := field.path_in_range(field.hovered, blueprint)
+				hint = "조준 가능한 경로  %.1f칸" % reach if reach > 0.0 else "이 위치에서는 경로에 닿지 않음"
+				build_hint.modulate = Color.WHITE if reach > 0.0 else PINK
 		else:
 			hint = "빈 타일에 마우스를 올리세요"
 			build_hint.modulate = Color.WHITE
@@ -356,14 +362,23 @@ func _update_hud() -> void:
 	else:
 		build_button.text = "%s  ·  %d" % [blueprint.name, cost]
 	var has_tower := battle.occupied.has(selected)
+	support_button.visible = has_tower
 	if has_tower:
-		var definition: Dictionary = battle.occupied[selected].definition
+		var tower: Battle.Turret = battle.occupied[selected]
+		var definition := tower.definition
 		tower_heading.text = definition.name
-		var damage: String = "%d 피해" % int(definition.damage) if definition.damage > 0 else TowerRegistry.ATTACK_NAMES[definition.attack]
-		tower_stats.text = "%s  ·  %s초 주기\n범위  %s%s" % [
-			damage, definition.interval, TowerRegistry.reach_text(definition),
-			"  ·  반경 %s칸" % definition.radius if definition.radius > 0 else "",
-		]
+		if definition.support != TowerSupport.Kind.NONE:
+			tower_stats.text = "지원 범위  %s\n대상  %d기\n%s" % [
+				TowerRegistry.reach_text(definition), battle.support.followers(tower).size(), _support_timer(tower),
+			]
+		else:
+			var power := float(definition.damage)
+			var delay := float(definition.interval)
+			var damage: String = "피해  %.2f → %.2f" % [power, power * tower.damage_multiplier] if power > 0 else TowerRegistry.ATTACK_NAMES[definition.attack]
+			tower_stats.text = "%s\n주기  %.2f → %.2f초\n사거리  %s → %s\n지원 효과  %d종" % [
+				damage, delay, maxf(delay / tower.speed_multiplier, Battle._sequence_span(definition)),
+				TowerRegistry.reach_text(definition), TowerRegistry.reach_text(tower.effective), tower.buffs.size(),
+			]
 		tower_stats.tooltip_text = definition.description
 		sell_button.text = "타워 판매  +%d" % int(definition.refund)
 	else:
@@ -455,7 +470,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		match modal_kind:
-			"pause", "research", "catalog":
+			"pause", "research", "catalog", "support":
 				close_modal()
 			"effects_settings":
 				show_settings(settings_origin)
@@ -677,16 +692,17 @@ func _research_purchased(_id: String, tower_id: String) -> void:
 func show_catalog() -> void:
 	if battle.lost:
 		return
-	var panel := _open_modal("catalog", Vector2(1350, 838))
+	var panel := _open_modal("catalog", Vector2(1610, 838))
 	text_at(panel, "타워 목록", 33, 26, 38)
 	text_at(panel, "타워를 선택해 배치하거나 해금 연구로 이동하세요.", 35, 82, 20, MUTED)
-	button_at(panel, "닫기", Rect2(1116, 30, 200, 54), close_modal)
+	button_at(panel, "닫기", Rect2(1376, 30, 200, 54), close_modal)
+	var detail := text_at(panel, "", 35, 789, 18, MUTED, 1536)
 	for i in data.towers.ids.size():
 		var id := data.towers.ids[i]
 		var def := data.towers.lookup(id)
 		var ready := battle.research.unlocked.has(id)
 		var affordable := battle.credits >= int(def.cost)
-		var at := Vector2(34 + (i % 5) * 259, 131 + floori(i / 5.0) * 110)
+		var at := Vector2(34 + (i % 6) * 259, 131 + floori(i / 6.0) * 110)
 		var subtitle := "설치 %d" % int(def.cost)
 		if not ready:
 			subtitle += "  ·  잠김"
@@ -707,9 +723,61 @@ func show_catalog() -> void:
 		text_at(tile, subtitle, 76, 60, 15, MINT if ready and affordable else MUTED, 157)
 		tile.disabled = (ready and not affordable) or (not ready and not can_open_research())
 		tile.tooltip_text = def.description
+		tile.mouse_entered.connect(_catalog_detail.bind(detail, def))
+		tile.focus_entered.connect(_catalog_detail.bind(detail, def))
 		tile.accessibility_name = "%s, %s, %s" % [def.name, role, subtitle]
 
+func _catalog_detail(label: Label, definition: Dictionary) -> void:
+	label.text = "%s  ·  %s" % [definition.name, definition.description]
+	label.modulate = definition.tint
+
+func _support_timer(tower: Battle.Turret) -> String:
+	match int(tower.definition.support):
+		TowerSupport.Kind.QUANTUM:
+			var followers := battle.support.followers(tower)
+			if followers.is_empty():
+				return "연결 대기 · 활성 연결 없음"
+			var remaining := TowerSupport.QUANTUM_PERIOD
+			for follower in followers:
+				remaining = minf(remaining, battle.support.time_to_quantum(follower))
+			return "다음 연동까지 %.1f초" % remaining
+		TowerSupport.Kind.COMMAND:
+			if battle.support.command != tower:
+				return "다른 코어가 동기화 주관 중"
+			return ("동기화 종료까지 %.1f초" if battle.support.synchronized else "동기화까지 %.1f초") % battle.support.time_to_sync()
+	return "범위 내 공격 타워를 강화합니다"
+
+func show_support_details() -> void:
+	var tower: Battle.Turret = battle.occupied.get(selected)
+	if tower == null:
+		return
+	var panel := _open_modal("support", Vector2(690, 630))
+	text_at(panel, tower.definition.name, 38, 24, 34, LIGHT, 602)
+	var close := button_at(panel, "전장으로 돌아가기", Rect2(38, 543, 614, 53), close_modal, true)
+	close.grab_focus()
+	if tower.definition.support != TowerSupport.Kind.NONE:
+		text_at(panel, tower.definition.description, 38, 87, 21, tower.definition.tint, 614)
+		text_at(panel, "범위  %s   ·   적용 대상 %d기" % [TowerRegistry.reach_text(tower.definition), battle.support.followers(tower).size()], 38, 141, 21, LIGHT, 614)
+		text_at(panel, _support_timer(tower), 38, 196, 20, MUTED, 614)
+		return
+	text_at(panel, "피해 ×%.2f   ·   공격 속도 ×%.2f   ·   사거리 %s" % [
+		tower.damage_multiplier, tower.speed_multiplier, TowerRegistry.reach_text(tower.effective),
+	], 38, 86, 21, LIGHT, 612)
+	var row := 0
+	for kind: int in tower.buffs:
+		var source: Battle.Turret = tower.buffs[kind]
+		text_at(panel, "%s (%d, %d)" % [source.definition.name, source.cell.x + 1, source.cell.y + 1], 38, 140 + row * 62, 20, source.definition.tint, 610)
+		var detail: String = source.definition.description
+		if kind == TowerSupport.Kind.COMMAND and battle.support.synchronized:
+			detail += " · 작동 중"
+		text_at(panel, detail, 38, 166 + row * 62, 17, MUTED, 610)
+		row += 1
+	if row == 0:
+		text_at(panel, "현재 적용 중인 지원 효과가 없습니다.", 38, 150, 20, MUTED)
+
 func _tower_role(def: Dictionary) -> String:
+	if def.support != TowerSupport.Kind.NONE:
+		return "지원  ·  " + TowerRegistry.reach_text(def)
 	match def.id:
 		"tower_01": return "기본 단일 표적"
 		"tower_02": return "속사 · 신속형 대응"
@@ -735,7 +803,7 @@ func show_effect_settings() -> void:
 	text_at(panel, "전투 효과 설정", 35, 24, 39)
 	text_at(panel, "효과 품질", 38, 108, 22, MUTED)
 	var quality := OptionButton.new()
-	for label in ["낮음", "중간", "높음"]:
+	for label in ["최소", "낮음", "보통", "높음"]:
 		quality.add_item(label)
 	quality.select(Profile.fx_quality)
 	quality.item_selected.connect(_set_fx_quality)

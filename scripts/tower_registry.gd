@@ -3,7 +3,7 @@ extends RefCounted
 
 const BASE := "tower_01"
 const DEFAULTS := {
-	"stage": 0, "research_id": "", "radius": 0.0, "projectile_speed": 12.0,
+	"support": 0, "stage": 0, "research_id": "", "radius": 0.0, "projectile_speed": 12.0,
 	"fx": "fire", "global": false, "priority": "exit", "center": "target",
 	"shots": 1, "spread": 0.0, "width": 0.25, "max_targets": 0, "jump_radius": 0.0,
 	"windup": 0.0, "ramp": 0.0, "duration": 0.0, "tick": 0.0, "guided": false,
@@ -13,7 +13,7 @@ const DEFAULTS := {
 	"copy_cadence": 1.0, "terminal_cadence": 1.0, "copy_overrides": {},
 }
 const ATTACK_NAMES := {
-	"bolt": "투사체", "line": "직선 관통", "chain": "연쇄", "strike": "지연 타격",
+	"support": "지원", "bolt": "투사체", "line": "직선 관통", "chain": "연쇄", "strike": "지연 타격",
 	"cone": "부채꼴", "beam": "광선", "mark": "피해 증폭 표식", "field": "지속 광역",
 	"multi": "동시 조준", "pulse": "확산 충격파", "copy": "패턴 복제", "singularity": "전역 지속장",
 }
@@ -45,6 +45,10 @@ func _add(raw: Dictionary) -> void:
 			or float(raw.get("interval", 0)) <= 0.0 or int(raw.get("cost", 0)) <= 0 \
 			or float(raw.get("damage", -1)) < 0 or float(raw.get("range", -1)) < 0:
 		error = "유효하지 않은 타워 정의 · " + id
+		return
+	var kind := int(raw.get("support", TowerSupport.Kind.NONE))
+	if kind < TowerSupport.Kind.NONE or kind > TowerSupport.Kind.COMMAND or (raw.attack == "support") != (kind != TowerSupport.Kind.NONE):
+		error = "유효하지 않은 지원 타워 종류 · " + id
 		return
 	var def := DEFAULTS.duplicate()
 	def.merge(raw, true)

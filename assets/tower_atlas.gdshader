@@ -6,7 +6,7 @@ varying flat vec2 atlas_offset;
 varying flat float opacity;
 
 void vertex() {
-	float frame = floor(COLOR.r * 63.0 + 0.5);
+	float frame = floor(COLOR.r * 127.0 + 0.5);
 	atlas_offset = vec2(mod(frame, 8.0), floor(frame / 8.0));
 	opacity = COLOR.a;
 }

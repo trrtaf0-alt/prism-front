@@ -12,6 +12,7 @@ const GEAR := [
 ]
 const SIZES := [100, 500, 1000, 5000]
 var tier_limit := SIZES.size()
+var support_stress := false
 const TYPES := ["normal", "normal", "normal", "normal", "swift", "swarm", "armored", "shield", "regen", "cloak", "resist", "accelerate", "heavy", "energy"]
 
 class TimedBattle extends Battle:
@@ -51,6 +52,8 @@ var ticks := 0
 var peak_live := 0
 var grants := 0
 var impacts := 0
+var quantum_hits := 0
+var sync_starts := 0
 var cursor := 0
 
 func _initialize() -> void:
@@ -64,7 +67,8 @@ func _run() -> void:
 		var def := rules.mobs.lookup(id).duplicate()
 		def.health = maxi(1_000_000, int(def.health))
 		fixture[id] = def
-	if "--campaign" in OS.get_cmdline_user_args():
+	support_stress = "--support-stress" in OS.get_cmdline_user_args()
+	if support_stress or "--campaign" in OS.get_cmdline_user_args():
 		tier_limit = 3
 	if "--profile-combat" in OS.get_cmdline_user_args():
 		_profile_combat()
@@ -77,7 +81,7 @@ func _run() -> void:
 		quit(1)
 		return
 	var profile = root.get_node("Profile")
-	profile.fx_quality = 2
+	profile.fx_quality = 3
 	profile.fx_particles = 0.85
 	profile.fx_dim = false
 	profile.fx_shake = 0.35
@@ -104,6 +108,16 @@ func _configure(sim: Battle, tower_count: int, count: int) -> void:
 		if not sim.install(SEATS[i], GEAR[i]):
 			printerr("Invalid test emplacement: ", SEATS[i], " / ", GEAR[i])
 			quit(1)
+	if support_stress:
+		var built := 0
+		for y in range(2, 16):
+			for x in range(2, 25):
+				if built >= 36:
+					break
+				var id: String = "tower_%02d" % (31 + built) if built < 6 else ["tower_01", "tower_06", "tower_09", "tower_12", "tower_13", "tower_14", "tower_18"][built % 7]
+				if sim.install(Vector2i(x, y), id):
+					built += 1
+		sim.support.command_time = 14.0
 	var support := mini(8, ceili(count / 135.0))
 	for i in support:
 		sim.spawn(6.0 + i * 5.8, fixture.guardian)
@@ -133,6 +147,9 @@ func _reset() -> void:
 	peak_live = count
 	grants = 0
 	impacts = 0
+	quantum_hits = 0
+	sync_starts = 0
+	sim.support_visual.connect(_on_support_visual)
 	sim.mob_visual.connect(_on_mob)
 	sim.attack_visual.connect(_on_attack)
 	previous = Time.get_ticks_usec()
@@ -143,6 +160,10 @@ func _on_mob(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color, _li
 
 func _on_attack(kind: String, _start: Vector2, _end: Vector2, _r: float, _t: Color, _l: float, _s: int) -> void:
 	impacts += int(kind == "cataclysm")
+
+func _on_support_visual(kind: StringName, _buff: int, _start: Vector2, _end: Vector2) -> void:
+	quantum_hits += int(kind == &"quantum")
+	sync_starts += int(kind == &"sync")
 
 func _physics() -> void:
 	ticks += 1
@@ -165,7 +186,9 @@ func _frame() -> void:
 	print("%d mobs: %.1f FPS; frame p95 %.2f ms; %d ticks; peak %d; %d guard links; %d cataclysm casts" % [
 		SIZES[tier], times.size() / measured, times[ceili(times.size() * 0.95) - 1], ticks, peak_live, grants, impacts,
 	])
-	if impacts <= 0 or grants <= 0 or sim.lost or ui.modal != null:
+	if support_stress:
+		print("Support sample: %d quantum hits; %d synchronization starts" % [quantum_hits, sync_starts])
+	if impacts <= 0 or grants <= 0 or sim.lost or ui.modal != null or (support_stress and (quantum_hits == 0 or sync_starts == 0)):
 		printerr("Benchmark sample did not receive expected battle activity.")
 		quit(1)
 		return

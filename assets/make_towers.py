@@ -16,6 +16,7 @@ BASES = [
     (5, 37, -18), (6, 38, 0), (6, 40, 30), (3, 41, 0), (3, 41, 30),
     (5, 41, 18), (8, 40, 22), (4, 41, 45), (6, 43, 0), (6, 43, 30),
     (4, 43, 45), (3, 44, 30), (8, 47, 22), (6, 47, 0), (4, 47, 45),
+    (6, 37, 30), (8, 39, 22), (6, 40, 30), (4, 42, 45), (3, 43, 30), (8, 47, 22),
 ]
 
 
@@ -280,15 +281,95 @@ class Sprite:
                 self.regular(4, 22, 45, "#3d352d", self.tint, 4)
                 self.gem(0, 0, 13, 4)
 
+            case 31:  # Rotating aerial with flanking transmitter panels.
+                self.gem(0, 0, 12, 6)
+                self.barrel(0, 38, 0, 5)
+                for y in [-18, 18]:
+                    self.armor([(-15, y - 5), (11, y - 8), (15, y + 4), (-13, y + 7)])
+                self.circle(35, 0, 4, self.lit)
+            case 32:  # Rangefinder crosshair and optical lens.
+                for a in range(0, 360, 90):
+                    self.arc(33, a + 12, a + 77, self.rim, 6)
+                    self.line([orbit(27, a), orbit(41, a)], self.lit, 3)
+                self.circle(0, 0, 16, "#183041", self.tint, 3)
+                self.gem(0, 0, 8)
+            case 33:  # Resonator with bright violet standing waves.
+                for a in [0, 120, 240]:
+                    self.arc(34, a + 5, a + 92, self.rim, 5)
+                    self.arc(25, a + 10, a + 100, self.tint, 3)
+                self.gem(0, 0, 17, 6)
+            case 34:  # Four industrial coils and lightning bus.
+                self.nodes(4, 28, 9, 45)
+                self.armor([(-25, -13), (22, -13), (27, 8), (20, 17), (-23, 17)])
+                self.line([(-20, 3), (-7, -10), (-4, 4), (6, -4), (4, 10), (21, -3)], self.lit, 5)
+            case 35:  # Suspended twin-node quantum oscillator.
+                for i, hue in enumerate(["#c38dff", "#6df3dd", "#c38dff", "#6df3dd"]):
+                    self.arc(34, i * 90 + 5, i * 90 + 79, hue, 5)
+                    self.line([orbit(13, i * 90 + 45), orbit(32, i * 90 + 45)], hue, 3)
+                self.gem(-11, 0, 10, 3)
+                self.regular(3, 12, 180, "#6df3dd", "#c4fff5", 3, 11, 0)
+            case 36:  # Hexagonal golden crown enclosing the command beacon.
+                self.nodes(6, 37, 5)
+                for a in range(0, 360, 60):
+                    self.arc(40, a + 9, a + 48, self.lit, 5)
+                    self.arc(25, a + 5, a + 54, self.tint, 3)
+                self.gem(0, 0, 18, 6)
+                self.circle(0, 0, 6, "#fff9e5")
+
     def render(self):
         return self.image.resize((CELL, CELL), Image.Resampling.LANCZOS)
+
+
+def support_atlas():
+    """Paint the overlay glyphs and short attack reactions into a shared atlas."""
+    colors = ["#56dac9", "#76b9ff", "#bd90f8", "#ff985a", "#ac80fb", "#ffdaa0"]
+    atlas = Image.new("RGBA", (CELL * SIDE, CELL * 2))
+    for i, hex_color in enumerate(colors):
+        color = ImageColor.getrgb(hex_color)
+        badge = Sprite(color)
+        attack = Sprite(color)
+        aqua = "#69f1da"
+        if i == 0:
+            badge.line([(-28, 20), (0, -27), (28, 20)], color, 10)
+            for y in [-20, 20]:
+                attack.line([(8, y), (42, y), (58, y - 3)], color, 4)
+                attack.line([(-4, y + 5), (33, y + 5)], badge.lit, 2)
+        elif i == 1:
+            badge.line([(-28, 0), (28, 0)], color, 10)
+            badge.line([(0, -28), (0, 28)], color, 10)
+            attack.line([(16, 0), (56, 0)], color, 4)
+            for x in [29, 43]:
+                attack.line([(x, -6), (x, 6)], badge.lit, 3)
+        elif i == 2:
+            badge.circle(0, 0, 26, None, color, 9)
+            attack.arc(29, 18, 286, color, 4)
+            attack.arc(36, 165, 269, badge.lit, 2)
+        elif i == 3:
+            bolt = [(21, -29), (-23, 3), (8, 2), (-17, 29)]
+            badge.line(bolt, color, 9)
+            attack.line([(24, -34), (32, -13), (21, -6), (38, 7), (27, 23)], color, 5)
+            attack.line([(-15, -26), (4, -34), (18, -31)], badge.lit, 3)
+        elif i == 4:
+            badge.circle(-15, 0, 13, color)
+            badge.circle(15, 0, 13, aqua)
+            attack.arc(29, 0, 168, color, 4)
+            attack.arc(29, 180, 348, aqua, 4)
+            attack.circle(29, 0, 4, aqua)
+        else:
+            badge.regular(4, 29, 0, color)
+            attack.arc(37, 26, 182, badge.lit, 4)
+            attack.arc(38, 223, 329, color, 3)
+            attack.arc(29, 212, 312, color, 3)
+        atlas.paste(badge.render(), (i * CELL, 0))
+        atlas.paste(attack.render(), (i * CELL, CELL))
+    atlas.save(ROOT / "support_atlas.png", optimize=True)
 
 
 def main():
     extra = json.loads((ROOT.parent / "data" / "towers.json").read_text(encoding="utf-8"))
     base = json.loads((ROOT.parent / "data" / "turret.json").read_text(encoding="utf-8"))
     definitions = [base, *extra["towers"]]
-    atlas = Image.new("RGBA", (CELL * SIDE, CELL * SIDE))
+    atlas = Image.new("RGBA", (CELL * SIDE, CELL * ((len(definitions) * 2 + SIDE - 1) // SIDE)))
     for i, (definition, chassis) in enumerate(zip(definitions, BASES, strict=True)):
         color = ImageColor.getrgb(definition["color"])
         base_art, head_art = Sprite(color), Sprite(color)
@@ -297,6 +378,7 @@ def main():
         for frame, art in enumerate([base_art, head_art], i * 2):
             atlas.paste(art.render(), (frame % SIDE * CELL, frame // SIDE * CELL))
     atlas.save(ROOT / "tower_atlas.png", optimize=True)
+    support_atlas()
 
 
 if __name__ == "__main__":

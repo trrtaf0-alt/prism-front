@@ -15,7 +15,7 @@ var best_clear: Dictionary = {}
 var fastest_clear := 0.0
 var file_path := PATH
 var save_error := false
-var fx_quality := 2
+var fx_quality := 3
 var fx_particles := 0.85
 var fx_flash := 0.45
 var fx_shake := 0.35
@@ -40,7 +40,7 @@ func load_profile() -> void:
 	campaign_best = 0
 	best_clear = {}
 	fastest_clear = 0.0
-	fx_quality = 2
+	fx_quality = 3
 	fx_particles = 0.85
 	fx_flash = 0.45
 	fx_shake = 0.35
@@ -50,9 +50,10 @@ func load_profile() -> void:
 		return
 	master = _volume(config.get_value("audio", "master", master), master)
 	effects = _volume(config.get_value("audio", "effects", effects), effects)
-	var quality: Variant = config.get_value("visual", "quality", fx_quality)
+	var legacy_quality: int = int(config.get_value("visual", "quality", 2))
+	var quality: Variant = config.get_value("visual", "quality_v2", legacy_quality + 1)
 	if quality is int:
-		fx_quality = clampi(quality, 0, 2)
+		fx_quality = clampi(quality, 0, 3)
 	fx_particles = _volume(config.get_value("visual", "particles", fx_particles), fx_particles)
 	fx_flash = _volume(config.get_value("visual", "flash", fx_flash), fx_flash)
 	fx_shake = _volume(config.get_value("visual", "shake", fx_shake), fx_shake)
@@ -83,6 +84,7 @@ func _volume(value: Variant, fallback: float) -> float:
 
 func save_profile() -> void:
 	var config := ConfigFile.new()
+	config.load(file_path)
 	config.set_value("audio", "master", master)
 	config.set_value("audio", "effects", effects)
 	config.set_value("display", "fullscreen", fullscreen)
@@ -92,7 +94,7 @@ func save_profile() -> void:
 	config.set_value(section, "wave", campaign_best)
 	config.set_value(section, "best_clear", best_clear)
 	config.set_value(section, "fastest_clear", fastest_clear)
-	config.set_value("visual", "quality", fx_quality)
+	config.set_value("visual", "quality_v2", fx_quality)
 	config.set_value("visual", "particles", fx_particles)
 	config.set_value("visual", "flash", fx_flash)
 	config.set_value("visual", "shake", fx_shake)

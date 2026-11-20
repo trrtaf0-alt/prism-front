@@ -7,6 +7,7 @@ signal wave_finished(number: int, reward: int)
 signal defeated(number: int)
 signal cleared(result: Dictionary)
 signal base_damaged(amount: int)
+signal support_visual(event: StringName, kind: int, start: Vector2, finish: Vector2)
 signal mob_visual(kind: StringName, start: Vector2, finish: Vector2, tint: Color, lifetime: float)
 signal attack_visual(style: String, origin: Vector2, end: Vector2, radius: float, tint: Color, life: float, stage: int)
 
@@ -61,7 +62,14 @@ class Turret:
 	var recoil := 0.0
 	var full_buckets := PackedInt32Array()
 	var edge_buckets := PackedInt32Array()
+	var target_radius_squared := 0.0
 	var definition: Dictionary
+	var effective: Dictionary
+	var buffs: Dictionary = {}
+	var damage_multiplier := 1.0
+	var speed_multiplier := 1.0
+	var range_multiplier := 1.0
+	var damage_remainder := 0.0
 	var field_age := 0.0
 	var mirror_timers: Dictionary = {}
 	var mirror_fields: Dictionary = {}
@@ -79,7 +87,9 @@ class Bolt:
 	var reversed := false
 	var hit: Dictionary = {}
 	var fragment := false
+	var owner: Turret
 
+var support := TowerSupport.new()
 var arsenal := TowerArsenal.new()
 var field_diagonal: float
 var research: ResearchRun
@@ -171,13 +181,15 @@ func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	tower.cell = cell
 	tower.position = Vector2(cell) + Vector2(0.5, 0.5)
 	tower.definition = data.towers.lookup(id)
+	tower.effective = tower.definition
 	_cache_range(tower, float(tower.definition.range))
 	towers.append(tower)
 	occupied[cell] = tower
 	credits -= int(tower.definition.cost)
 	total_installs += 1
-	if int(tower.definition.stage) == 5:
+	if int(tower.definition.stage) == 5 and tower.definition.support == TowerSupport.Kind.NONE:
 		terminal_used[id] = tower.definition.name
+	support.rebuild(self)
 	_refresh_copies()
 	effect.emit(&"install", tower.position, Vector2.ZERO)
 	return true
@@ -188,6 +200,10 @@ func sell(cell: Vector2i) -> bool:
 	var tower: Turret = occupied[cell]
 	occupied.erase(cell)
 	towers.erase(tower)
+	if tower.definition.support == TowerSupport.Kind.NONE:
+		tower.buffs.clear()
+		tower.damage_multiplier = 1.0
+	support.rebuild(self)
 	_credit(int(tower.definition.refund))
 	_refresh_copies()
 	effect.emit(&"sell", tower.position, Vector2.ZERO)
@@ -293,6 +309,7 @@ func tick(delta: float) -> void:
 	_advanced_impact_budget = 4
 	_mob_fx_budget = 20
 	_needs_cleanup = false
+	support.tick(self, delta)
 	_update_drones(delta)
 	_update_bolts(delta)
 	if _needs_cleanup:
@@ -440,8 +457,12 @@ func _recycle_drone(index: int) -> void:
 
 func _update_towers(delta: float) -> void:
 	for tower in towers:
+		if tower.definition.support != TowerSupport.Kind.NONE:
+			continue
 		tower.recoil = maxf(0.0, tower.recoil - delta)
-		tower.cooldown = maxf(0.0, tower.cooldown - delta)
+		var due := tower.cooldown - delta * tower.speed_multiplier
+		var cadence_carry := minf(0.0, due) if tower.cooldown > 0.0 and tower.speed_multiplier > 1.0 else 0.0
+		tower.cooldown = maxf(0.0, due)
 		if tower.definition.attack == "copy":
 			_update_copy(tower, delta)
 			continue
@@ -450,7 +471,7 @@ func _update_towers(delta: float) -> void:
 			continue
 		if tower.definition.id != TowerRegistry.BASE and tower.cooldown > 0.12 and tower.definition.ramp <= 0.0:
 			continue
-		var target := _select_target(tower, tower.definition, true)
+		var target := _select_target(tower, tower.effective, true)
 		if target == null:
 			tower.field_age = 0.0
 			continue
@@ -460,10 +481,13 @@ func _update_towers(delta: float) -> void:
 		if tower.cooldown <= 0.000001:
 			if tower.definition.id == TowerRegistry.BASE and absf(angle_difference(tower.angle, angle)) > 0.45:
 				continue
-			tower.cooldown = float(tower.definition.interval)
+			tower.cooldown = maxf(float(tower.definition.interval) + cadence_carry, _sequence_span(tower.effective) * tower.speed_multiplier)
 			tower.angle = angle
 			tower.recoil = 0.12
-			arsenal.attack(self, tower, target, tower.definition, direction)
+			arsenal.attack(self, tower, target, tower.effective, direction)
+
+static func _sequence_span(def: Dictionary) -> float:
+	return maxf(float(def.windup), float(def.duration))
 
 func target_direction(tower: Turret, target: Drone, def: Dictionary, predict: bool) -> Vector2:
 	if predict and def.attack == "bolt" and not def.guided:
@@ -477,9 +501,9 @@ func _refresh_copies() -> void:
 		if tower.definition.attack != "copy":
 			continue
 		var neighbors: Array[Turret] = []
-		var radius := float(tower.definition.range)
+		var radius := float(tower.effective.range)
 		for other in towers:
-			if other.definition.attack != "copy" and other.position.distance_squared_to(tower.position) <= radius * radius:
+			if other.definition.support == TowerSupport.Kind.NONE and other.definition.attack != "copy" and other.position.distance_squared_to(tower.position) <= radius * radius:
 				neighbors.append(other)
 		neighbors.sort_custom(func(a: Turret, b: Turret): return tower.position.distance_squared_to(a.position) < tower.position.distance_squared_to(b.position))
 		neighbors.resize(mini(neighbors.size(), int(tower.definition.max_targets)))
@@ -491,11 +515,16 @@ func _refresh_copies() -> void:
 
 func _update_copy(tower: Turret, delta: float) -> void:
 	for other: Turret in _copy_neighbors.get(tower, []):
-		var timer := maxf(0.0, float(tower.mirror_timers.get(other, 0.0)) - delta)
+		var timer := maxf(0.0, float(tower.mirror_timers.get(other, 0.0)) - delta * tower.speed_multiplier)
 		tower.mirror_timers[other] = timer
 		if timer > 0.000001 or enemies.is_empty():
 			continue
 		var def := other.definition
+		if not def.global and tower.range_multiplier > 1.0:
+			def = def.duplicate()
+			def.range *= tower.range_multiplier
+			if def.center == "self" and def.attack in ["field", "pulse"]:
+				def.radius *= tower.range_multiplier
 		var target := _select_target(tower, def, false)
 		if target == null:
 			tower.mirror_fields.erase(other)
@@ -509,7 +538,7 @@ func _update_copy(tower: Turret, delta: float) -> void:
 		var direction := target_direction(tower, target, def, true)
 		tower.angle = direction.angle()
 		tower.recoil = 0.12
-		tower.mirror_timers[other] = float(def.interval) * cadence
+		tower.mirror_timers[other] = maxf(float(def.interval) * cadence, _sequence_span(def) * tower.speed_multiplier)
 		attack_visual.emit("holo", tower.position, other.position, 0, tower.definition.tint, 0.25, 4)
 		tower.field_age = float(tower.mirror_fields.get(other, 0.0))
 		arsenal.attack(self, tower, target, def, direction, efficiency)
@@ -571,7 +600,10 @@ func target_for(origin: Vector2) -> Drone:
 func _cache_range(tower: Turret, radius: float) -> void:
 	# Interior cells need only their leading drone. Boundary cells still use
 	# exact circular range, including the edge itself.
+	tower.full_buckets.clear()
+	tower.edge_buckets.clear()
 	var radius_squared := radius * radius
+	tower.target_radius_squared = radius_squared
 	var half_tile := Vector2(0.5, 0.5)
 	for cell in _track_cells:
 		var offset := (tower.position - (Vector2(cell) + half_tile)).abs()
@@ -591,7 +623,7 @@ func _target_in_range(tower: Turret) -> Drone:
 		if leader != null and leader.progress > progress:
 			best = leader
 			progress = leader.progress
-	var radius_squared := pow(float(tower.definition.range), 2.0)
+	var radius_squared := tower.target_radius_squared
 	for index in tower.edge_buckets:
 		var leader := _bucket_leaders[index]
 		if leader != null and leader.progress <= progress:
@@ -619,7 +651,7 @@ func aim_at(origin: Vector2, target: Drone, speed: float = 12.0) -> Vector2:
 	var direction := origin.direction_to(field.position_at(target.status.predict(target.progress, enemy_speed, high)))
 	return Vector2.RIGHT if direction.is_zero_approx() else direction
 
-func _fire(origin: Vector2, direction: Vector2, definition: Dictionary = {}, target: Drone = null, efficiency: float = 1.0, source: Vector2 = Vector2.ZERO, show: bool = true) -> Bolt:
+func _fire(origin: Vector2, direction: Vector2, definition: Dictionary = {}, target: Drone = null, efficiency: float = 1.0, source: Vector2 = Vector2.ZERO, show: bool = true, owner: Turret = null) -> Bolt:
 	var def := data.towers.lookup(TowerRegistry.BASE) if definition.is_empty() else definition
 	var bolt: Bolt = Bolt.new() if _bolt_pool.is_empty() else _bolt_pool.pop_back()
 	bolt.position = origin
@@ -633,6 +665,7 @@ func _fire(origin: Vector2, direction: Vector2, definition: Dictionary = {}, tar
 	bolt.remaining = float(def.range) * (1.0 + enemy_speed / speed_margin) + HIT_RADIUS
 	bolt.origin = source
 	bolt.efficiency = efficiency
+	bolt.owner = owner
 	bolt.guided_target = target if def.guided else null
 	bolt.target_serial = bolt.guided_target.serial if bolt.guided_target != null else 0
 	bolt.reversed = false
@@ -666,7 +699,7 @@ func _update_bolts(delta: float) -> void:
 		var spent := hit != null
 		if def.returning:
 			while hit != null:
-				damage(hit, def, bolt.efficiency)
+				damage(hit, def, bolt.efficiency, -1.0, bolt.owner)
 				bolt.hit[hit.serial] = true
 				hit = _collide(bolt.position, end, step / (bolt.speed * delta), delta, bolt.hit)
 			spent = false
@@ -685,6 +718,7 @@ func _update_bolts(delta: float) -> void:
 				_impact_budget -= 1
 				effect.emit(&"miss", end, bolt.direction)
 			bolt.guided_target = null
+			bolt.owner = null
 			bolt.hit.clear()
 			if _bolt_pool.size() < 1024:
 				_bolt_pool.append(bolt)
@@ -694,10 +728,10 @@ func _update_bolts(delta: float) -> void:
 func _bolt_impact(bolt: Bolt, target: Drone) -> void:
 	var def := bolt.definition
 	if def.radius > 0 and not bolt.fragment:
-		arsenal.area(self, target.position, float(def.radius), def, bolt.efficiency)
+		arsenal.area(self, target.position, float(def.radius), def, bolt.efficiency, -1.0, bolt.owner)
 		attack_visual.emit(def.fx, target.position, target.position, def.radius, def.tint, 0.58, int(def.stage))
 		return
-	damage(target, def, bolt.efficiency)
+	damage(target, def, bolt.efficiency, -1.0, bolt.owner)
 	if def.split > 0 and not bolt.fragment:
 		var fragments := def.duplicate()
 		fragments.damage = def.fragment_damage
@@ -705,7 +739,7 @@ func _bolt_impact(bolt: Bolt, target: Drone) -> void:
 		var origin := target.position
 		for i in int(def.split):
 			var aim := Vector2.from_angle(TAU * i / float(def.split))
-			var shard := _fire(origin, aim, fragments, null, bolt.efficiency, origin, false)
+			var shard := _fire(origin, aim, fragments, null, bolt.efficiency, origin, false, bolt.owner)
 			shard.fragment = true
 			shard.hit[target.serial] = true
 		attack_visual.emit("split", origin, origin, float(def.fragment_range) * 0.55, def.tint, 0.36, int(def.stage))
@@ -750,15 +784,30 @@ static func sweep(offset: Vector2, motion: Vector2, radius: float) -> float:
 func _damage_drone(drone: Drone, direction: Vector2) -> void:
 	_apply_damage(drone, _damage, direction)
 
-func damage(drone: Drone, def: Dictionary, efficiency: float = 1.0, anchor: float = -1.0) -> void:
+func damage(drone: Drone, def: Dictionary, efficiency: float = 1.0, anchor: float = -1.0, owner: Turret = null) -> void:
 	if drone.health <= 0:
 		return
-	var amount := maxi(1, roundi(float(def.damage) * efficiency)) if def.damage > 0 else 0
+	var amount := _scaled_damage(def, efficiency, owner)
 	var control := def if def.shock or def.slow > 0 or def.pull > 0 else {}
-	_apply_damage(drone, amount, Vector2.ZERO, int(def.stage) >= 2, control, anchor)
+	_apply_damage(drone, amount, Vector2.ZERO, int(def.stage) >= 2, control, anchor, owner)
 
-func barrage(targets: Array, def: Dictionary, efficiency: float, anchor: float = -1.0) -> void:
-	var amount := maxi(1, roundi(float(def.damage) * efficiency)) if def.damage > 0 else 0
+func _scaled_damage(def: Dictionary, efficiency: float, owner: Turret) -> int:
+	if def.damage <= 0:
+		return 0
+	var base := float(def.damage) * efficiency
+	if owner == null or owner.damage_multiplier == 1.0:
+		return maxi(1, roundi(base))
+	var raw := maxi(1, roundi(base)) * owner.damage_multiplier + owner.damage_remainder
+	var whole := floori(raw + 0.000001)
+	owner.damage_remainder = maxf(0.0, raw - whole)
+	return whole
+
+func barrage(targets: Array, def: Dictionary, efficiency: float, anchor: float = -1.0, owner: Turret = null) -> void:
+	if owner != null and (owner.damage_multiplier > 1.0 or support.linked.has(owner)):
+		for drone: Drone in targets:
+			damage(drone, def, efficiency, anchor, owner)
+		return
+	var amount := _scaled_damage(def, efficiency, owner)
 	if not def.shock and def.slow <= 0 and def.pull <= 0:
 		if amount == 0:
 			return
@@ -773,10 +822,11 @@ func barrage(targets: Array, def: Dictionary, efficiency: float, anchor: float =
 	for drone: Drone in targets:
 		_apply_damage(drone, amount, Vector2.ZERO, true, def, anchor)
 
-func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool = false, control: Dictionary = {}, anchor: float = -1.0) -> void:
+func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool = false, control: Dictionary = {}, anchor: float = -1.0, owner: Turret = null, final_damage: bool = false) -> void:
 	if drone.health <= 0 or (amount <= 0 and control.is_empty()):
 		return
-	if drone.status.mark_stacks > 0:
+	var before := drone.health + drone.shield_hp
+	if not final_damage and drone.status.mark_stacks > 0:
 		amount = drone.status.boosted_damage(amount)
 	if drone.shield_hp > 0 and amount > 0:
 		var absorbed := mini(amount, drone.shield_hp)
@@ -787,7 +837,9 @@ func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool
 			drone.shield_source = 0
 			mob_effect(&"shield_break", drone.position, drone.position, Color("#78e4ff"), 0.58)
 	if amount > 0:
-		drone.health -= ceili(amount * (1.0 - drone.armor)) if drone.armor > 0 else amount
+		drone.health -= ceili(amount * (1.0 - drone.armor)) if not final_damage and drone.armor > 0 else amount
+	if owner != null and not owner.buffs.is_empty():
+		support.note_damage(self, owner, drone, before - maxi(0, drone.health) - drone.shield_hp)
 	drone.flash = 0.09
 	var killed := drone.health <= 0
 	if killed:

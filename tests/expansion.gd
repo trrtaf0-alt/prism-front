@@ -46,13 +46,13 @@ func _tower_art() -> void:
 func _research() -> void:
 	var graph := rules.research
 	check(graph.ids.size() == 100 and graph.ordered.size() == 100, "100 unique reachable nodes")
-	check(graph.unlocks.size() == 29 and graph.ids.size() - graph.unlocks.size() == 71 and rules.towers.ids.size() == 30, "29 unlocks, 71 junctions and 30 towers")
+	check(graph.unlocks.size() == 35 and graph.ids.size() - graph.unlocks.size() == 65 and rules.towers.ids.size() == 36, "35 unlocks, 65 junctions and 36 towers")
 	var distribution := [Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO]
 	for id in graph.ids:
 		var node: Dictionary = graph.nodes[id]
 		distribution[int(node.stage)] += Vector2i(1, int(node.has("unlock")))
 		check(node.has("unlock") or not graph.children[id].is_empty(), "junction opens a detectable route: " + id)
-	check(distribution == [Vector2i(6, 0), Vector2i(14, 4), Vector2i(24, 7), Vector2i(26, 8), Vector2i(20, 7), Vector2i(10, 3)], "tier distribution")
+	check(distribution == [Vector2i(6, 0), Vector2i(14, 4), Vector2i(24, 8), Vector2i(26, 10), Vector2i(19, 8), Vector2i(11, 5)], "tier distribution")
 	var nested := {"all": [{"any": ["a", {"all": ["b", "c"]}]}, "d"]}
 	check(not ResearchGraph.satisfied(nested, {"a": true}) and not ResearchGraph.satisfied(nested, {"b": true, "d": true}), "AND and nested conditions reject incomplete plans")
 	check(ResearchGraph.satisfied(nested, {"a": true, "d": true}) and ResearchGraph.satisfied(nested, {"b": true, "c": true, "d": true}), "either nested OR path works")
@@ -67,12 +67,12 @@ func _research() -> void:
 		full_cost += int(graph.nodes[id].cost_rp)
 		if id != "survey":
 			check(run.purchase(id), "can purchase " + id)
-	check(run.completed.size() == 100 and run.unlocked.size() == 30 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
-	for pair: Array in [["singularity", 20000], ["spectrum", 30000], ["cataclysm", 45000]]:
+	check(run.completed.size() == 100 and run.unlocked.size() == 36 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
+	for pair: Array in [["singularity", 19360], ["spectrum", 27080], ["cataclysm", 42260]]:
 		var cost := graph.minimum_cost(pair[0])
 		check(cost == pair[1], "minimum unique RP cost for %s = %d" % [pair[0], cost])
 	check(graph.minimum_cost("cataclysm", run.completed) == 0, "completed shared prerequisites not billed")
-	check(full_cost == 48680, "full web campaign cost")
+	check(full_cost == 51275, "full web campaign cost")
 	var raw: Array = BattleData.read_json("res://data/research.json").nodes
 	_bad_graph(raw, "survey", "survey", "self reference")
 	_bad_graph(raw, "survey", "imaginary", "missing reference")
@@ -152,6 +152,8 @@ func _all_towers() -> void:
 		var def := rules.towers.lookup(id)
 		var before := sim.credits
 		check(sim.install(cell, id) and sim.credits == before - int(def.cost), "install and exact price " + id)
+		if def.support != TowerSupport.Kind.NONE:
+			continue
 		var fixture: Array[Battle.Drone] = []
 		for i in 11:
 			fixture.append(sim.spawn(1.5 + i * 0.11, armored))
@@ -341,7 +343,7 @@ func _interface() -> void:
 	board.overview()
 	await _capture("research-overview")
 	board.select_node("cataclysm", true)
-	check(board.highlighted.size() > 75 and ui.research_screen.buy.disabled, "terminal path and locked condition display")
+	check(board.highlighted.size() > 65 and ui.research_screen.buy.disabled, "terminal path and locked condition display")
 	await _capture("research-network")
 	sim.research.earn(100)
 	board.select_node("survey", true)
@@ -424,7 +426,7 @@ func _visual_preview(ui) -> void:
 	_unlock(sim)
 	var sample_cells: Array[Vector2i] = []
 	for y in [2, 5, 8, 11, 15]:
-		for x in [2, 6, 10, 14, 18, 22, 26]:
+		for x in [1, 4, 7, 10, 13, 16, 19, 22, 26]:
 			var cell := Vector2i(x, y)
 			if sim.field.tile_at(cell) != ".":
 				cell += Vector2i(0, 1)
@@ -433,7 +435,7 @@ func _visual_preview(ui) -> void:
 	check(sample_cells.size() >= rules.towers.ids.size(), "all tower art fits on the sample field")
 	for i in mini(sample_cells.size(), rules.towers.ids.size()):
 		sim.install(sample_cells[i], rules.towers.ids[i])
-	check(sim.towers.size() == 30, "all 30 tower silhouettes are installed for visual QA")
+	check(sim.towers.size() == 36, "all 36 tower silhouettes are installed for visual QA")
 	ui.callout_time = 0.0
 	await _capture("tower-lineup")
 

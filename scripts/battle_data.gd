@@ -3,7 +3,7 @@ extends RefCounted
 
 const NUMBER_LIMIT: int = 9_000_000_000_000_000
 const FINAL_WAVE := 50
-const CAMPAIGN_RECORD := "campaign_04"
+const CAMPAIGN_RECORD := "campaign_05"
 
 static func read_json(path: String) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))

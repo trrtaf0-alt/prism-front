@@ -27,11 +27,11 @@ func _bolt(sim, tower, target, def: Dictionary, direction: Vector2, efficiency: 
 	for i in int(def.shots):
 		var angle := lerpf(-spread * 0.5, spread * 0.5, float(i) / (float(def.shots) - 1.0)) if def.shots > 1 else 0.0
 		var aim := direction.rotated(angle)
-		sim._fire(tower.position + aim * sim.BARREL_LENGTH, aim, def, target, efficiency, tower.position, i == 0)
+		sim._fire(tower.position + aim * sim.BARREL_LENGTH, aim, def, target, efficiency, tower.position, i == 0, tower)
 
 func _beam(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
 	_visual(sim, def, tower.position, target.position)
-	sim.damage(target, def, efficiency)
+	sim.damage(target, def, efficiency, -1.0, tower)
 
 func _mark(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
 	target.status.mark(def, efficiency)
@@ -41,9 +41,9 @@ func _line(sim, tower, target, def: Dictionary, direction: Vector2, efficiency: 
 	if def.windup > 0:
 		_stage(sim, tower, target.position, direction, def, efficiency)
 		return
-	_fire_line(sim, tower.position, direction, def, efficiency)
+	_fire_line(sim, tower.position, direction, def, efficiency, tower)
 
-func _fire_line(sim, origin: Vector2, direction: Vector2, def: Dictionary, efficiency: float) -> void:
+func _fire_line(sim, origin: Vector2, direction: Vector2, def: Dictionary, efficiency: float, tower) -> void:
 	var reach: float = sim.field_diagonal if def.global else float(def.range)
 	var impact := origin + direction * reach
 	var candidates: Array = sim.query_box(origin.min(impact), origin.max(impact), float(def.width))
@@ -55,11 +55,11 @@ func _fire_line(sim, origin: Vector2, direction: Vector2, def: Dictionary, effic
 			if def.max_targets > 0:
 				hits.append([projection, drone])
 			else:
-				sim.damage(drone, def, efficiency)
+				sim.damage(drone, def, efficiency, -1.0, tower)
 	if def.max_targets > 0:
 		hits.sort_custom(func(a, b): return a[0] < b[0])
 		for i in mini(hits.size(), int(def.max_targets)):
-			sim.damage(hits[i][1], def, efficiency)
+			sim.damage(hits[i][1], def, efficiency, -1.0, tower)
 	_visual(sim, def, origin, impact, float(def.width), 0.6 if def.global else 0.24)
 
 func _cone(sim, tower, _target, def: Dictionary, direction: Vector2, efficiency: float) -> void:
@@ -67,7 +67,7 @@ func _cone(sim, tower, _target, def: Dictionary, direction: Vector2, efficiency:
 	for drone in sim.query_radius(tower.position, def.range):
 		var normal: Vector2 = tower.position.direction_to(drone.position)
 		if normal.dot(direction) >= limit:
-			sim.damage(drone, def, efficiency)
+			sim.damage(drone, def, efficiency, -1.0, tower)
 	_visual(sim, def, tower.position, tower.position + direction * float(def.range), def.spread, 0.20)
 
 func _multi(sim, tower, _target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
@@ -75,11 +75,11 @@ func _multi(sim, tower, _target, def: Dictionary, _direction: Vector2, efficienc
 	var stride := maxi(1, ceili(targets.size() / 13.0))
 	for i in range(0, targets.size(), stride):
 		_visual(sim, def, tower.position, targets[i].position, 0.0, 0.16)
-	sim.barrage(targets, def, efficiency)
+	sim.barrage(targets, def, efficiency, -1.0, tower)
 
 func _chain(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
 	if def.global:
-		_storm(sim, tower.position, def, efficiency)
+		_storm(sim, tower.position, def, efficiency, tower)
 		return
 	var seen: Dictionary = {}
 	var from: Vector2 = tower.position
@@ -89,10 +89,10 @@ func _chain(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency
 		seen[target.serial] = true
 		_visual(sim, def, from, target.position, 0.0, 0.22)
 		from = target.position
-		sim.damage(target, def, efficiency)
+		sim.damage(target, def, efficiency, -1.0, tower)
 		target = sim.nearest_in_radius(from, def.jump_radius, seen, def.get("detect_cloak", false))
 
-func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float) -> void:
+func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float, tower) -> void:
 	var pool: Array = sim.leading_targets(origin, 0.0, true, def.max_targets, def.get("detect_cloak", false))
 	# Group the selected targets into spatially coherent strike columns.
 	var columns: Dictionary = {}
@@ -110,7 +110,7 @@ func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float) -> void:
 			if i > 0 and i % stride == 0:
 				_visual(sim, def, previous, drone.position, 0.0, 0.22)
 				previous = drone.position
-	sim.barrage(pool, def, efficiency)
+	sim.barrage(pool, def, efficiency, -1.0, tower)
 
 func _field(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
 	var center: Vector2 = tower.position if def.center == "self" else target.position
@@ -118,7 +118,7 @@ func _field(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency
 	if def.ramp > 0.0:
 		tower.field_age = minf(def.ramp, tower.field_age + float(def.interval))
 		radius *= lerpf(0.22, 1.0, tower.field_age / float(def.ramp))
-	area(sim, center, radius, def, efficiency)
+	area(sim, center, radius, def, efficiency, -1.0, tower)
 	_visual(sim, def, center, center, radius, maxf(0.24, float(def.interval) * 1.1))
 
 func _strike(sim, tower, target, def: Dictionary, direction: Vector2, efficiency: float) -> void:
@@ -164,11 +164,11 @@ func _step(sim, seq: Sequence) -> bool:
 		for drone in sim.query_radius(seq.point, radius):
 			if not seq.hit.has(drone.serial):
 				seq.hit[drone.serial] = true
-				sim.damage(drone, def, seq.efficiency)
+				sim.damage(drone, def, seq.efficiency, -1.0, seq.tower)
 		return seq.elapsed >= float(def.duration)
 	if def.attack == "singularity":
 		while seq.tick_index * float(def.tick) < float(def.duration) - 0.00001 and seq.elapsed + 0.00001 >= seq.tick_index * float(def.tick):
-			area(sim, seq.point, 0.0, def, seq.efficiency, seq.anchor)
+			area(sim, seq.point, 0.0, def, seq.efficiency, seq.anchor, seq.tower)
 			seq.tick_index += 1
 		if seq.elapsed + 0.00001 >= float(def.duration):
 			_visual(sim, def, seq.point, seq.point, sim.field_diagonal * 0.62, 1.05, "collapse_gravity")
@@ -177,18 +177,18 @@ func _step(sim, seq: Sequence) -> bool:
 	if seq.elapsed + 0.00001 < float(def.windup):
 		return false
 	if def.attack == "line":
-		_fire_line(sim, seq.tower.position, seq.direction, def, seq.efficiency)
+		_fire_line(sim, seq.tower.position, seq.direction, def, seq.efficiency, seq.tower)
 	else:
-		area(sim, seq.point, def.radius, def, seq.efficiency)
+		area(sim, seq.point, def.radius, def, seq.efficiency, -1.0, seq.tower)
 		var reach: float = sim.field_diagonal * 0.59 if def.global else float(def.radius)
 		_visual(sim, def, seq.point, seq.point, reach, 1.65 if def.global else 0.65)
 	return true
 
-func area(sim, center: Vector2, radius: float, def: Dictionary, efficiency: float, anchor: float = -1.0) -> void:
+func area(sim, center: Vector2, radius: float, def: Dictionary, efficiency: float, anchor: float = -1.0, tower = null) -> void:
 	if def.pull > 0 and anchor < 0:
 		anchor = sim.projection(center)
 	var targets: Array = sim.enemies if def.global else sim.query_radius(center, radius)
-	sim.barrage(targets, def, efficiency, anchor)
+	sim.barrage(targets, def, efficiency, anchor, tower)
 
 func _visual(sim, def: Dictionary, start: Vector2, end: Vector2, width: float = 0.0, life: float = 0.25, style: String = "") -> void:
 	var name := str(def.fx) if style.is_empty() else style

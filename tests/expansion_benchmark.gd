@@ -89,7 +89,7 @@ func _setup() -> void:
 		quit(1)
 		return
 	var profile = root.get_node("Profile")
-	profile.fx_quality = 2
+	profile.fx_quality = 3
 	profile.fx_particles = 0.85
 	profile.fx_dim = false
 	profile.fx_shake = 0.35

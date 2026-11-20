@@ -2,7 +2,7 @@ class_name AttackEffects
 extends Node2D
 
 const BUDGET := 400
-const LIMITS := [30, 55, 88]
+const LIMITS := [13, 30, 55, 88]
 const HUGE_LIMIT := 18
 const REFRESHABLE := ["vortex", "plasma", "gravity"]
 
@@ -85,7 +85,7 @@ func capture_mob(kind: StringName, start: Vector2, finish: Vector2, tint: Color,
 	capture("mob_" + String(kind), start, finish, radius, tint, life, 0)
 
 func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint: Color, life: float, _stage: int) -> void:
-	var large := style.begins_with("charge_") or style in ["cataclysm", "nova", "singularity", "collapse_gravity", "doom", "orbit", "mob_boss_spawn", "mob_boss_down", "mob_phase"]
+	var large := style.begins_with("charge_") or style in ["cataclysm", "nova", "singularity", "collapse_gravity", "doom", "orbit", "mob_boss_spawn", "mob_boss_down", "mob_phase", "support_sync"]
 	var layer := _huge if large else _ordinary
 	var limit: int = HUGE_LIMIT if large else LIMITS[_preferences.fx_quality]
 	var from := _field.position + start * _cell
@@ -185,6 +185,21 @@ func _render(fx: Effect) -> void:
 	var at := fx.origin
 	var reach := maxf(12, fx.radius * _cell)
 	match fx.style:
+		"support_gain", "support_link":
+			_beam(at, at.lerp(fx.end, minf(1.0, t * 1.5)), 2.1, tint)
+			_ring(fx.end, 16.0 + 16.0 * t, tint)
+		"support_lose":
+			_ring(at, 25.0 - 18.0 * t, tint)
+		"support_impact":
+			_glow(at, 20.0 + 10.0 * t, Color(tint, fade * 0.45))
+		"support_quantum":
+			_zap(at, fx.end, tint, 2.7)
+			_beam(at, fx.end, 1.4, Color("#6df3dd", fade * 0.74))
+			_ring(fx.end, 11.0 + 27.0 * t, tint)
+		"support_sync":
+			_ring(at, reach * t, Color(tint, fade * 0.55))
+			_ring(at, reach * t * 0.87, Color("#fff5d0", fade * 0.32))
+			_hoop(at, 51.0 + t * 35.0, 8, _time * 2.0, tint)
 		"mob_grant", "mob_boost":
 			_beam(at, fx.end, 3.0, Color(tint, fade * 0.78))
 			_ring(fx.end, 16 + 12 * t, tint)

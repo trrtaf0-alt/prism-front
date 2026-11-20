@@ -20,6 +20,15 @@ const POLICIES := {
 	"rush": [[2, 9, 12, 13, 21, 25, 28, 29, 30], [9, 12, 13, 21, 25], [28, 30, 29, 25, 29, 25, 25]],
 }
 
+const SUPPORT_PLANS := {
+	"none": {}, "pair": {31: 12, 32: 18}, "overdrive": {34: 34},
+	"quantum": {35: 41}, "command": {36: 45},
+	"all": {31: 12, 32: 18, 33: 25, 34: 34, 35: 41, 36: 45},
+}
+
+var support_plan := "none"
+var final_quantum := 0
+var final_syncs := 0
 var rules := BattleData.new()
 var map := FieldMap.new()
 var policy := "standard"
@@ -41,7 +50,9 @@ func _run() -> void:
 	for arg in args:
 		if arg.begins_with("--strategy="):
 			policy = arg.trim_prefix("--strategy=")
-	if not POLICIES.has(policy) or not map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty() or not rules.mobs.error.is_empty():
+		if arg.begins_with("--support="):
+			support_plan = arg.trim_prefix("--support=")
+	if not SUPPORT_PLANS.has(support_plan) or not POLICIES.has(policy) or not map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty() or not rules.mobs.error.is_empty():
 		printerr("Invalid campaign fixture")
 		quit(1)
 		return
@@ -80,6 +91,8 @@ func _run() -> void:
 	if not leaky:
 		_place_opening(sim)
 	for wave in range(1, BattleData.FINAL_WAVE + 1):
+		if wave == BattleData.FINAL_WAVE:
+			sim.support_visual.connect(_final_support_event)
 		sim.start_wave()
 		var ticks := 0
 		while sim.active and not sim.lost and ticks < 48000:
@@ -111,14 +124,21 @@ func _run() -> void:
 	print("%s clear=%.2fs boss_wave=%.2fs boss_kill=%.2fs stage2=%.2fs stage3=%.2fs last_escort=%.2fs peak=%d final_peak=%d" % [
 		policy, sim.elapsed, sim.elapsed - sim.finale_started, sim.finale_boss_time, stage_two, stage_three, sim.finale_last_spawn, peak_live, peak_final,
 	])
+	if support_plan != "none":
+		print("Finale support: %d quantum strikes, %d sync starts" % [final_quantum, final_syncs])
 	if ui != null and sim.won:
 		await RenderingServer.frame_post_draw
-		var filename := ProjectSettings.globalize_path("res://reports/campaign-live-victory.png")
+		var name := "campaign-live-victory.png" if support_plan == "none" else "support-campaign-victory.png"
+		var filename := ProjectSettings.globalize_path("res://reports/" + name)
 		if root.get_texture().get_image().save_png(filename) != OK or ui.modal_kind != "victory":
 			quit(1)
 			return
 		await create_timer(1.0).timeout
 	quit(0 if sim.won else 1)
+
+func _final_support_event(event: StringName, _kind: int, _start: Vector2, _finish: Vector2) -> void:
+	final_quantum += int(event == &"quantum")
+	final_syncs += int(event == &"sync")
 
 func _place_opening(sim: Battle) -> void:
 	for i in 5:
@@ -163,6 +183,19 @@ func _research(sim: Battle, choice: String) -> void:
 
 func _prepare(sim: Battle) -> void:
 	var options: Array = POLICIES[policy]
+	for number: int in SUPPORT_PLANS[support_plan]:
+		if sim.wave < int(SUPPORT_PLANS[support_plan][number]):
+			continue
+		var id := _id(number)
+		if _count(sim, id) > 0:
+			continue
+		var node: String = rules.research.unlocks[id]
+		if rules.research.minimum_cost(node, sim.research.completed) <= sim.research.points:
+			if not sim.research.unlocked.has(id):
+				_research(sim, id)
+				if sim.research.unlocked.has(id):
+					first_unlock[number] = sim.wave
+			_buy_support(sim, id)
 	for index in range(0, 5):
 		var before := sim.research.completed.size()
 		for number: int in options[0]:
@@ -213,6 +246,27 @@ func _prepare(sim: Battle) -> void:
 				var id := _id(n)
 				if _count(sim, id) < (7 if n == 25 else 4) and sim.credits >= reserve + int(rules.towers.lookup(id).cost):
 					_buy(sim, id)
+
+func _buy_support(sim: Battle, id: String) -> void:
+	var def := rules.towers.lookup(id)
+	if sim.credits < int(def.cost):
+		return
+	var best := Vector2i(-1, -1)
+	var score := -1.0
+	var radius_sq := float(def.range) ** 2
+	for candidate in seats:
+		if not sim.can_install(candidate, id):
+			continue
+		var weight := 0.0
+		var center := Vector2(candidate) + Vector2(0.5, 0.5)
+		for tower in sim.towers:
+			if tower.definition.support == TowerSupport.Kind.NONE and (def.global or center.distance_squared_to(tower.position) <= radius_sq):
+				weight += 1.0 + float(tower.definition.stage)
+		if weight > score:
+			best = candidate
+			score = weight
+	if sim.install(best, id):
+		first_buy[int(id.get_slice("_", 1))] = sim.wave
 
 func _count(sim: Battle, id: String) -> int:
 	var result := 0
