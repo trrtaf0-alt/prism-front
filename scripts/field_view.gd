@@ -7,8 +7,6 @@ const MINT := Color("#50f6ed")
 const PINK := Color("#ff467d")
 const GOLD := Color("#ffc879")
 const MAX_EFFECTS := 160
-const TURRET_BASE := preload("res://assets/turret_base.png")
-const TURRET_HEAD := preload("res://assets/turret_head.png")
 const BOLT_TEXTURE := preload("res://assets/bolt.png")
 const SHOCKWAVE := preload("res://assets/shockwave.png")
 const NEON_SHADER := preload("res://assets/neon.gdshader")
@@ -59,8 +57,10 @@ func _ready() -> void:
 	_drone_color = Color(battle.data.drone.color)
 	var material_mask := ShaderMaterial.new()
 	material_mask.shader = NEON_SHADER
-	_bases = SpriteBatch.new(TURRET_BASE, CELL, material_mask)
-	_heads = SpriteBatch.new(TURRET_HEAD, CELL, material_mask)
+	var tower_material := ShaderMaterial.new()
+	tower_material.shader = TowerArt.SHADER
+	_bases = SpriteBatch.new(TowerArt.ATLAS, CELL, tower_material)
+	_heads = SpriteBatch.new(TowerArt.ATLAS, CELL, tower_material)
 	_bolts = SpriteBatch.new(BOLT_TEXTURE, 55.0, material_mask)
 	add_child(_bases)
 	add_child(_heads)
@@ -193,12 +193,12 @@ func _update_batches() -> void:
 	for i in battle.towers.size():
 		var tower := battle.towers[i]
 		var at := pixel(tower.position)
-		var aim := Vector2.from_angle(tower.angle)
-		var pulse := 0.9 + sin(elapsed * 3.0) * 0.1
-		var tint: Color = tower.definition.tint
-		var scale := 1.0 + float(tower.definition.stage) * 0.085
-		_bases.item(i, at, Vector2.RIGHT * scale, Color(tint, pulse))
-		_heads.item(i, at - aim * (tower.recoil * 34.0), aim * scale, tint)
+		var id: String = tower.definition.id
+		var aim := Vector2.from_angle(tower.angle + TowerArt.rotation_offset(id, elapsed))
+		var scale := TowerArt.size_for_stage(int(tower.definition.stage))
+		var frame := TowerArt.first_frame(id)
+		_bases.item(i, at, Vector2.RIGHT * scale, TowerArt.batch_color(frame))
+		_heads.item(i, at - aim * (tower.recoil * 31.0), aim * scale, TowerArt.batch_color(frame + 1))
 	_bases.finish()
 	_heads.finish()
 	_mobs.submit(battle, ORIGIN, _preferences.fx_dim)
@@ -268,15 +268,39 @@ func _draw() -> void:
 		draw_rect(tile, Color(color, 0.12))
 		draw_rect(tile, Color(color, 0.76), false, 1.5)
 		if building and focus == hovered and not battle.occupied.has(hovered):
-			draw_texture_rect(TURRET_BASE, tile.grow(-3.0), false, Color(battle.data.towers.lookup(build_id).tint, 0.55))
+			var art_size := CELL * TowerArt.size_for_stage(int(battle.data.towers.lookup(build_id).stage))
+			var silhouette := Rect2(tile.get_center() - Vector2.ONE * art_size * 0.5, Vector2.ONE * art_size)
+			var frame := TowerArt.first_frame(build_id)
+			draw_texture_rect(TowerArt.icon(frame), silhouette, false, Color(1, 1, 1, 0.72))
+			draw_texture_rect(TowerArt.icon(frame + 1), silhouette, false, Color(1, 1, 1, 0.84))
 	if battle.occupied.has(selected):
 		draw_arc(pixel(battle.occupied[selected].position), 21.0, 0, TAU, 32, battle.occupied[selected].definition.tint, 2.0, true)
 
 func _draw_overlay() -> void:
 	for tower in battle.towers:
-		if tower.definition.stage >= 3 and tower.recoil > 0.0:
-			var tint: Color = Color(tower.definition.tint, tower.recoil * 5.0)
-			_overlay.draw_arc(pixel(tower.position), 18.0 + 8.0 * (1.0 - tower.recoil / 0.12), elapsed * 2.0, elapsed * 2.0 + 4.9, 22, tint, 2.3)
+		var stage := int(tower.definition.stage)
+		if stage < 3:
+			continue
+		var at := pixel(tower.position)
+		var tint: Color = tower.definition.tint
+		var radius := CELL * (0.55 + 0.052 * stage)
+		var hit := tower.recoil / 0.12
+		var windup := float(tower.definition.windup)
+		var fired_ago := float(tower.definition.interval) - tower.cooldown
+		var charge := fired_ago / windup if windup > 0.0 and tower.cooldown > 0.0 and fired_ago < windup else 0.0
+		var brightness := 0.52 if _preferences.fx_dim else 1.0
+		if hit > 0.0:
+			_overlay.draw_arc(at, radius + 9.0 * (1.0 - hit), tower.angle - 0.95, tower.angle + 0.95, 16, Color(tint, hit * brightness * 0.58), 2.3, true)
+		if stage < 4 or _preferences.fx_quality == 0:
+			continue
+		var orbit_count := 3 if stage == 5 else 2
+		for i in orbit_count:
+			var phase := elapsed * (0.6 + charge) + i * TAU / orbit_count
+			var r := radius + 6.0 * charge
+			var accent := Color(tint, (0.27 + charge * 0.48) * brightness)
+			_overlay.draw_arc(at, r, phase, phase + (1.20 if stage == 5 else 0.72), 16, accent, 1.8 + charge, true)
+			if stage == 5 and _preferences.fx_particles > 0.0:
+				_overlay.draw_circle(at + Vector2.from_angle(phase) * r, 2.4, accent, true, -1.0, true)
 
 func _draw_portals() -> void:
 	var start := pixel(Vector2(battle.field.start) + Vector2(0.5, 0.5))

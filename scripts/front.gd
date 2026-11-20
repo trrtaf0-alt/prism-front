@@ -689,16 +689,22 @@ func show_catalog() -> void:
 		var at := Vector2(34 + (i % 5) * 259, 131 + floori(i / 5.0) * 110)
 		var subtitle := "설치 %d" % int(def.cost)
 		if not ready:
-			subtitle += "  ·  연구 필요"
+			subtitle += "  ·  잠김"
 		elif not affordable:
 			subtitle += "  ·  재화 부족"
 		var tile := button_at(panel, "", Rect2(at, Vector2(241, 91)), _choose_tower.bind(id), ready and affordable)
 		var tint: Color = def.tint
-		panel_at(tile, Rect2(10, 16, 4, 58), "#" + tint.to_html(false), "#" + tint.to_html(false))
-		text_at(tile, def.name, 24, 5, 21, LIGHT, 207)
+		var frame := TowerArt.first_frame(id)
+		for layer in [frame, frame + 1]:
+			var portrait := TextureRect.new()
+			portrait.texture = TowerArt.icon(layer)
+			portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			place(portrait, tile, Rect2(1, 6, 79, 79))
+		text_at(tile, def.name, 76, 6, 20, LIGHT, 157)
 		var role := _tower_role(def)
-		text_at(tile, role, 24, 34, 17, tint, 207)
-		text_at(tile, subtitle, 24, 60, 16, MINT if ready and affordable else MUTED, 207)
+		text_at(tile, role, 76, 35, 15, tint, 157)
+		text_at(tile, subtitle, 76, 60, 15, MINT if ready and affordable else MUTED, 157)
 		tile.disabled = (ready and not affordable) or (not ready and not can_open_research())
 		tile.tooltip_text = def.description
 		tile.accessibility_name = "%s, %s, %s" % [def.name, role, subtitle]
@@ -706,9 +712,9 @@ func show_catalog() -> void:
 func _tower_role(def: Dictionary) -> String:
 	match def.id:
 		"tower_01": return "기본 단일 표적"
-		"tower_02": return "짧은 간격 · 신속형 대응"
-		"tower_03": return "직선 관통 · 장갑과 밀집 대응"
-		"tower_04": return "근거리 부채꼴 · 밀집 대응"
+		"tower_02": return "속사 · 신속형 대응"
+		"tower_03": return "직선 관통 · 밀집 대응"
+		"tower_04": return "산탄 · 밀집 대응"
 		"tower_05": return "이동 둔화 · 신속형 대응"
 	return str(TowerRegistry.ATTACK_NAMES[def.attack])
 

@@ -24,11 +24,24 @@ func _run() -> void:
 	_research()
 	_status_and_economy()
 	_all_towers()
+	_tower_art()
 	_attack_details()
 	_projectile_behaviors()
 	await _interface()
 	print("Expansion checks: %d, failures: %d" % [checks, failures])
 	quit(1 if failures > 0 else 0)
+
+func _tower_art() -> void:
+	var atlas := TowerArt.ATLAS.get_image()
+	var frames := {}
+	for id in rules.towers.ids:
+		var first := TowerArt.first_frame(id)
+		for frame in [first, first + 1]:
+			var texture := TowerArt.icon(frame)
+			var art := atlas.get_region(Rect2i(texture.region))
+			check(not frames.has(frame) and art.get_used_rect().has_area(),
+				"id %s has a filled, unique art layer %d" % [id, frame])
+			frames[frame] = true
 
 func _research() -> void:
 	var graph := rules.research
@@ -405,7 +418,24 @@ func _visual_preview(ui) -> void:
 	for i in 44:
 		sim.tick(STEP)
 	await _capture("terminal-strike")
-	await create_timer(0.85).timeout
+	await create_timer(0.35).timeout
+	ui.start_game()
+	sim = ui.battle
+	_unlock(sim)
+	var sample_cells: Array[Vector2i] = []
+	for y in [2, 5, 8, 11, 15]:
+		for x in [2, 6, 10, 14, 18, 22, 26]:
+			var cell := Vector2i(x, y)
+			if sim.field.tile_at(cell) != ".":
+				cell += Vector2i(0, 1)
+			if sim.field.tile_at(cell) == ".":
+				sample_cells.append(cell)
+	check(sample_cells.size() >= rules.towers.ids.size(), "all tower art fits on the sample field")
+	for i in mini(sample_cells.size(), rules.towers.ids.size()):
+		sim.install(sample_cells[i], rules.towers.ids[i])
+	check(sim.towers.size() == 30, "all 30 tower silhouettes are installed for visual QA")
+	ui.callout_time = 0.0
+	await _capture("tower-lineup")
 
 func _click(ui: Control, logical: Vector2) -> void:
 	var point := ui.get_global_transform_with_canvas() * logical
