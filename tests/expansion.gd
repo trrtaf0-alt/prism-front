@@ -305,7 +305,7 @@ func _interface() -> void:
 	ui.start_game()
 	var sim: Battle = ui.battle
 	var original_best: int = root.get_node("Profile").best
-	check(ui.rp_label.text == "0" and ui.catalog_button.text == "목록 1", "HUD fresh research economy")
+	check(ui.rp_label.text == "0" and ui.catalog_button.tooltip_text == "해금된 타워 1종", "HUD fresh research economy")
 	sim.start_wave()
 	var first := sim.enemies[0]
 	var progress := first.progress
@@ -355,15 +355,26 @@ func _interface() -> void:
 	check(sim.research.completed.has("survey") and sim.research.points == 98, "research button completes and debits selected node")
 	for id in ["motion", "bus", "heat", "feed", "rapid"]:
 		sim.research.purchase(id)
-	check(ui.catalog_button.text == "목록 2", "unlocked tower count refreshes immediately")
+	check(ui.catalog_button.tooltip_text == "해금된 타워 2종", "unlocked tower count refreshes immediately")
 	ui.close_modal()
 	ui._physics_process(STEP)
 	check(first.progress > progress, "closing research resumes same combat")
-	_click(ui, ui.catalog_button.get_rect().get_center())
-	check(ui.modal_kind == "catalog", "catalog opens from HUD")
-	await _capture("tower-catalog")
 	sim.credits = 200
-	ui._choose_tower("tower_02")
+	_click(ui, ui.catalog_button.get_rect().get_center())
+	check(ui.modal_kind == "catalog" and _catalog_cards(ui).size() == 2, "catalog opens with unlocked towers")
+	await _capture("tower-catalog")
+	for button: Button in ui.modal.find_children("*", "Button", true, false):
+		if button.text.begins_with("전체"):
+			_click(ui, button.get_global_rect().get_center())
+			break
+	var all_cards := _catalog_cards(ui)
+	check(all_cards.size() == 36, "catalog can show every tower on demand")
+	_click(ui, all_cards[2].get_global_rect().get_center())
+	check(ui.modal_kind == "research" and ui.research_screen.board.focus_id == "pierce", "locked tower links to its research")
+	ui.close_modal()
+	_click(ui, ui.catalog_button.get_rect().get_center())
+	_click(ui, _catalog_cards(ui)[1].get_global_rect().get_center())
+	check(ui.building and ui.build_id == "tower_02" and ui.modal == null, "selecting a catalog card enters placement immediately")
 	_click(ui, FieldView.pixel(Vector2(2.5, 4.5)))
 	check(sim.occupied.has(Vector2i(2, 4)) and sim.occupied[Vector2i(2, 4)].definition.id == "tower_02", "selected researched tower installs at tile")
 	ui.start_game()
@@ -665,6 +676,13 @@ func _attack_showcase(ui) -> void:
 		for i in int(times[name]):
 			sim.tick(STEP)
 		await _capture(name)
+
+func _catalog_cards(ui: Control) -> Array[Button]:
+	var cards: Array[Button] = []
+	for button: Button in ui.modal.find_children("*", "Button", true, false):
+		if not button.accessibility_name.is_empty():
+			cards.append(button)
+	return cards
 
 func _click(ui: Control, logical: Vector2) -> void:
 	var point := ui.get_global_transform_with_canvas() * logical

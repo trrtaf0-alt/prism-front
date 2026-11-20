@@ -12,6 +12,8 @@ signal support_visual(event: StringName, kind: int, start: Vector2, finish: Vect
 signal mob_visual(kind: StringName, start: Vector2, finish: Vector2, tint: Color, lifetime: float)
 signal attack_visual(style: String, origin: Vector2, end: Vector2, radius: float, tint: Color, life: float, stage: int)
 
+enum Placement { READY, OUTSIDE, OCCUPIED, TERRAIN, LOCKED, FUNDS, ENDED }
+
 # All distances are measured in tiles. The display converts them to pixels.
 const HIT_RADIUS := 0.21
 const BARREL_LENGTH := 0.31
@@ -171,9 +173,22 @@ func _init(map: FieldMap, rules: BattleData) -> void:
 		_bucket_leaders.append(null)
 		_used_slots.append(-1)
 
-func can_install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
+func placement_status(cell: Vector2i, id: String) -> Placement:
+	if lost or won:
+		return Placement.ENDED
+	if not field.contains(cell):
+		return Placement.OUTSIDE
+	if occupied.has(cell):
+		return Placement.OCCUPIED
+	if field.tile_at(cell) != ".":
+		return Placement.TERRAIN
 	var definition := data.towers.lookup(id)
-	return not lost and not won and research.unlocked.has(id) and not definition.is_empty() 		and credits >= int(definition.cost) and field.tile_at(cell) == "." and not occupied.has(cell)
+	if definition.is_empty() or not research.unlocked.has(id):
+		return Placement.LOCKED
+	return Placement.READY if credits >= int(definition.cost) else Placement.FUNDS
+
+func can_install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
+	return placement_status(cell, id) == Placement.READY
 
 func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	if not can_install(cell, id):

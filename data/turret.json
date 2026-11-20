@@ -1,5 +1,5 @@
 {
-  "name": "네온 자동 포탑",
+  "name": "기본 포탑",
   "damage": 1,
   "shots_per_second": 1,
   "range": 4,

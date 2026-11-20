@@ -40,6 +40,7 @@ var status: Label
 var result: Label
 var forecast: Label
 var build_hint: Label
+var placement_label: Label
 var _forecast_wave := -1
 var _forecast_seed := 0
 var tower_heading: Label
@@ -267,10 +268,15 @@ func _make_hud() -> void:
 	result = _right_hud_text("", 1460, 148, 17, GOLD, 402)
 	_forecast_wave = -1
 
-	build_button = _hud_button("", Rect2(1218, 998, 282, 44), toggle_build, true)
-	catalog_button = _hud_button("목록", Rect2(1514, 998, 130, 44), show_catalog)
+	build_button = _hud_button("", Rect2(1166, 998, 316, 44), toggle_build, true)
+	build_button.toggle_mode = true
+	build_button.tooltip_text = "같은 타워 배치 · 1"
+	catalog_button = _hud_button("타워 선택", Rect2(1496, 998, 148, 44), show_catalog)
 	research_button = _hud_button("연구 그물망 · R", Rect2(1658, 998, 204, 44), show_research)
-	build_hint = _right_hud_text("", 1200, 1046, 16, MUTED, 662)
+	build_hint = _right_hud_text("", 1100, 1046, 16, MUTED, 762)
+	placement_label = _hud_text(screen, "", 0, 0, 18, LIGHT, 0)
+	placement_label.add_theme_stylebox_override("normal", box("#121a22f0", "#536b70ad"))
+	placement_label.hide()
 	tower_heading = _hud_text(screen, "", 86, 871, 26, LIGHT, 500)
 	tower_stats = _hud_text(screen, "", 86, 911, 17, MINT, 560)
 	sell_button = _hud_button("타워 판매", Rect2(86, 998, 168, 44), sell_selected)
@@ -358,38 +364,11 @@ func _update_hud() -> void:
 	else:
 		wave_button.text = "웨이브 %d 시작" % (battle.wave + 1)
 	_update_forecast()
-	var blueprint := data.towers.lookup(build_id)
-	var hint := "1  설치 선택   /   우클릭  취소"
-	if building:
-		if battle.can_install(field.hovered, build_id):
-			if blueprint.support != TowerSupport.Kind.NONE:
-				hint = "지원 범위  " + TowerRegistry.reach_text(blueprint)
-				build_hint.modulate = Color.WHITE
-			else:
-				var reach := field.path_in_range(field.hovered, blueprint)
-				hint = "조준 가능한 경로  %.1f칸" % reach if reach > 0.0 else "이 위치에서는 경로에 닿지 않음"
-				build_hint.modulate = Color.WHITE if reach > 0.0 else PINK
-		else:
-			hint = "빈 타일에 마우스를 올리세요"
-			build_hint.modulate = Color.WHITE
-	elif battle.wave == 0 and battle.towers.is_empty():
-		hint = "진입로 가까이에 포탑을 놓으세요"
-		build_hint.modulate = Color.WHITE
-	else:
-		build_hint.modulate = Color.WHITE
-	build_hint.text = hint
-	var cost := int(blueprint.cost)
+	_update_placement()
 	rp_label.text = str(battle.research.points)
 	research_button.disabled = not can_open_research()
-	catalog_button.disabled = battle.lost
-	catalog_button.text = "목록 %d" % battle.research.unlocked.size()
-	build_button.disabled = battle.lost or battle.credits < cost
-	if building:
-		build_button.text = "설치할 타일 선택  ·  %d" % cost
-	elif battle.credits < cost:
-		build_button.text = "재화 부족  ·  %d 필요" % cost
-	else:
-		build_button.text = "%s  ·  %d" % [blueprint.name, cost]
+	catalog_button.disabled = battle.lost or battle.won
+	catalog_button.tooltip_text = "해금된 타워 %d종" % battle.research.unlocked.size()
 	var has_tower := battle.occupied.has(selected)
 	for control: Control in [tower_heading, tower_stats, sell_button, support_button]:
 		control.visible = has_tower
@@ -412,6 +391,56 @@ func _update_hud() -> void:
 		tower_stats.tooltip_text = definition.description
 		sell_button.text = "타워 판매  +%d" % int(definition.refund)
 	sell_button.disabled = not has_tower or battle.lost
+
+func _update_placement() -> void:
+	var blueprint := data.towers.lookup(build_id)
+	var cost := int(blueprint.cost)
+	var available := not battle.lost and not battle.won
+	build_button.disabled = not available or (not building and battle.credits < cost)
+	build_button.set_pressed_no_signal(building and available)
+	build_button.text = "%s  ·  %d" % [blueprint.name, cost]
+	build_hint.text = ""
+	placement_label.hide()
+	if not available:
+		return
+	if battle.credits < cost:
+		build_hint.text = "재화 %d 부족" % (cost - battle.credits)
+	elif not building:
+		build_hint.text = "1  빠른 배치"
+	if not building or modal != null:
+		return
+	build_hint.text = "좌클릭  배치   ·   우클릭 / Esc  취소" if battle.credits >= cost else "%s   ·   Esc  취소" % build_hint.text
+	var cell := field.hovered
+	var status_at_tile := battle.placement_status(cell, build_id)
+	if status_at_tile == Battle.Placement.OUTSIDE:
+		return
+	var message := ""
+	match status_at_tile:
+		Battle.Placement.READY:
+			if blueprint.support != TowerSupport.Kind.NONE:
+				message = "지원 범위 %s" % TowerRegistry.reach_text(blueprint)
+			else:
+				var reach := field.path_in_range(cell, blueprint)
+				message = "조준 가능한 경로 %.1f칸" % reach if reach > 0.0 else "설치 가능 · 경로가 사거리 밖"
+		Battle.Placement.OCCUPIED:
+			message = "이미 타워가 있습니다"
+		Battle.Placement.TERRAIN:
+			message = "장애물" if map.tile_at(cell) == "#" else "적 이동 경로"
+		Battle.Placement.FUNDS:
+			message = "재화 %d 부족" % (cost - battle.credits)
+		Battle.Placement.LOCKED:
+			message = "연구 필요"
+		_:
+			return
+	if placement_label.text != message:
+		placement_label.text = message
+		placement_label.reset_size()
+	placement_label.add_theme_color_override("font_color", MINT if status_at_tile == Battle.Placement.READY else PINK)
+	var center := field.transform * FieldView.pixel(Vector2(cell) + Vector2.ONE * 0.5)
+	var x := minf(center.x + 38.0, FieldView.SCREEN.end.x - placement_label.size.x - 24.0)
+	var y := clampf(center.y - 27.0, 112.0, 950.0)
+	placement_label.position = Vector2(x, y)
+	placement_label.show()
 
 func _update_forecast() -> void:
 	forecast.visible = not (battle.active or battle.lost or battle.won)
@@ -446,7 +475,7 @@ func _update_forecast() -> void:
 	forecast.text = forecast_text
 
 func toggle_build() -> void:
-	if battle.lost or battle.credits < int(data.towers.lookup(build_id).cost):
+	if battle.lost or battle.won or (not building and battle.credits < int(data.towers.lookup(build_id).cost)):
 		return
 	building = not building
 	selected = NONE
@@ -505,7 +534,10 @@ func _unhandled_input(event: InputEvent) -> void:
 				_leave_settings()
 			"":
 				if game and not battle.lost:
-					show_pause()
+					if building:
+						toggle_build()
+					else:
+						show_pause()
 		get_viewport().set_input_as_handled()
 		return
 	if game and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R:
@@ -515,7 +547,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			show_research()
 		get_viewport().set_input_as_handled()
 		return
-	if not game or modal != null or battle.lost:
+	if not game or modal != null or battle.lost or battle.won:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_1:
 		toggle_build()
@@ -526,15 +558,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			selected = NONE
 		elif event.button_index == MOUSE_BUTTON_LEFT:
 			var cell := camera_fx.cell_under(make_input_local(event).position)
-			if battle.occupied.has(cell):
-				selected = cell
-				building = false
-			elif building:
-				if battle.install(cell, build_id) and battle.credits < int(data.towers.lookup(build_id).cost):
-					building = false
-					selected = cell
+			if building:
+				field.hovered = cell
+				battle.install(cell, build_id)
 			else:
-				selected = NONE
+				selected = cell if battle.occupied.has(cell) else NONE
 		_sync_selection()
 
 func _battle_effect(kind: StringName, _point: Vector2, _direction: Vector2) -> void:
@@ -610,6 +638,7 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 			control.focus_mode = Control.FOCUS_NONE
 	if is_instance_valid(field):
 		field.frozen = true
+		placement_label.hide()
 		camera_fx.suspend(true)
 	var shade := ColorRect.new()
 	shade.color = Color(0.018, 0.020, 0.025, 0.86)
@@ -729,25 +758,35 @@ func _research_purchased(_id: String, tower_id: String, advanced_stage: bool) ->
 			Sound.cue(&"clear")
 	_update_hud()
 
-func show_catalog() -> void:
-	if battle.lost:
+func show_catalog(show_all: bool = false) -> void:
+	if battle.lost or battle.won:
 		return
-	var panel := _open_modal("catalog", Vector2(1610, 838))
-	text_at(panel, "타워 목록", 33, 26, 38)
-	text_at(panel, "타워를 선택해 배치하거나 해금 연구로 이동하세요.", 35, 82, 20, MUTED)
-	button_at(panel, "닫기", Rect2(1376, 30, 200, 54), close_modal)
-	var detail := text_at(panel, "", 35, 789, 18, MUTED, 1536)
-	for i in data.towers.ids.size():
-		var id := data.towers.ids[i]
+	var ids: Array[String] = []
+	for id in data.towers.ids:
+		if show_all or battle.research.unlocked.has(id):
+			ids.append(id)
+	var columns := 6 if ids.size() > 12 else clampi(ids.size(), 2, 4)
+	var dimensions := Vector2(maxi(690, columns * 259 + 56), 205 + 110 * ceili(float(ids.size()) / columns))
+	var panel := _open_modal("catalog", dimensions)
+	text_at(panel, "타워 선택", 33, 22, 34)
+	var close := button_at(panel, "닫기", Rect2(dimensions.x - 146, 25, 112, 46), close_modal)
+	var funds := text_at(panel, "재화 %d" % battle.credits, dimensions.x - 338, 35, 19, GOLD, 169)
+	funds.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	button_at(panel, "해금됨 %d" % battle.research.unlocked.size(), Rect2(34, 82, 156, 42), show_catalog.bind(false), not show_all)
+	button_at(panel, "전체 %d" % data.towers.ids.size(), Rect2(201, 82, 130, 42), show_catalog.bind(true), show_all)
+	var detail := text_at(panel, "", 34, dimensions.y - 53, 18, MUTED, dimensions.x - 68)
+	var initial_focus := close
+	for i in ids.size():
+		var id := ids[i]
 		var def := data.towers.lookup(id)
 		var ready := battle.research.unlocked.has(id)
 		var affordable := battle.credits >= int(def.cost)
-		var at := Vector2(34 + (i % 6) * 259, 131 + floori(i / 6.0) * 110)
-		var subtitle := "설치 %d" % int(def.cost)
+		var at := Vector2(34 + (i % columns) * 259, 143 + floori(float(i) / columns) * 110)
+		var subtitle := "배치 %d" % int(def.cost)
 		if not ready:
-			subtitle += "  ·  잠김"
+			subtitle += "  ·  연구"
 		elif not affordable:
-			subtitle += "  ·  재화 부족"
+			subtitle += "  ·  부족"
 		var tile := button_at(panel, "", Rect2(at, Vector2(241, 91)), _choose_tower.bind(id), ready and affordable)
 		var tint: Color = def.tint
 		var frame := TowerArt.first_frame(id)
@@ -766,6 +805,10 @@ func show_catalog() -> void:
 		tile.mouse_entered.connect(_catalog_detail.bind(detail, def))
 		tile.focus_entered.connect(_catalog_detail.bind(detail, def))
 		tile.accessibility_name = "%s, %s, %s" % [def.name, role, subtitle]
+		if id == build_id and not tile.disabled:
+			initial_focus = tile
+	_catalog_detail(detail, data.towers.lookup(build_id))
+	initial_focus.grab_focus()
 
 func _catalog_detail(label: Label, definition: Dictionary) -> void:
 	label.text = "%s  ·  %s" % [definition.name, definition.description]

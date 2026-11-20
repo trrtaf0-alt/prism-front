@@ -133,7 +133,7 @@ func _ui_and_record() -> void:
 	sim.wave = 4
 	ui.field.hovered = Vector2i(8, 4)
 	ui.toggle_build()
-	check(ui.forecast.text.contains("신속형") and ui.build_hint.text.begins_with("조준 가능한 경로"), "HUD displays upcoming threat and placement coverage")
+	check(ui.forecast.text.contains("신속형") and ui.placement_label.text.begins_with("조준 가능한 경로"), "HUD displays upcoming threat and placement coverage")
 	if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
 		ui.set_process(false)
 		await RenderingServer.frame_post_draw

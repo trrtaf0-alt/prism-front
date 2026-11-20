@@ -71,6 +71,10 @@ Windows OpenGL에서 1,196개 검사를 통과했습니다. 선행 조건을 충
 
 30×18 정사각 타일의 한 변을 52에서 60 논리 픽셀로 확대했습니다. 전장은 1080픽셀 높이를 채우며 좌우에는 바닥 무늬가 이어집니다. Windows 렌더링에서 교전 중 선택 정보, 보스 체력바, HUD 뒤 입력 차단, 상하 가장자리 네 타일의 설치, 카메라 왜곡 중 타일 설치를 검증했습니다. `reports/hud-full-field.png`와 `reports/battle.png`에 시작 장면과 교전 장면이 저장됩니다.
 
+## 타워 선택과 배치
+
+Windows 화면에서 해금 목록과 전체 목록, 잠긴 타워의 연구 이동, 카드 선택 후 바로 배치, 점유 타일·경로·장애물·재화 부족 설명, 연속 설치와 Esc 및 HUD를 통한 취소를 검증했습니다. `reports/tower-catalog.png`와 `reports/tower-placement.png`에 타워 선택과 조준 경로가 저장됩니다.
+
 # v0.4 50웨이브 캠페인 검증
 
 Windows 11 Pro, Core i7-10750H, GeForce RTX 2060, Godot 4.7.2에서 실행했습니다. [수식과 타워 수치](BALANCE.md) · [18종 몹과 생성체 수치 및 능력](MOBS.md) · [웨이브별 편성](WAVES.md)

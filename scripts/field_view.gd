@@ -279,7 +279,8 @@ func _draw() -> void:
 			var left := ORIGIN + Vector2(0, y * CELL)
 			draw_line(left, left + Vector2(extent.x, 0), grid)
 	_draw_portals()
-	var focus := selected if map.contains(selected) else (hovered if building and battle.can_install(hovered, build_id) else Vector2i(-1, -1))
+	var can_place := building and battle.can_install(hovered, build_id)
+	var focus := hovered if can_place else selected
 	if map.contains(focus):
 		var at := pixel(Vector2(focus) + Vector2(0.5, 0.5))
 		var turret = battle.occupied.get(focus)
@@ -300,13 +301,13 @@ func _draw() -> void:
 		if def.support == TowerSupport.Kind.NONE and not _aim_lines.is_empty():
 			draw_multiline(_aim_lines, Color(tint, 0.34), 15.0, true)
 			draw_multiline(_aim_lines, Color(tint, 0.95), 4.0, true)
-	if map.contains(hovered) and not battle.lost:
+	if map.contains(hovered) and not battle.lost and (building or battle.occupied.has(hovered)):
 		var at := pixel(Vector2(hovered))
-		var color := MINT if not building or battle.can_install(hovered, build_id) else PINK
+		var color := MINT if not building or can_place else PINK
 		var tile := Rect2(at + Vector2(2, 2), Vector2.ONE * (CELL - 4.0))
 		draw_rect(tile, Color(color, 0.12))
 		draw_rect(tile, Color(color, 0.76), false, 1.5)
-		if building and focus == hovered and not battle.occupied.has(hovered):
+		if can_place:
 			var art_size := CELL * TowerArt.size_for_stage(int(battle.data.towers.lookup(build_id).stage))
 			var silhouette := Rect2(tile.get_center() - Vector2.ONE * art_size * 0.5, Vector2.ONE * art_size)
 			var frame := TowerArt.first_frame(build_id)

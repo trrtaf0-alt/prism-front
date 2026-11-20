@@ -186,8 +186,24 @@ func _interface(profile: Node) -> void:
 	gui_click(ui, ui.build_button.get_rect().get_center())
 	check(ui.building and ui.field.building, "build button enters placement mode")
 	var tower_tile := FieldView.pixel(Vector2(3.5, 2.5))
+	ui.set_process(false)
+	ui.field.hovered = Vector2i(3, 2)
+	ui._sync_selection()
+	await capture("tower-placement")
+	ui.set_process(true)
+	for entry: Array in [[Vector2i(1, 3), "적 이동 경로"], [Vector2i(1, 1), "장애물"]]:
+		gui_click(ui, FieldView.pixel(Vector2(entry[0]) + Vector2.ONE * 0.5))
+		check(ui.placement_label.text == entry[1] and sim.credits == 50, "blocked terrain explains why it cannot be used")
 	gui_click(ui, tower_tile)
 	check(sim.credits == 40 and sim.occupied.has(Vector2i(3, 2)), "tile click installs")
+	gui_click(ui, tower_tile)
+	check(ui.building and ui.selected == Vector2i(-1, -1) and sim.credits == 40, "occupied tile keeps placement mode without spending")
+	check(ui.placement_label.text == "이미 타워가 있습니다", "blocked tile shows its reason")
+	var escape := InputEventAction.new()
+	escape.action = "ui_cancel"
+	escape.pressed = true
+	ui._unhandled_input(escape)
+	check(not ui.building and ui.modal == null, "Escape cancels building before opening pause")
 	gui_click(ui, tower_tile)
 	check(ui.selected == Vector2i(3, 2) and not ui.sell_button.disabled, "tile click selects tower")
 	gui_click(ui, ui.sell_button.get_rect().get_center())
@@ -200,14 +216,18 @@ func _interface(profile: Node) -> void:
 	gui_click(ui, ui.catalog_button.get_rect().get_center())
 	check(ui.modal_kind == "catalog" and sim.towers.size() == edge_cells.size(), "a HUD button opens its menu without placing a tower through it")
 	ui.close_modal()
-	ui.toggle_build()
+	var final_slot := Vector2i(1, 2)
+	gui_click(ui, FieldView.pixel(Vector2(final_slot) + Vector2.ONE * 0.5))
+	check(sim.credits == 0 and ui.building and not ui.build_button.disabled, "spending the remaining credits keeps cancellation available")
+	gui_click(ui, FieldView.pixel(Vector2(2.5, 2.5)))
+	check(ui.placement_label.text == "재화 10 부족" and sim.towers.size() == edge_cells.size() + 1, "insufficient funds show the amount without placing")
+	gui_click(ui, ui.build_button.get_rect().get_center())
+	check(not ui.building, "HUD can cancel placement with no funds")
+	sim.sell(final_slot)
 	for cell: Vector2i in edge_cells:
 		sim.sell(cell)
 	gui_click(ui, ui.wave_button.get_rect().get_center())
 	check(sim.wave == 1 and ui.wave_callout.contains("1"), "HUD wave control")
-	var escape := InputEventAction.new()
-	escape.action = "ui_cancel"
-	escape.pressed = true
 	ui._unhandled_input(escape)
 	var distance := sim.enemies[0].progress
 	ui._physics_process(STEP)
