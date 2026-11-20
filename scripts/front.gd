@@ -35,6 +35,10 @@ var credits_label: Label
 var health_bar: ColorRect
 var status: Label
 var result: Label
+var forecast: Label
+var build_hint: Label
+var _forecast_wave := -1
+var _forecast_seed := 0
 var tower_heading: Label
 var tower_stats: Label
 var sell_button: Button
@@ -245,13 +249,15 @@ func _make_hud() -> void:
 	text_at(screen, "웨이브 제어", 1550, 166, 21, MUTED)
 	status = text_at(screen, "", 1550, 202, 24, LIGHT, 299)
 	wave_button = button_at(screen, "웨이브 시작", Rect2(1550, 251, 299, 59), start_wave, true)
-	result = text_at(screen, "", 1550, 323, 19, GOLD, 299)
+	forecast = text_at(screen, "", 1550, 313, 16, MINT, 299)
+	result = text_at(screen, "", 1550, 357, 16, GOLD, 299)
+	_forecast_wave = -1
 
 	panel_at(screen, Rect2(1527, 400, 345, 185))
 	text_at(screen, "타워 설치", 1550, 420, 21, MUTED)
 	catalog_button = button_at(screen, "목록", Rect2(1750, 412, 99, 40), show_catalog)
 	build_button = button_at(screen, "", Rect2(1550, 467, 299, 61), toggle_build, true)
-	text_at(screen, "1  설치 선택   /   우클릭  취소", 1550, 540, 17, MUTED)
+	build_hint = text_at(screen, "", 1550, 540, 17, MUTED, 299)
 	research_button = button_at(screen, "연구 그물망  ·  R", Rect2(1527, 890, 345, 65), show_research, true)
 
 	panel_at(screen, Rect2(1527, 603, 345, 265))
@@ -323,7 +329,23 @@ func _update_hud() -> void:
 		wave_button.text = "50웨이브  ·  최종 보스"
 	else:
 		wave_button.text = "웨이브 %d 시작" % (battle.wave + 1)
+	_update_forecast()
 	var blueprint := data.towers.lookup(build_id)
+	var hint := "1  설치 선택   /   우클릭  취소"
+	if building:
+		if battle.can_install(field.hovered, build_id):
+			var reach := field.path_in_range(field.hovered, blueprint)
+			hint = "조준 가능한 경로  %.1f칸" % reach if reach > 0.0 else "이 위치에서는 경로에 닿지 않음"
+			build_hint.modulate = Color.WHITE if reach > 0.0 else PINK
+		else:
+			hint = "빈 타일에 마우스를 올리세요"
+			build_hint.modulate = Color.WHITE
+	elif battle.wave == 0 and battle.towers.is_empty():
+		hint = "진입로 가까이에 포탑을 놓으세요"
+		build_hint.modulate = Color.WHITE
+	else:
+		build_hint.modulate = Color.WHITE
+	build_hint.text = hint
 	var cost := int(blueprint.cost)
 	rp_label.text = str(battle.research.points)
 	research_button.disabled = not can_open_research()
@@ -353,6 +375,38 @@ func _update_hud() -> void:
 		tower_stats.tooltip_text = ""
 		sell_button.text = "타워 판매"
 	sell_button.disabled = not has_tower or battle.lost
+
+func _update_forecast() -> void:
+	forecast.visible = not (battle.active or battle.lost or battle.won)
+	if not forecast.visible:
+		return
+	var upcoming := battle.wave + 1
+	if _forecast_wave == upcoming and _forecast_seed == battle.roster_seed:
+		return
+	_forecast_wave = upcoming
+	_forecast_seed = battle.roster_seed
+	var forecast_text := ""
+	if upcoming == BattleData.FINAL_WAVE:
+		forecast_text = "종결 보스 1 · 지원군 %d\n보스의 보호막은 체력 단계마다 바뀝니다" % (data.wave_count(upcoming) - 1)
+	else:
+		var counts := battle.preview_wave()
+		var threats: Array = counts.keys()
+		threats.erase("normal")
+		threats.sort_custom(func(a: String, b: String) -> bool:
+			return counts[a] > counts[b])
+		var summary := PackedStringArray()
+		for i in mini(2, threats.size()):
+			var id: String = threats[i]
+			summary.append("%s %d" % [data.mobs.lookup(id).name, counts[id]])
+		if summary.is_empty():
+			forecast_text = "일반형만 등장\n진입로와 굽은 길을 함께 노려보세요"
+		else:
+			forecast_text = "주요 적  " + " · ".join(summary)
+			if counts.has("swift") and upcoming <= 9:
+				forecast_text += "\n빠른 적은 속사포나 냉각포로 대응"
+			elif counts.has("armored") and upcoming <= 9:
+				forecast_text += "\n장갑 적은 관통포로 한 줄을 노리세요"
+	forecast.text = forecast_text
 
 func toggle_build() -> void:
 	if battle.lost or battle.credits < int(data.towers.lookup(build_id).cost):
@@ -636,11 +690,30 @@ func show_catalog() -> void:
 		var ready := battle.research.unlocked.has(id)
 		var affordable := battle.credits >= int(def.cost)
 		var at := Vector2(34 + (i % 5) * 259, 131 + floori(i / 5.0) * 110)
-		var subtitle := ("%d 재화" % int(def.cost) if affordable else "%d 재화 필요" % int(def.cost)) if ready else "연구 필요"
-		var tile := button_at(panel, "%s\n%s" % [def.name, subtitle], Rect2(at, Vector2(241, 91)), _choose_tower.bind(id), ready and affordable)
-		tile.add_theme_color_override("font_color", def.tint if ready else MUTED)
+		var subtitle := "설치 %d" % int(def.cost)
+		if not ready:
+			subtitle += "  ·  연구 필요"
+		elif not affordable:
+			subtitle += "  ·  재화 부족"
+		var tile := button_at(panel, "", Rect2(at, Vector2(241, 91)), _choose_tower.bind(id), ready and affordable)
+		var tint: Color = def.tint
+		panel_at(tile, Rect2(10, 16, 4, 58), "#" + tint.to_html(false), "#" + tint.to_html(false))
+		text_at(tile, def.name, 24, 5, 21, LIGHT, 207)
+		var role := _tower_role(def)
+		text_at(tile, role, 24, 34, 17, tint, 207)
+		text_at(tile, subtitle, 24, 60, 16, MINT if ready and affordable else MUTED, 207)
 		tile.disabled = (ready and not affordable) or (not ready and not can_open_research())
 		tile.tooltip_text = def.description
+		tile.accessibility_name = "%s, %s, %s" % [def.name, role, subtitle]
+
+func _tower_role(def: Dictionary) -> String:
+	match def.id:
+		"tower_01": return "기본 단일 표적"
+		"tower_02": return "짧은 간격 · 신속형 대응"
+		"tower_03": return "직선 관통 · 장갑과 밀집 대응"
+		"tower_04": return "근거리 부채꼴 · 밀집 대응"
+		"tower_05": return "이동 둔화 · 신속형 대응"
+	return str(TowerRegistry.ATTACK_NAMES[def.attack])
 
 func _choose_tower(id: String) -> void:
 	if not battle.research.unlocked.has(id):

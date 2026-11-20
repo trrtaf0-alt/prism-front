@@ -20,6 +20,7 @@ func _run() -> void:
 	check(rules.mobs.error.is_empty() and rules.research.error.is_empty(), "campaign definitions validate")
 	_count_and_timing()
 	_victory_conditions()
+	_preview_matches_spawn()
 	await _ui_and_record()
 	print("Campaign checks: %d, failures: %d" % [checked, bad])
 	quit(1 if bad else 0)
@@ -46,6 +47,21 @@ func _count_and_timing() -> void:
 	check(sim.primary_spawned == delivered and sim.queued == 820 - delivered, "stalled frame emits all elapsed slots")
 	sim._dispatch(1000.0)
 	check(sim.primary_spawned == 820 and sim.queued == 0, "all original slots retained at W49")
+
+func _preview_matches_spawn() -> void:
+	var sim := Battle.new(map, rules)
+	sim.roster_seed = 7043
+	check(sim.preview_wave() == {"normal": 10}, "opening preview contains ten regular drones")
+	sim.wave = 4
+	var expected := sim.preview_wave()
+	check(expected.has("swift") and expected == sim.preview_wave(), "opening threat preview is reproducible")
+	sim.start_wave()
+	sim._dispatch(30.0)
+	var actual := {}
+	for drone in sim.enemies:
+		var id: String = drone.definition.id
+		actual[id] = int(actual.get(id, 0)) + 1
+	check(actual == expected, "preview matches actual encounter without advancing its RNG")
 
 func _victory_conditions() -> void:
 	var sim := Battle.new(map, rules)
@@ -99,6 +115,22 @@ func _ui_and_record() -> void:
 	await process_frame
 	ui.start_game()
 	var sim: Battle = ui.battle
+	var turret := rules.towers.lookup(TowerRegistry.BASE)
+	check(ui.field.path_in_range(Vector2i(1, 2), turret) > 4.0, "entry preview clips the path into firing range")
+	check(ui.field.path_in_range(Vector2i(0, 17), turret) == 0.0, "remote legal position has no path coverage")
+	check(is_equal_approx(ui.field.path_in_range(Vector2i(0, 17), rules.towers.lookup("tower_29")), map.length()), "global targeting previews the entire path")
+	sim.roster_seed = 7043
+	sim.wave = 4
+	ui.field.hovered = Vector2i(8, 4)
+	ui.toggle_build()
+	check(ui.forecast.text.contains("신속형") and ui.build_hint.text.begins_with("조준 가능한 경로"), "HUD displays upcoming threat and placement coverage")
+	if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
+		ui.set_process(false)
+		await RenderingServer.frame_post_draw
+		var file := ProjectSettings.globalize_path("res://reports/opening-preview.png")
+		check(root.get_texture().get_image().save_png(file) == OK, "opening HUD captured")
+		ui.set_process(true)
+	ui.toggle_build()
 	sim.wave = 49
 	sim.elapsed = 2010.0
 	sim.start_wave()

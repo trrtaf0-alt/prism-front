@@ -193,6 +193,20 @@ func sell(cell: Vector2i) -> bool:
 	effect.emit(&"sell", tower.position, Vector2.ZERO)
 	return true
 
+func preview_wave() -> Dictionary:
+	var number := wave + 1
+	if number > BattleData.FINAL_WAVE:
+		return {}
+	if number == BattleData.FINAL_WAVE:
+		return {"boss": 1}
+	var count := data.wave_count(number)
+	var preview := WaveRoster.new(data.mobs, number, count, roster_seed ^ number)
+	var counts := {}
+	for i in count:
+		var id: String = preview.next().id
+		counts[id] = int(counts.get(id, 0)) + 1
+	return counts
+
 func start_wave() -> bool:
 	if active or lost or won or wave >= BattleData.FINAL_WAVE:
 		return false

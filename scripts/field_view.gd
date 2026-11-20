@@ -44,6 +44,10 @@ var _overlay: Node2D
 var _sparks: SpriteBatch
 var _rings: SpriteBatch
 var _effect_glows: SpriteBatch
+var _aim_cell := Vector2i(-1, -1)
+var _aim_tower := ""
+var _aim_lines := PackedVector2Array()
+var _aim_length := 0.0
 
 func _ready() -> void:
 	_preferences = get_tree().root.get_node("Profile")
@@ -196,6 +200,30 @@ func _update_batches() -> void:
 		_bolts.item(i, pixel(bolt.position), bolt.direction * (0.68 if bolt.fragment else 1.0), bolt.definition.tint)
 	_bolts.finish()
 
+func path_in_range(cell: Vector2i, def: Dictionary) -> float:
+	if cell == _aim_cell and def.id == _aim_tower:
+		return _aim_length
+	_aim_cell = cell
+	_aim_tower = def.id
+	_aim_lines.clear()
+	_aim_length = 0.0
+	var center := Vector2(cell) + Vector2(0.5, 0.5)
+	var path := battle.field.path
+	var radius_sq := float(def.range) * float(def.range)
+	for i in path.size() - 1:
+		var from := path[i]
+		var step := path[i + 1] - from
+		var projection := (center - from).dot(step)
+		var distance_sq := center.distance_squared_to(from + step * projection)
+		var offset := sqrt(maxf(0.0, radius_sq - distance_sq))
+		var enter := 0.0 if def.global else maxf(0.0, projection - offset)
+		var leave := 1.0 if def.global else minf(1.0, projection + offset)
+		if leave > enter:
+			_aim_lines.append(pixel(from + step * enter))
+			_aim_lines.append(pixel(from + step * leave))
+			_aim_length += leave - enter
+	return _aim_length
+
 func _draw() -> void:
 	var map := battle.field
 	_draw_portals()
@@ -212,12 +240,18 @@ func _draw() -> void:
 			var radius := float(def.range) * CELL
 			draw_circle(at, radius, Color(tint, 0.075), true, -1.0, true)
 			draw_arc(at, radius, 0, TAU, 96, Color(tint, 0.6), 1.6, true)
+		path_in_range(focus, def)
+		if not _aim_lines.is_empty():
+			draw_multiline(_aim_lines, Color(tint, 0.34), 15.0, true)
+			draw_multiline(_aim_lines, Color(tint, 0.95), 4.0, true)
 	if map.contains(hovered) and not battle.lost:
 		var at := pixel(Vector2(hovered))
 		var color := MINT if not building or battle.can_install(hovered, build_id) else PINK
 		var tile := Rect2(at + Vector2(2, 2), Vector2(44, 44))
 		draw_rect(tile, Color(color, 0.12))
 		draw_rect(tile, Color(color, 0.76), false, 1.5)
+		if building and focus == hovered and not battle.occupied.has(hovered):
+			draw_texture_rect(TURRET_BASE, tile.grow(-3.0), false, Color(battle.data.towers.lookup(build_id).tint, 0.55))
 	if battle.occupied.has(selected):
 		draw_arc(pixel(battle.occupied[selected].position), 21.0, 0, TAU, 32, battle.occupied[selected].definition.tint, 2.0, true)
 
