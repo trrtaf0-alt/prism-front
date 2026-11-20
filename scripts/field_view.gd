@@ -73,7 +73,7 @@ func _ready() -> void:
 	_bolts = SpriteBatch.new(BOLT_TEXTURE, 55.0, material_mask)
 	add_child(_bases)
 	add_child(_heads)
-	_mobs.setup(material_mask, CELL)
+	_mobs.setup(_glow, CELL)
 	add_child(_mobs)
 	add_child(_bolts)
 	_overlay = Node2D.new()
@@ -233,7 +233,7 @@ func _update_batches() -> void:
 	_tower_halos.finish()
 	_bases.finish()
 	_heads.finish()
-	_mobs.submit(battle, ORIGIN, _preferences.fx_dim)
+	_mobs.submit(battle, ORIGIN, _preferences.fx_dim, _preferences.fx_quality)
 	var traces := 0
 	var detail: bool = _preferences.fx_quality >= 2
 	_bolts.begin(battle.bolts.size() + (mini(80, battle.bolts.size()) if detail else 0))

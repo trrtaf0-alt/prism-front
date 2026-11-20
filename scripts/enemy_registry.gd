@@ -9,7 +9,10 @@ const DEFAULTS := {
 	"control_resist": 0.0, "shape": "drone", "scale": 1.0, "regen": {}, "cloak": {},
 	"acceleration": {}, "guardian": {}, "boost": {}, "brood": {}, "phases": [],
 }
-const SHAPES := ["drone", "dart", "hex", "swarm", "cell", "split", "ring", "guardian", "relay", "tank", "calamity", "boss"]
+const SHAPES := [
+	"drone", "dart", "hex", "swarm", "cell", "split", "ring", "guardian", "relay", "tank", "calamity", "boss",
+	"shield", "cloak", "accelerate", "brood", "energy", "giant",
+]
 
 var definitions: Dictionary = {}
 var normal_weight := 61.0

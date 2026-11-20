@@ -23,6 +23,7 @@ func _run() -> void:
 		quit(1)
 		return
 	_registry()
+	_art_resolution()
 	_damage_and_control()
 	_exit_collision()
 	_guardian()
@@ -34,6 +35,18 @@ func _run() -> void:
 	await _interface()
 	print("Mob checks: %d, failures: %d" % [checks, failures])
 	quit(1 if failures > 0 else 0)
+
+func _art_resolution() -> void:
+	var shapes := {}
+	for def: Dictionary in rules.mobs.definitions.values():
+		if not def.child:
+			shapes[def.shape] = true
+	_check(shapes.size() == 18 and MobView.TEXTURES.size() == EnemyRegistry.SHAPES.size(), "each primary enemy has a distinct silhouette")
+	for entry: Array in [["heavy", 256], ["giant", 384], ["calamity", 384], ["boss", 512]]:
+		var shape := EnemyRegistry.SHAPES.find(rules.mobs.lookup(entry[0]).shape)
+		var texture: Texture2D = MobView.TEXTURES[shape]
+		_check(texture.get_width() == entry[1] and texture.get_height() == entry[1] and texture.get_image().has_mipmaps(),
+			"%s uses its full-size mipped source texture" % entry[0])
 
 func _fresh() -> Battle:
 	var sim := Battle.new(map, rules)
@@ -309,7 +322,35 @@ func _interface() -> void:
 		var image := root.get_texture().get_image()
 		var file := ProjectSettings.globalize_path("res://reports/mobs-roster.png")
 		_check(image.save_png(file) == OK, "render and capture the live mob field")
+		await _render_large_mobs(scene)
 	ui.start_game()
 	_check(ui.battle.bosses.is_empty() and ui.battle.enemies.is_empty() and ui.battle._ability_units.is_empty() and not ui.boss_panel.visible, "restart clears mob state and HUD")
 	ui.queue_free()
+	await process_frame
+
+func _render_large_mobs(scene: PackedScene) -> void:
+	var preview := SubViewport.new()
+	preview.size = Vector2i(1440, 760)
+	preview.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(preview)
+	preview.canvas_transform = Transform2D(Vector2(2.25, 0), Vector2(0, 2.25), Vector2(-75, -188))
+	var ui = scene.instantiate()
+	preview.add_child(ui)
+	ui.start_game()
+	ui.set_physics_process(false)
+	var sim: Battle = ui.battle
+	sim.spawn(2.05, rules.mobs.lookup("giant"))
+	sim.spawn(5.4, rules.mobs.lookup("calamity"))
+	var boss := sim.spawn(9.12, rules.mobs.lookup("boss"))
+	sim._apply_damage(boss, 585000, Vector2.ZERO)
+	sim._apply_damage(boss, 780000, Vector2.ZERO)
+	_advance(sim, 96)
+	ui.field.advanced_fx.update(2.4)
+	ui.callout_time = 0.0
+	await process_frame
+	await RenderingServer.frame_post_draw
+	var image := preview.get_texture().get_image()
+	_check(image.get_size() == Vector2i(1440, 760) and image.save_png(ProjectSettings.globalize_path("res://reports/mobs-large.png")) == OK,
+		"capture giant, calamity and phase-three boss at 2.25x")
+	preview.queue_free()
 	await process_frame
