@@ -105,6 +105,7 @@ func _ui_and_record() -> void:
 	sim.queued = 0
 	_drain(sim)
 	check(ui.modal_kind == "victory" and ui.wave_button.disabled and not ui.can_open_research(), "victory UI differs from defeat and locks play")
+	check(not ui.toast.visible and ui.callout_time == 0.0, "victory dismisses prior combat notices")
 	check(profile.best == 90 and profile.campaign_best == 50 and profile.fastest_clear > 0.0, "legacy and campaign records stay separate")
 	if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
 		await process_frame

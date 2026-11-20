@@ -529,6 +529,8 @@ func show_pause() -> void:
 
 func _cleared(record: Dictionary) -> void:
 	Profile.record_clear(record)
+	callout_time = 0.0
+	toast.hide()
 	building = false
 	_sync_selection()
 	var panel := _open_modal("victory", Vector2(900, 660))

@@ -11,6 +11,7 @@ const GEAR := [
 	"tower_30", "tower_29", "tower_07", "tower_18", "tower_20", "tower_24", "tower_26", "tower_14",
 ]
 const SIZES := [100, 500, 1000, 5000]
+var tier_limit := SIZES.size()
 const TYPES := ["normal", "normal", "normal", "normal", "swift", "swarm", "armored", "shield", "regen", "cloak", "resist", "accelerate", "heavy", "energy"]
 
 class TimedBattle extends Battle:
@@ -63,6 +64,8 @@ func _run() -> void:
 		var def := rules.mobs.lookup(id).duplicate()
 		def.health = maxi(1_000_000, int(def.health))
 		fixture[id] = def
+	if "--campaign" in OS.get_cmdline_user_args():
+		tier_limit = 3
 	if "--profile-combat" in OS.get_cmdline_user_args():
 		_profile_combat()
 		return
@@ -167,7 +170,7 @@ func _frame() -> void:
 		quit(1)
 		return
 	tier += 1
-	if tier < SIZES.size():
+	if tier < tier_limit:
 		_reset()
 	else:
 		process_frame.disconnect(_frame)

@@ -11,7 +11,7 @@ const GROW: Array[Vector2i] = [
 	Vector2i(8, 6), Vector2i(12, 9), Vector2i(8, 12), Vector2i(9, 12), Vector2i(12, 12),
 	Vector2i(6, 12), Vector2i(5, 12), Vector2i(15, 10), Vector2i(10, 14), Vector2i(11, 14),
 ]
-const GOALS := [20000, 40000, 90000]
+const GOALS := [20000, 30000, 45000]
 const IDS := ["tower_02", "tower_09", "tower_12", "tower_13", "tower_24"]
 
 var rules := BattleData.new()
@@ -33,19 +33,22 @@ func _economy() -> void:
 	var total_rp := 0
 	var total_enemies := 0
 	var goal := 0
-	for wave in range(1, 46):
+	var total_spawn_time := 0.0
+	for wave in range(1, BattleData.FINAL_WAVE):
 		var slots := rules.wave_count(wave)
 		var roster := WaveRoster.new(rules.mobs, wave, slots, 7043 ^ wave)
 		for i in slots:
 			var def := roster.next()
-			total_rp += int(def.reward_rp)
+			if i > 0:
+				total_spawn_time += rules.spawn_interval(wave)
+			total_rp += roundi(float(def.reward_rp) * rules.slot_rp_multiplier(wave))
 			total_enemies += 1
 			if goal < GOALS.size() and total_rp >= GOALS[goal]:
 				print("At 100%% kills: %d RP in wave %d after %d scheduled kills (%.2f hours of spawns)" % [
-					GOALS[goal], wave, total_enemies, total_enemies * rules.spawn_interval(wave) / 3600.0,
+					GOALS[goal], wave, total_enemies, total_spawn_time / 3600.0,
 				])
 				goal += 1
-	print("Total attainable RP at wave 45: ", total_rp)
+	print("Total attainable RP at wave 49: ", total_rp)
 
 func _buy_route(sim: Battle, tower: String) -> void:
 	var graph := rules.research
@@ -137,7 +140,7 @@ func _boss_trial() -> bool:
 		sim.install(GROW[i], ids[i])
 	sim.spawn(0.0, rules.mobs.lookup("boss"))
 	var seconds := 0
-	for i in 14000:
+	for i in 48000:
 		if i % 30 == 0:
 			sim.spawn(0.0, rules.mobs.lookup("normal"))
 		sim.tick(1.0 / 60)
