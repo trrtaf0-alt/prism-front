@@ -25,6 +25,13 @@ func _run() -> void:
 			formation = arg.trim_prefix("--formation=")
 		elif arg.begins_with("--limit="):
 			time_limit = int(arg.trim_prefix("--limit="))
+		elif arg.begins_with("--enemy-data="):
+			var tuning := BattleData.read_json(arg.trim_prefix("--enemy-data="))
+			if tuning.is_empty():
+				printerr("Could not read enemy difficulty data")
+				quit(1)
+				return
+			rules.difficulty_rules = tuning
 	if snapshot.is_empty() or not HP.has(snapshot.get("difficulty")) or not formation in OPTIONS or time_limit < 1:
 		printerr("Provide a W49 snapshot, a valid formation, and a positive time limit")
 		quit(1)
@@ -80,10 +87,16 @@ func _run() -> void:
 	var nearest_direct := boss.position.distance_to(exit_position)
 	var ticks := 0
 	var next_progress := 300
+	var escort_peak := 0
+	var escort_clear := -1.0
 	while sim.active and ticks < time_limit * 60:
 		var track_boss := not sim.boss_killed and not sim.boss_escaped
 		sim.tick(STEP)
 		ticks += 1
+		var escorts := sim.enemies.size() - sim.bosses.size()
+		escort_peak = maxi(escort_peak, escorts)
+		if escort_clear < 0.0 and sim.queued == 0 and escorts == 0:
+			escort_clear = ticks * STEP
 		if track_boss:
 			furthest_progress = maxf(furthest_progress, boss.progress)
 			nearest_direct = minf(nearest_direct, boss.position.distance_to(exit_position))
@@ -98,6 +111,7 @@ func _run() -> void:
 		"closest_path_tiles": maxf(0.0, map.length() - furthest_progress),
 		"closest_direct_tiles": nearest_direct,
 		"furthest_tile": Vector2i(map.position_at(furthest_progress).floor()) + Vector2i.ONE,
+		"escort_peak": escort_peak, "escort_clear": escort_clear,
 	}))
 	quit()
 

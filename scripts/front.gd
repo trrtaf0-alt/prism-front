@@ -219,7 +219,7 @@ func show_difficulty() -> void:
 		var tuning: Dictionary = data.difficulty_rules[str(mode)]
 		var hp_multiplier := BattleData.curve(tuning.hp, BattleData.FINAL_WAVE)
 		var boss := data.enemy_for_wave(data.mobs.lookup("boss"), BattleData.FINAL_WAVE, mode)
-		var summary := "기존 웨이브 기준" if mode == &"easy" else "후반 적 체력·보호막 %s배" % str(hp_multiplier)
+		var summary := "50웨이브 지원군 HP %s배" % String.num(hp_multiplier, 2)
 		text_at(option, "%s\n보스 HP %s만" % [summary, String.num(float(boss.health) / 10000.0, 2)], 20, 84, 17, LIGHT, 240)
 		var entry := Profile.campaign_record(mode)
 		var progress := "최고 %d / 50" % int(entry.wave)
