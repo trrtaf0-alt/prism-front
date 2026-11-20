@@ -204,7 +204,10 @@ func _attack_details() -> void:
 	var far := sim.spawn(50.0, armored)
 	for i in 211:
 		sim.tick(STEP)
-	check(far.health == 988000, "cataclysm lands 12000 at remote location after windup")
+	check(far.health == 920000, "cataclysm lands 80000 at remote location after windup")
+	for i in 480:
+		sim.tick(STEP)
+	check(far.health == 840000, "cataclysm lands a second strike eight seconds later")
 	sim = _new_battle()
 	_unlock(sim)
 	sim.install(Vector2i(2, 4), "tower_28")
@@ -212,7 +215,7 @@ func _attack_details() -> void:
 	far = sim.spawn(50.0, armored)
 	for i in 254:
 		sim.tick(STEP)
-	check(near.health == 993600 and far.health == 993600, "singularity delivers twenty global ticks of 320 damage")
+	check(near.health == 983000 and far.health == 983000, "singularity delivers twenty global ticks of 850 damage")
 	check(far.position.is_equal_approx(map.position_at(far.progress)) and far.progress > 50.0 and far.progress < 53.0, "singularity slows progress along the original path")
 	sim = _new_battle()
 	_unlock(sim)
@@ -223,8 +226,8 @@ func _attack_details() -> void:
 	sim.tick(STEP)
 	var struck := 0
 	for drone in distant:
-		struck += int(drone.health == 999840)
-	check(struck == 1000, "spectrum deals 160 damage each to 1000 enemies despite sampled visuals")
+		struck += int(drone.health == 999580)
+	check(struck == 1000, "spectrum deals 420 damage each to 1000 enemies despite sampled visuals")
 
 func _gravity_slow() -> void:
 	var gravity := rules.towers.lookup("tower_20")
