@@ -179,6 +179,10 @@ func _interface(profile: Node) -> void:
 	gui_click(ui, Vector2(335, 643))
 	check(ui.game, "menu start receives a viewport click")
 	var sim: Battle = ui.battle
+	check(FieldView.pixel(Vector2(15, 9)) == FieldView.SCREEN.get_center(), "battlefield is centered in the viewport")
+	check(not ui.tower_heading.visible and not ui.sell_button.visible and not ui.support_button.visible, "tower details appear only on selection")
+	check(ui.camera_fx.cell_under(Vector2(20, 500)) == Vector2i(-1, -1), "decorative floor outside the map cannot be built on")
+	await capture("hud-full-field")
 	gui_click(ui, ui.build_button.get_rect().get_center())
 	check(ui.building and ui.field.building, "build button enters placement mode")
 	var tower_tile := FieldView.pixel(Vector2(3.5, 2.5))
@@ -188,6 +192,17 @@ func _interface(profile: Node) -> void:
 	check(ui.selected == Vector2i(3, 2) and not ui.sell_button.disabled, "tile click selects tower")
 	gui_click(ui, ui.sell_button.get_rect().get_center())
 	check(sim.credits == 50 and sim.towers.is_empty(), "sell button refunds")
+	gui_click(ui, ui.build_button.get_rect().get_center())
+	var edge_cells := [Vector2i(28, 0), Vector2i(28, 1), Vector2i(27, 16), Vector2i(28, 17)]
+	for cell: Vector2i in edge_cells:
+		gui_click(ui, FieldView.pixel(Vector2(cell) + Vector2.ONE * 0.5))
+		check(sim.occupied.has(cell), "viewport click can install beside HUD at %s" % str(cell))
+	gui_click(ui, ui.catalog_button.get_rect().get_center())
+	check(ui.modal_kind == "catalog" and sim.towers.size() == edge_cells.size(), "a HUD button opens its menu without placing a tower through it")
+	ui.close_modal()
+	ui.toggle_build()
+	for cell: Vector2i in edge_cells:
+		sim.sell(cell)
 	gui_click(ui, ui.wave_button.get_rect().get_center())
 	check(sim.wave == 1 and ui.wave_callout.contains("1"), "HUD wave control")
 	var escape := InputEventAction.new()

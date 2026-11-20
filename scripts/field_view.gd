@@ -1,8 +1,9 @@
 class_name FieldView
 extends Node2D
 
-const CELL := 52.0
-const ORIGIN := Vector2(34, 68)
+const SCREEN := Rect2(0, 0, 1920, 1080)
+const CELL := 60.0
+const ORIGIN := Vector2(60, 0)
 const MINT := Color("#50f6ed")
 const PINK := Color("#ff467d")
 const GOLD := Color("#ffc879")
@@ -115,10 +116,10 @@ func _draw_floor(canvas: Node2D) -> void:
 	var map := battle.field
 	var extent := Vector2(map.size) * CELL
 	var bounds := Rect2(ORIGIN, extent)
-	canvas.draw_rect(bounds.grow(12), Color("#090c10"))
-	canvas.draw_rect(bounds, Color("#0c1016"))
-	for y in map.size.y:
-		for x in range(y % 2, map.size.x, 2):
+	# Extend the floor into the sides and beyond the moving camera's visible edges.
+	canvas.draw_rect(bounds.grow(3.0 * CELL), Color("#0c1016"))
+	for y in range(-3, map.size.y + 3):
+		for x in range(-3 + posmod(y + 3, 2), map.size.x + 3, 2):
 			var tile_origin := ORIGIN + Vector2(x, y) * CELL
 			canvas.draw_rect(Rect2(tile_origin, Vector2.ONE * CELL), Color("#10151c"))
 	canvas.draw_texture_rect(_glow, bounds, false, Color("#242d3a"))
@@ -145,13 +146,7 @@ func _draw_floor(canvas: Node2D) -> void:
 		var forward := direction.normalized()
 		var side := forward.orthogonal()
 		canvas.draw_polyline(PackedVector2Array([at - forward * 4 + side * 4, at + forward * 3, at - forward * 4 - side * 4]), Color("#526772"), 1.2, true)
-	canvas.draw_rect(bounds, Color("#3d4140"), false, 1.0)
-	for corner: Vector2 in [Vector2.ZERO, Vector2(extent.x, 0), Vector2(0, extent.y), extent]:
-		var at := ORIGIN + corner
-		var inward := Vector2(1 if corner.x == 0 else -1, 1 if corner.y == 0 else -1)
-		var brass := Color("#82735e")
-		canvas.draw_line(at, at + Vector2(22 * inward.x, 0), brass, 2.0)
-		canvas.draw_line(at, at + Vector2(0, 22 * inward.y), brass, 2.0)
+	canvas.draw_rect(bounds, Color("#273039"), false, 1.0)
 
 func impact(kind: StringName, point: Vector2, direction: Vector2) -> void:
 	var critical := kind in [&"base", &"collapse", &"install", &"sell"]

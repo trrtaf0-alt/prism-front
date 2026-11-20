@@ -147,9 +147,11 @@ func _hide_lens() -> void:
 	_lens_strength = 0.0
 
 func cell_under(point: Vector2) -> Vector2i:
-	if not bounds.has_point(point):
-		return Vector2i(-1, -1)
-	return _field.cell_under(sample_point(point))
+	if FieldView.SCREEN.has_point(point):
+		var cell := _field.cell_under(sample_point(point))
+		if _field.battle.field.contains(cell):
+			return cell
+	return Vector2i(-1, -1)
 
 func sample_point(point: Vector2) -> Vector2:
 	if _lens_strength == 0.0 or not _lens_region.has_point(point):

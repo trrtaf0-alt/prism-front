@@ -309,7 +309,7 @@ func _interface() -> void:
 	sim.start_wave()
 	var first := sim.enemies[0]
 	var progress := first.progress
-	_click(ui, Vector2(1694, 922))
+	_click(ui, ui.research_button.get_rect().get_center())
 	check(ui.modal_kind == "research", "research opens from the HUD midwave")
 	if ui.modal_kind != "research":
 		ui.queue_free()

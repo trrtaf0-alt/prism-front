@@ -9,6 +9,8 @@ const LINE := Color("#3b3e3f")
 const PINK := Color("#df8a86")
 const GOLD := Color("#dcc197")
 const NONE := Vector2i(-1, -1)
+const BASE_BAR_WIDTH := 138.0
+const BOSS_BAR_WIDTH := 600.0
 
 var data := BattleData.new()
 var map := FieldMap.new()
@@ -46,15 +48,14 @@ var sell_button: Button
 var support_button: Button
 var build_button: Button
 var wave_button: Button
-var boss_panel: Panel
+var boss_panel: Control
 var boss_title: Label
 var boss_values: Label
 var boss_body: ColorRect
 var boss_shield: ColorRect
 var last_base_damage := 0
 var flash := 0.0
-var toast: Panel
-var toast_text: Label
+var toast: Label
 var warning_edge: Panel
 var wave_callout := ""
 var callout_time := 0.0
@@ -244,67 +245,76 @@ func start_game() -> void:
 	_update_hud()
 
 func _make_hud() -> void:
-	panel_at(screen, Rect2(0, 0, 1920, 53), "#0a0d10", "#0a0d10")
-	var footer := panel_at(screen, Rect2(0, 1021, 1920, 59), "#0a0d10", "#0a0d10")
-	for entry: Array in [[52, "#667069"], [152, "#62605a"], [268, "#b77a7d"], [413, "#a9c6bd"]]:
-		panel_at(footer, Rect2(entry[0], 19, 9, 9), entry[1], entry[1])
-	text_at(screen, "웨이브", 34, 15, 18, MUTED)
-	wave_label = text_at(screen, "", 106, 8, 26, LIGHT, 138)
-	text_at(screen, "기지", 278, 15, 18, MUTED)
-	health_label = text_at(screen, "", 328, 8, 26, MINT)
-	panel_at(screen, Rect2(492, 24, 140, 6), "#303437", "#303437")
+	_hud_text(screen, "웨이브", 86, 22, 17, MUTED, 126)
+	wave_label = _hud_text(screen, "", 86, 43, 28, LIGHT, 126)
+	_hud_text(screen, "기지", 249, 22, 17, MUTED, 152)
+	health_label = _hud_text(screen, "", 249, 43, 28, MINT, 154)
+	panel_at(screen, Rect2(250, 84, BASE_BAR_WIDTH, 3), "#131d22", "#131d22")
 	health_bar = ColorRect.new()
 	health_bar.color = MINT
 	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(health_bar, screen, Rect2(492, 24, 140, 6))
-	text_at(screen, "재화", 672, 15, 18, MUTED)
-	credits_label = text_at(screen, "", 727, 8, 26, GOLD, 190)
-	text_at(screen, "RP", 944, 15, 18, MUTED)
-	rp_label = text_at(screen, "0", 987, 8, 26, Color("#c3b5d0"), 162)
-	button_at(screen, "일시정지  ·  Esc", Rect2(1726, 8, 160, 39), show_pause)
+	place(health_bar, screen, Rect2(250, 84, BASE_BAR_WIDTH, 3))
+	_hud_text(screen, "재화", 442, 22, 17, MUTED, 156)
+	credits_label = _hud_text(screen, "", 442, 43, 28, GOLD, 156)
+	_hud_text(screen, "RP", 626, 22, 17, MUTED, 146)
+	rp_label = _hud_text(screen, "0", 626, 43, 28, Color("#c3b5d0"), 146)
 
-	panel_at(screen, Rect2(1614, 68, 272, 934))
-	panel_at(screen, Rect2(1630, 316, 240, 1), "#3b3e3f", "#3b3e3f")
-	status = text_at(screen, "", 1630, 100, 22, LIGHT, 240)
-	wave_button = button_at(screen, "웨이브 시작", Rect2(1630, 144, 240, 54), start_wave, true)
-	forecast = text_at(screen, "", 1630, 213, 15, MINT, 240)
-	result = text_at(screen, "", 1630, 267, 16, GOLD, 240)
+	# Center the actions on the seam between tile rows, leaving tile centers clickable.
+	_hud_button("일시정지 · Esc", Rect2(1704, 38, 158, 44), show_pause)
+	wave_button = _hud_button("웨이브 시작", Rect2(1500, 38, 190, 44), start_wave, true)
+	status = _right_hud_text("", 1190, 46, 20, LIGHT, 294)
+	forecast = _right_hud_text("", 1460, 93, 17, MINT, 402)
+	result = _right_hud_text("", 1460, 148, 17, GOLD, 402)
 	_forecast_wave = -1
 
-	text_at(screen, "타워 설치", 1630, 359, 20, MUTED)
-	catalog_button = button_at(screen, "목록", Rect2(1782, 352, 88, 40), show_catalog)
-	build_button = button_at(screen, "", Rect2(1630, 411, 240, 54), toggle_build, true)
-	build_hint = text_at(screen, "", 1630, 478, 16, MUTED, 240)
-	research_button = button_at(screen, "연구 그물망  ·  R", Rect2(1630, 895, 240, 52), show_research, true)
+	build_button = _hud_button("", Rect2(1218, 998, 282, 44), toggle_build, true)
+	catalog_button = _hud_button("목록", Rect2(1514, 998, 130, 44), show_catalog)
+	research_button = _hud_button("연구 그물망 · R", Rect2(1658, 998, 204, 44), show_research)
+	build_hint = _right_hud_text("", 1200, 1046, 16, MUTED, 662)
+	tower_heading = _hud_text(screen, "", 86, 871, 26, LIGHT, 500)
+	tower_stats = _hud_text(screen, "", 86, 911, 17, MINT, 560)
+	sell_button = _hud_button("타워 판매", Rect2(86, 998, 168, 44), sell_selected)
+	support_button = _hud_button("지원 상태", Rect2(268, 998, 144, 44), show_support_details)
 
-	panel_at(screen, Rect2(1630, 542, 240, 1), "#3b3e3f", "#3b3e3f")
-	tower_heading = text_at(screen, "", 1630, 580, 21, LIGHT, 240)
-	tower_stats = text_at(screen, "", 1630, 627, 17, MUTED, 240)
-	sell_button = button_at(screen, "포탑 판매  +%d" % int(data.turret.refund), Rect2(1630, 755, 240, 49), sell_selected)
-	support_button = button_at(screen, "지원 상태", Rect2(1630, 819, 240, 49), show_support_details)
-	text_at(screen, "경로", 70, 1028, 17, MUTED)
-	text_at(screen, "장애물", 170, 1028, 17, MUTED)
-	text_at(screen, "생성 지점", 286, 1028, 17, MUTED)
-	text_at(screen, "기지 코어", 431, 1028, 17, MUTED)
-	warning_edge = panel_at(screen, Rect2(FieldView.ORIGIN, Vector2(map.size) * FieldView.CELL).grow(6), "#00000000", "#ff467d")
+	warning_edge = panel_at(screen, FieldView.SCREEN.grow(-3), "#00000000", "#ff467d")
 	warning_edge.hide()
-	toast = panel_at(screen, Rect2(567, 87, 494, 63), "#1a2025", "#66615a")
-	toast_text = text_at(toast, "", 13, 8, 27, MINT, 468)
-	toast_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	toast = _hud_text(screen, "", 628, 146, 26, MINT, 664)
+	toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.hide()
-	boss_panel = panel_at(screen, Rect2(696, 1015, 792, 53), "#1c2226", "#9f8068")
-	boss_title = text_at(boss_panel, "", 14, 2, 16, GOLD, 234)
-	boss_values = text_at(boss_panel, "", 250, 2, 16, LIGHT, 524)
+
+	boss_panel = Control.new()
+	boss_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place(boss_panel, screen, Rect2(660, 904, BOSS_BAR_WIDTH, 53))
+	boss_title = _hud_text(boss_panel, "", 0, 0, 18, GOLD, 155)
+	boss_values = _hud_text(boss_panel, "", 155, 0, 17, LIGHT, 445)
 	boss_values.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	panel_at(boss_panel, Rect2(14, 34, 760, 7), "#432e32", "#432e32")
+	panel_at(boss_panel, Rect2(0, 31, BOSS_BAR_WIDTH, 6), "#432e32", "#432e32")
 	boss_body = ColorRect.new()
 	boss_body.color = Color("#e1a284")
 	boss_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(boss_body, boss_panel, Rect2(14, 34, 760, 7))
+	place(boss_body, boss_panel, Rect2(0, 31, BOSS_BAR_WIDTH, 6))
 	boss_shield = ColorRect.new()
 	boss_shield.color = Color("#8dbdc9")
 	boss_shield.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(boss_shield, boss_panel, Rect2(14, 43, 760, 3))
+	place(boss_shield, boss_panel, Rect2(0, 40, BOSS_BAR_WIDTH, 2))
+
+func _hud_text(parent: Control, value: String, x: float, y: float, font_size: int, color: Color, width: float) -> Label:
+	var label := text_at(parent, value, x, y, font_size, color, width)
+	label.add_theme_color_override("font_outline_color", Color("#080d12e6"))
+	label.add_theme_constant_override("outline_size", 4)
+	return label
+
+func _right_hud_text(value: String, x: float, y: float, font_size: int, color: Color, width: float) -> Label:
+	var label := _hud_text(screen, value, x, y, font_size, color, width)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	return label
+
+func _hud_button(value: String, rect: Rect2, action: Callable, primary: bool = false) -> Button:
+	var button := button_at(screen, value, rect, action)
+	button.add_theme_font_size_override("font_size", 19)
+	button.add_theme_stylebox_override("normal", box("#192b2bcf" if primary else "#121a22c7", "#829d958f" if primary else "#58687378"))
+	button.add_theme_stylebox_override("disabled", box("#101820a3", "#34414a68"))
+	return button
 
 func _update_boss_hud() -> void:
 	boss_panel.visible = not battle.bosses.is_empty()
@@ -314,15 +324,15 @@ func _update_boss_hud() -> void:
 	boss_title.text = "%s  ·  %d단계" % [boss.definition.name, boss.mob.phase + 1]
 	var shield_text := "  /  보호막 %d" % boss.shield_hp if boss.shield_hp > 0 else ""
 	boss_values.text = "본체 %d / %d%s" % [boss.health, boss.maximum_health, shield_text]
-	boss_body.size.x = 760.0 * float(boss.health) / float(boss.maximum_health)
-	boss_shield.size.x = 760.0 * float(boss.shield_hp) / maxi(1, boss.shield_max)
+	boss_body.size.x = BOSS_BAR_WIDTH * float(boss.health) / float(boss.maximum_health)
+	boss_shield.size.x = BOSS_BAR_WIDTH * float(boss.shield_hp) / maxi(1, boss.shield_max)
 
 func _update_hud() -> void:
 	_update_boss_hud()
 	wave_label.text = "%d / %d" % [battle.wave, BattleData.FINAL_WAVE]
 	health_label.text = "%d / %d" % [battle.health, int(data.balance.base_health)]
 	var ratio := float(battle.health) / float(data.balance.base_health)
-	health_bar.size.x = 140 * ratio
+	health_bar.size.x = BASE_BAR_WIDTH * ratio
 	health_bar.color = PINK.lerp(MINT, ratio)
 	health_label.modulate = Color.WHITE.lerp(Color("#ffd3df"), flash)
 	if battle.credits > _credits_shown and _credits_shown >= 0:
@@ -381,30 +391,26 @@ func _update_hud() -> void:
 	else:
 		build_button.text = "%s  ·  %d" % [blueprint.name, cost]
 	var has_tower := battle.occupied.has(selected)
-	support_button.visible = has_tower
+	for control: Control in [tower_heading, tower_stats, sell_button, support_button]:
+		control.visible = has_tower
 	if has_tower:
 		var tower: Battle.Turret = battle.occupied[selected]
 		var definition := tower.definition
 		tower_heading.text = definition.name
 		if definition.support != TowerSupport.Kind.NONE:
-			tower_stats.text = "지원 범위  %s\n대상  %d기\n%s" % [
+			tower_stats.text = "지원 범위  %s   ·   대상  %d기\n%s" % [
 				TowerRegistry.reach_text(definition), battle.support.followers(tower).size(), _support_timer(tower),
 			]
 		else:
 			var power := float(definition.damage)
 			var delay := float(definition.interval)
 			var damage: String = "피해  %.2f → %.2f" % [power, power * tower.damage_multiplier] if power > 0 else TowerRegistry.ATTACK_NAMES[definition.attack]
-			tower_stats.text = "%s\n주기  %.2f → %.2f초\n사거리  %s → %s\n지원 효과  %d종" % [
+			tower_stats.text = "%s   ·   주기  %.2f → %.2f초\n사거리  %s → %s   ·   지원  %d종" % [
 				damage, delay, maxf(delay / tower.speed_multiplier, Battle._sequence_span(definition)),
 				TowerRegistry.reach_text(definition), TowerRegistry.reach_text(tower.effective), tower.buffs.size(),
 			]
 		tower_stats.tooltip_text = definition.description
 		sell_button.text = "타워 판매  +%d" % int(definition.refund)
-	else:
-		tower_heading.text = "선택한 타워"
-		tower_stats.text = "배치한 타워를 클릭하면\n능력치를 볼 수 있습니다."
-		tower_stats.tooltip_text = ""
-		sell_button.text = "타워 판매"
 	sell_button.disabled = not has_tower or battle.lost
 
 func _update_forecast() -> void:
@@ -471,13 +477,14 @@ func _process(delta: float) -> void:
 	if game and modal == null:
 		camera_fx.update(delta)
 		if not battle.lost:
-			field.hovered = camera_fx.cell_under(get_local_mouse_position())
+			var hovered_control := get_viewport().gui_get_hovered_control()
+			field.hovered = NONE if hovered_control is Button else camera_fx.cell_under(get_local_mouse_position())
 		flash = maxf(0.0, flash - delta * 1.65)
 		_credit_flash = maxf(0.0, _credit_flash - delta)
 		callout_time = maxf(0.0, callout_time - delta)
 		toast.visible = callout_time > 0.0
 		toast.modulate.a = minf(1.0, callout_time * 4.0)
-		toast_text.text = wave_callout
+		toast.text = wave_callout
 		warning_edge.visible = flash > 0.0
 		warning_edge.modulate.a = flash
 		if defeat_delay > 0:
