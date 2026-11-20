@@ -30,6 +30,7 @@ var support_plan := "none"
 var difficulty := &"easy"
 var trial_health := 0
 var trial_armor := 0.0
+var snapshot_path := ""
 var final_quantum := 0
 var final_syncs := 0
 var rules := BattleData.new()
@@ -58,6 +59,8 @@ func _run() -> void:
 			support_plan = arg.trim_prefix("--support=")
 		if arg.begins_with("--difficulty="):
 			difficulty = StringName(arg.trim_prefix("--difficulty="))
+		if arg.begins_with("--save-finale="):
+			snapshot_path = arg.trim_prefix("--save-finale=")
 		if arg.begins_with("--boss-trial="):
 			var values := arg.trim_prefix("--boss-trial=").split(",")
 			if values.size() != 2 or not values[0].is_valid_int() or int(values[0]) <= 0 or not values[1].is_valid_float() or float(values[1]) < 0.0 or float(values[1]) > 100.0:
@@ -139,6 +142,10 @@ func _run() -> void:
 			_place_opening(sim)
 		if wave < BattleData.FINAL_WAVE:
 			_prepare(sim)
+		if wave == BattleData.FINAL_WAVE - 1 and not snapshot_path.is_empty():
+			var saved := _save_finale(sim)
+			quit(0 if saved else 1)
+			return
 		if wave == BattleData.FINAL_WAVE - 1 and "--spend-reserve" in args:
 			for number in [29, 25, 25, 25, 25]:
 				if sim.research.unlocked.has(_id(number)):
@@ -167,6 +174,23 @@ func _run() -> void:
 			return
 		await create_timer(1.0).timeout
 	quit(0 if sim.won else 1)
+
+func _save_finale(sim: Battle) -> bool:
+	var result := FileAccess.open(snapshot_path, FileAccess.WRITE)
+	if result == null:
+		printerr("Could not write the W49 snapshot")
+		return false
+	var towers: Array = []
+	for tower: Battle.Turret in sim.towers:
+		towers.append([tower.definition.id, tower.cell.x, tower.cell.y, tower.cooldown, tower.angle])
+	result.store_string(JSON.stringify({
+		"difficulty": str(difficulty), "strategy": policy, "seed": sim.roster_seed,
+		"health": sim.health, "credits": sim.credits, "points": sim.research.points,
+		"completed": sim.research.completed.keys(), "towers": towers,
+		"command_clock": sim.support.command_time,
+	}))
+	print("Saved W49 %s/%s: HP=%d cash=%d RP=%d towers=%d" % [difficulty, policy, sim.health, sim.credits, sim.research.points, sim.towers.size()])
+	return true
 
 func _final_support_event(event: StringName, _kind: int, _start: Vector2, _finish: Vector2) -> void:
 	final_quantum += int(event == &"quantum")
