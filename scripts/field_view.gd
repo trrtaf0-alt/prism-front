@@ -6,7 +6,6 @@ const ORIGIN := Vector2(48, 147)
 const MINT := Color("#50f6ed")
 const PINK := Color("#ff467d")
 const GOLD := Color("#ffc879")
-const GRID := Color("#1b2a3a")
 const MAX_EFFECTS := 160
 const TURRET_BASE := preload("res://assets/turret_base.png")
 const TURRET_HEAD := preload("res://assets/turret_head.png")
@@ -102,36 +101,40 @@ func cell_under(point: Vector2) -> Vector2i:
 func _draw_floor(canvas: Node2D) -> void:
 	var map := battle.field
 	var extent := Vector2(map.size) * CELL
-	canvas.draw_rect(Rect2(ORIGIN - Vector2(9, 9), extent + Vector2(18, 18)), Color("#101b29"))
+	var bounds := Rect2(ORIGIN, extent)
+	canvas.draw_rect(bounds.grow(12), Color("#090c10"))
+	canvas.draw_rect(bounds, Color("#151a1f"))
+	canvas.draw_texture_rect(_glow, Rect2(ORIGIN, extent), false, Color("#39434a"))
 	for y in map.size.y:
 		for x in map.size.x:
+			if map.tile_at(Vector2i(x, y)) != "#":
+				continue
 			var at := ORIGIN + Vector2(x, y) * CELL
-			var tile := map.tile_at(Vector2i(x, y))
-			var color := Color("#101c29") if (x + y) % 2 == 0 else Color("#111e2b")
-			if tile == "#":
-				color = Color("#161e2a")
-			elif tile != ".":
-				color = Color("#172b37")
-			canvas.draw_rect(Rect2(at + Vector2.ONE, Vector2.ONE * (CELL - 1)), color)
-			if tile == "#":
-				var plate := Rect2(at + Vector2(6, 6), Vector2(36, 36))
-				canvas.draw_rect(plate, Color("#26313f"))
-				canvas.draw_rect(plate, Color("#364354"), false, 1.0)
-				canvas.draw_line(at + Vector2(11, 34), at + Vector2(34, 11), Color("#495868"), 1.4, true)
-				canvas.draw_line(at + Vector2(23, 35), at + Vector2(35, 23), Color("#3c4a5c"), 1.4, true)
-			elif tile == ".":
-				canvas.draw_rect(Rect2(at + Vector2(23, 23), Vector2(2, 2)), GRID.lightened(0.10))
+			var plate := Rect2(at + Vector2(4, 4), Vector2(40, 40))
+			canvas.draw_rect(plate, Color("#101419"))
+			canvas.draw_rect(plate, Color("#2e3438"), false, 1.0)
+			canvas.draw_line(plate.position + Vector2(1, 1), plate.position + Vector2(16, 1), Color("#4a4843"), 1.5)
 	var track := PackedVector2Array()
 	for point in map.path:
 		track.append(pixel(point))
-	canvas.draw_polyline(track, Color("#203e4a"), 4.0, true)
-	canvas.draw_polyline(track, Color("#315465"), 1.0, true)
-	for i in range(1, map.path.size() - 1):
+	canvas.draw_polyline(track, Color("#0f1418"), 20.0, true)
+	canvas.draw_polyline(track, Color("#293130"), 16.0, true)
+	canvas.draw_polyline(track, Color("#353c39"), 1.3, true)
+	for i in range(1, track.size() - 1):
+		var direction := track[i + 1] - track[i]
+		if i % 5 != 0 and direction == track[i] - track[i - 1]:
+			continue
 		var at := track[i]
-		var direction := (track[i + 1] - at).normalized()
-		var side := direction.orthogonal()
-		canvas.draw_polyline(PackedVector2Array([at - direction * 4 + side * 5, at + direction * 2, at - direction * 4 - side * 5]), Color("#437782"), 1.6, true)
-	canvas.draw_rect(Rect2(ORIGIN, extent), Color("#34485c"), false, 1.0)
+		var forward := direction.normalized()
+		var side := forward.orthogonal()
+		canvas.draw_polyline(PackedVector2Array([at - forward * 4 + side * 4, at + forward * 3, at - forward * 4 - side * 4]), Color("#59605a"), 1.2, true)
+	canvas.draw_rect(bounds, Color("#3d4140"), false, 1.0)
+	for corner: Vector2 in [Vector2.ZERO, Vector2(extent.x, 0), Vector2(0, extent.y), extent]:
+		var at := ORIGIN + corner
+		var inward := Vector2(1 if corner.x == 0 else -1, 1 if corner.y == 0 else -1)
+		var brass := Color("#82735e")
+		canvas.draw_line(at, at + Vector2(22 * inward.x, 0), brass, 2.0)
+		canvas.draw_line(at, at + Vector2(0, 22 * inward.y), brass, 2.0)
 
 func impact(kind: StringName, point: Vector2, direction: Vector2) -> void:
 	var critical := kind in [&"base", &"collapse", &"install", &"sell"]
@@ -226,6 +229,15 @@ func path_in_range(cell: Vector2i, def: Dictionary) -> float:
 
 func _draw() -> void:
 	var map := battle.field
+	if building:
+		var extent := Vector2(map.size) * CELL
+		var grid := Color("#46535860")
+		for x in range(1, map.size.x):
+			var top := ORIGIN + Vector2(x * CELL, 0)
+			draw_line(top, top + Vector2(0, extent.y), grid)
+		for y in range(1, map.size.y):
+			var left := ORIGIN + Vector2(0, y * CELL)
+			draw_line(left, left + Vector2(extent.x, 0), grid)
 	_draw_portals()
 	var focus := selected if map.contains(selected) else (hovered if building and battle.can_install(hovered, build_id) else Vector2i(-1, -1))
 	if map.contains(focus):
@@ -266,8 +278,8 @@ func _draw_portals() -> void:
 	var goal := pixel(Vector2(battle.field.exit) + Vector2(0.5, 0.5))
 	var health := float(battle.health) / float(battle.data.balance.base_health)
 	var core := PINK.lerp(MINT, health)
-	glow_at(start, 31.0, Color(PINK, 0.8))
-	glow_at(goal, 31.0, Color(core, 0.9))
+	glow_at(start, 31.0, Color(PINK, 0.48))
+	glow_at(goal, 31.0, Color(core, 0.55))
 	draw_arc(start, 19, elapsed, elapsed + 5.0, 32, PINK, 2.0, true)
 	draw_arc(start, 14, -elapsed, -elapsed + 4.2, 32, Color("#ff92b0"), 1.5, true)
 	draw_set_transform(goal, PI / 4.0)

@@ -2,12 +2,12 @@ extends Control
 
 const UI_FONT := preload("res://assets/NotoSansKR.ttf")
 const MARK := preload("res://assets/prism.svg")
-const MINT := Color("#66f3e5")
-const LIGHT := Color("#e5f3fc")
-const MUTED := Color("#96adbf")
-const LINE := Color("#2b4254")
-const PINK := Color("#ff729a")
-const GOLD := Color("#ffd18a")
+const MINT := Color("#a9c6bd")
+const LIGHT := Color("#eee9dc")
+const MUTED := Color("#a5a8a5")
+const LINE := Color("#3b3e3f")
+const PINK := Color("#df8a86")
+const GOLD := Color("#dcc197")
 const NONE := Vector2i(-1, -1)
 
 var data := BattleData.new()
@@ -94,22 +94,22 @@ func _init_theme() -> void:
 	_ui_theme.set_color("font_color", "Label", LIGHT)
 	_ui_theme.set_color("font_color", "Button", LIGHT)
 	_ui_theme.set_color("font_hover_color", "Button", Color.WHITE)
-	_ui_theme.set_color("font_disabled_color", "Button", Color("#708596"))
+	_ui_theme.set_color("font_disabled_color", "Button", Color("#797d7c"))
 	_ui_theme.set_constant("h_separation", "Button", 12)
-	_ui_theme.set_stylebox("normal", "Button", box("#152536", "#30495c"))
-	_ui_theme.set_stylebox("hover", "Button", box("#203c49", "#66f3e5"))
-	_ui_theme.set_stylebox("pressed", "Button", box("#264b55", "#a1fff4"))
-	_ui_theme.set_stylebox("focus", "Button", box("#00000000", "#b8fffb"))
-	_ui_theme.set_stylebox("disabled", "Button", box("#101b27", "#223443"))
+	_ui_theme.set_stylebox("normal", "Button", box("#20252a", "#414649"))
+	_ui_theme.set_stylebox("hover", "Button", box("#303a3b", "#a9c6bd"))
+	_ui_theme.set_stylebox("pressed", "Button", box("#354341", "#bbd0c5"))
+	_ui_theme.set_stylebox("focus", "Button", box("#00000000", "#dcc197"))
+	_ui_theme.set_stylebox("disabled", "Button", box("#14181d", "#2e3337"))
 	for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 		_ui_theme.set_stylebox(state, "OptionButton", _ui_theme.get_stylebox(state, "Button"))
-	_ui_theme.set_stylebox("panel", "PopupMenu", box("#162837", "#548090"))
-	_ui_theme.set_stylebox("hover", "PopupMenu", box("#274d58", "#548090"))
+	_ui_theme.set_stylebox("panel", "PopupMenu", box("#20262b", "#626e6d"))
+	_ui_theme.set_stylebox("hover", "PopupMenu", box("#34413f", "#626e6d"))
 	_ui_theme.set_color("font_color", "PopupMenu", LIGHT)
 	_ui_theme.set_constant("v_separation", "PopupMenu", 10)
-	_ui_theme.set_stylebox("slider", "HSlider", box("#1d3041", "#1d3041"))
-	_ui_theme.set_stylebox("grabber_area", "HSlider", box("#307e86", "#307e86"))
-	_ui_theme.set_stylebox("grabber_area_highlight", "HSlider", box("#439c9d", "#439c9d"))
+	_ui_theme.set_stylebox("slider", "HSlider", box("#252b30", "#252b30"))
+	_ui_theme.set_stylebox("grabber_area", "HSlider", box("#5b7771", "#5b7771"))
+	_ui_theme.set_stylebox("grabber_area_highlight", "HSlider", box("#77968c", "#77968c"))
 	theme = _ui_theme
 
 func box(fill: String, border: String) -> StyleBoxFlat:
@@ -117,7 +117,7 @@ func box(fill: String, border: String) -> StyleBoxFlat:
 	style.bg_color = Color(fill)
 	style.border_color = Color(border)
 	style.set_border_width_all(1)
-	style.set_corner_radius_all(5)
+	style.set_corner_radius_all(3)
 	style.content_margin_left = 16.0
 	style.content_margin_right = 16.0
 	return style
@@ -144,14 +144,14 @@ func button_at(parent: Node, value: String, rect: Rect2, action: Callable, prima
 	var button := Button.new()
 	button.text = value
 	if primary:
-		button.add_theme_stylebox_override("normal", box("#174348", "#58c6c1"))
-		button.add_theme_color_override("font_color", Color("#c2fff7"))
+		button.add_theme_stylebox_override("normal", box("#35433f", "#849991"))
+		button.add_theme_color_override("font_color", Color("#edf3eb"))
 	button.pressed.connect(Sound.cue.bind(&"click"))
 	button.pressed.connect(action)
 	place(button, parent, rect)
 	return button
 
-func panel_at(parent: Node, rect: Rect2, fill: String = "#111d2a", border: String = "#294154") -> Panel:
+func panel_at(parent: Node, rect: Rect2, fill: String = "#171c21", border: String = "#353a3c") -> Panel:
 	var panel := Panel.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_theme_stylebox_override("panel", box(fill, border))
@@ -234,7 +234,7 @@ func _make_hud() -> void:
 	wave_label = text_at(screen, "", 579, 56, 32, LIGHT, 270)
 	text_at(screen, "기지 체력", 886, 31, 18, MUTED)
 	health_label = text_at(screen, "", 886, 56, 32, MINT)
-	panel_at(screen, Rect2(1030, 77, 140, 8), "#203443", "#203443")
+	panel_at(screen, Rect2(1030, 77, 140, 8), "#303437", "#303437")
 	health_bar = ColorRect.new()
 	health_bar.color = MINT
 	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -242,10 +242,11 @@ func _make_hud() -> void:
 	text_at(screen, "재화", 1230, 31, 18, MUTED)
 	credits_label = text_at(screen, "", 1230, 56, 29, GOLD, 246)
 	text_at(screen, "연구 포인트", 1495, 31, 18, MUTED)
-	rp_label = text_at(screen, "0", 1495, 56, 29, Color("#b4a0ff"), 151)
+	rp_label = text_at(screen, "0", 1495, 56, 29, Color("#c3b5d0"), 151)
 	button_at(screen, "일시정지  ·  Esc", Rect2(1660, 45, 212, 57), show_pause)
 
-	panel_at(screen, Rect2(1527, 147, 345, 235))
+	panel_at(screen, Rect2(1527, 147, 345, 808))
+	panel_at(screen, Rect2(1550, 390, 299, 1), "#3b3e3f", "#3b3e3f")
 	text_at(screen, "웨이브 제어", 1550, 166, 21, MUTED)
 	status = text_at(screen, "", 1550, 202, 24, LIGHT, 299)
 	wave_button = button_at(screen, "웨이브 시작", Rect2(1550, 251, 299, 59), start_wave, true)
@@ -253,14 +254,14 @@ func _make_hud() -> void:
 	result = text_at(screen, "", 1550, 357, 16, GOLD, 299)
 	_forecast_wave = -1
 
-	panel_at(screen, Rect2(1527, 400, 345, 185))
+
 	text_at(screen, "타워 설치", 1550, 420, 21, MUTED)
 	catalog_button = button_at(screen, "목록", Rect2(1750, 412, 99, 40), show_catalog)
 	build_button = button_at(screen, "", Rect2(1550, 467, 299, 61), toggle_build, true)
 	build_hint = text_at(screen, "", 1550, 540, 17, MUTED, 299)
-	research_button = button_at(screen, "연구 그물망  ·  R", Rect2(1527, 890, 345, 65), show_research, true)
+	research_button = button_at(screen, "연구 그물망  ·  R", Rect2(1550, 879, 299, 52), show_research, true)
 
-	panel_at(screen, Rect2(1527, 603, 345, 265))
+	panel_at(screen, Rect2(1550, 595, 299, 1), "#3b3e3f", "#3b3e3f")
 	tower_heading = text_at(screen, "", 1550, 624, 23, LIGHT, 299)
 	tower_stats = text_at(screen, "", 1550, 674, 19, MUTED, 299)
 	sell_button = button_at(screen, "포탑 판매  +%d" % int(data.turret.refund), Rect2(1550, 791, 299, 53), sell_selected)
@@ -270,21 +271,21 @@ func _make_hud() -> void:
 	text_at(screen, "기지 코어", 431, 1028, 17, MUTED)
 	warning_edge = panel_at(screen, Rect2(39, 138, 1458, 882), "#00000000", "#ff467d")
 	warning_edge.hide()
-	toast = panel_at(screen, Rect2(521, 164, 494, 63), "#112631", "#4a788a")
+	toast = panel_at(screen, Rect2(521, 164, 494, 63), "#1a2025", "#66615a")
 	toast_text = text_at(toast, "", 13, 8, 27, MINT, 468)
 	toast_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.hide()
-	boss_panel = panel_at(screen, Rect2(696, 1015, 792, 53), "#181e2b", "#ab7b54")
+	boss_panel = panel_at(screen, Rect2(696, 1015, 792, 53), "#1c2226", "#9f8068")
 	boss_title = text_at(boss_panel, "", 14, 2, 16, GOLD, 234)
 	boss_values = text_at(boss_panel, "", 250, 2, 16, LIGHT, 524)
 	boss_values.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	panel_at(boss_panel, Rect2(14, 34, 760, 7), "#3d2934", "#3d2934")
+	panel_at(boss_panel, Rect2(14, 34, 760, 7), "#432e32", "#432e32")
 	boss_body = ColorRect.new()
-	boss_body.color = Color("#ff926f")
+	boss_body.color = Color("#e1a284")
 	boss_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	place(boss_body, boss_panel, Rect2(14, 34, 760, 7))
 	boss_shield = ColorRect.new()
-	boss_shield.color = Color("#69dfff")
+	boss_shield.color = Color("#8dbdc9")
 	boss_shield.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	place(boss_shield, boss_panel, Rect2(14, 43, 760, 3))
 
@@ -564,11 +565,11 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 	if is_instance_valid(field):
 		field.frozen = true
 	var shade := ColorRect.new()
-	shade.color = Color(0.018, 0.035, 0.059, 0.86)
+	shade.color = Color(0.018, 0.020, 0.025, 0.86)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	place(shade, self, Rect2(Vector2.ZERO, Vector2(1920, 1080)))
 	modal = shade
-	return panel_at(modal, Rect2((Vector2(1920, 1080) - dimensions) * 0.5, dimensions), "#132331", "#4e7988")
+	return panel_at(modal, Rect2((Vector2(1920, 1080) - dimensions) * 0.5, dimensions), "#1a2026", "#6e7778")
 
 func show_pause() -> void:
 	if battle.lost:
@@ -818,34 +819,28 @@ func _leave_settings() -> void:
 		close_modal()
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, 1920, 1080), Color("#0b1019"))
+	draw_rect(Rect2(0, 0, 1920, 1080), Color("#101316"))
 	if game:
+		draw_rect(Rect2(0, 0, 1920, 122), Color("#0a0d10"))
+		draw_rect(Rect2(0, 1021, 1920, 59), Color("#0a0d10"))
 		draw_line(Vector2(48, 116), Vector2(1872, 116), LINE, 1.0)
-		for entry: Array in [[52, "#4b8090"], [152, "#56697a"], [268, "#ff467d"], [413, "#66f3e5"]]:
+		for entry: Array in [[52, "#667069"], [152, "#62605a"], [268, "#b77a7d"], [413, "#a9c6bd"]]:
 			draw_rect(Rect2(entry[0], 1040, 9, 9), Color(entry[1]))
 		return
 	_draw_menu_art()
 
 func _draw_menu_art() -> void:
 	var center := Vector2(1315, 526)
-	draw_texture_rect(_glow, Rect2(735, -50, 1160, 1160), false, Color("#1b748a"))
-	var grid_offset := fmod(clock * 8.0, 64.0)
-	for x in range(680, 1921, 64):
-		draw_line(Vector2(x + grid_offset, 0), Vector2(x + grid_offset, 1080), Color("#172535"))
-	for y in range(0, 1081, 64):
-		draw_line(Vector2(680, y + grid_offset), Vector2(1920, y + grid_offset), Color("#172535"))
-	for i in 4:
-		var radius := 134.0 + i * 71.0
-		draw_arc(center, radius, 0.0, TAU, 128, Color(MINT, 0.09), 1.2, true)
-		var phase := clock * (0.08 if i % 2 == 0 else -0.11) + i * 1.7
-		draw_arc(center, radius, phase, phase + 1.06, 36, Color(MINT if i % 2 == 0 else PINK, 0.36), 2.0, true)
-		var marker := center + Vector2.from_angle(phase) * radius
-		draw_circle(marker, 3.0 + i, Color(MINT if i % 2 == 0 else PINK, 0.65), true, -1.0, true)
-	for i in 48:
-		var x := 700.0 + fmod(i * 149.0 + clock * (4.0 + i % 7), 1200.0)
-		var y := fmod(i * 213.0 + 21.0 * sin(clock * 0.4 + i), 1080.0)
-		draw_circle(Vector2(x, y), 1.0 + i % 3, Color(MINT, 0.10 + (i % 5) * 0.034))
-	var lift := Vector2(0, sin(clock * 1.1) * 9.0)
-	draw_texture_rect(MARK, Rect2(center + lift - Vector2(111, 111), Vector2(222, 222)), false)
-	draw_line(Vector2(681, 103), Vector2(681, 972), LINE, 1.0)
+	draw_rect(Rect2(688, 58, 1174, 964), Color("#10151a"))
+	draw_texture_rect(_glow, Rect2(698, 30, 1100, 1020), false, Color("#78604a"))
+	draw_texture_rect(_glow, Rect2(995, 246, 832, 712), false, Color("#435c60"))
+	for i in 3:
+		var radius := 185.0 + 78.0 * i
+		draw_arc(center, radius, 0.0, TAU, 128, Color("#4c4b45"), 1.0, true)
+	var angle := -0.48 + sin(clock * 0.2) * 0.09
+	draw_line(center - Vector2.from_angle(angle) * 470.0, center + Vector2.from_angle(angle) * 470.0, Color("#675c4d"), 1.0, true)
+	draw_texture_rect(MARK, Rect2(center - Vector2(111, 111), Vector2(222, 222)), false, Color("#b0babc"))
+	draw_rect(Rect2(688, 58, 1174, 964), LINE, false, 1.0)
+	draw_rect(Rect2(688, 58, 1174, 41), Color("#0b0e11"))
+	draw_rect(Rect2(688, 981, 1174, 41), Color("#0b0e11"))
 	draw_line(Vector2(132, 927), Vector2(550, 927), LINE, 1.0)

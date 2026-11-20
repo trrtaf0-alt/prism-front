@@ -3,8 +3,8 @@ extends Control
 
 signal selected(id: String)
 const CARD := Vector2(226, 46)
-const EDGE := Color("#31495c")
-const GOLD := Color("#ffcf89")
+const EDGE := Color("#414b50")
+const GOLD := Color("#dcc197")
 
 var run: ResearchRun
 var zoom := 0.80
@@ -123,12 +123,12 @@ func _pick(at: Vector2) -> void:
 
 func _draw() -> void:
 	var viewport := Rect2(Vector2.ZERO, size)
-	draw_rect(viewport, Color("#0b1622"))
+	draw_rect(viewport, Color("#111519"))
 	var cadence := clampf(80.0 * zoom, 24, 100)
 	for x in range(int(fposmod(offset.x, cadence)), int(size.x), roundi(cadence)):
-		draw_line(Vector2(x, 0), Vector2(x, size.y), Color("#142536"))
+		draw_line(Vector2(x, 0), Vector2(x, size.y), Color("#1c2227"))
 	for y in range(int(fposmod(offset.y, cadence)), int(size.y), roundi(cadence)):
-		draw_line(Vector2(0, y), Vector2(size.x, y), Color("#142536"))
+		draw_line(Vector2(0, y), Vector2(size.x, y), Color("#1c2227"))
 	var graph := run.graph
 	var view_scale := _view_scale()
 	var world := Rect2(-offset / view_scale, size / view_scale).grow(12.0)
@@ -137,7 +137,7 @@ func _draw() -> void:
 		if not world.intersects(link.bounds):
 			continue
 		var active: bool = (link.target == focus_id or highlighted.has(link.target)) and highlighted.has(link.parent)
-		var tint := Color("#91dcec") if active else (Color("#466f64") if run.completed.has(link.parent) else EDGE)
+		var tint := Color("#a9c6bd") if active else (Color("#466f64") if run.completed.has(link.parent) else EDGE)
 		var thickness := (1.05 if active else 0.7) / view_scale.y if overview_mode else (2.8 if active else 1.5) / zoom
 		draw_polyline(link.curve, tint, thickness, true)
 		if zoom > 0.45:
@@ -155,14 +155,14 @@ func _draw() -> void:
 		var border := color
 		match state:
 			&"locked":
-				border = Color("#425268")
+				border = Color("#475156")
 			&"insufficient":
 				border = GOLD.darkened(0.25)
 			&"done":
-				border = Color("#61e3ac")
+				border = Color("#83b09d")
 		if id == focus_id:
 			draw_rect(card.grow(4), Color(color, 0.24))
-		var fill := Color("#172c39") if state != &"locked" else Color("#111e2b")
+		var fill := Color("#212b30") if state != &"locked" else Color("#171e24")
 		if overview_mode:
 			fill = fill.lerp(color, 0.30)
 		draw_rect(card, fill)
@@ -171,7 +171,7 @@ func _draw() -> void:
 		var badge := "해금" if node.has("unlock") else "경유"
 		draw_circle(at + Vector2(15, 23), 3.2, border)
 		if zoom >= 0.42:
-			draw_string(font, at + Vector2(25, 28), node.name, HORIZONTAL_ALIGNMENT_LEFT, 153, 17, Color("#e6f3ff"))
+			draw_string(font, at + Vector2(25, 28), node.name, HORIZONTAL_ALIGNMENT_LEFT, 153, 17, Color("#eee9dc"))
 			draw_string(font, at + Vector2(175, 27), "완료" if state == &"done" else badge, HORIZONTAL_ALIGNMENT_RIGHT, 40, 12, border)
 	draw_set_transform(Vector2.ZERO)
 	if overview_mode:
@@ -182,5 +182,5 @@ func _draw() -> void:
 				continue
 			prior_stage = stage
 			var x := maxf(10.0, graph.point(id).x * zoom + offset.x - 18.0)
-			draw_string(font, Vector2(x, 29), graph.ZONES[stage], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#adc1d4"))
+			draw_string(font, Vector2(x, 29), graph.ZONES[stage], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#a5a8a5"))
 	draw_rect(viewport, EDGE, false)

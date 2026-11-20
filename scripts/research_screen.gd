@@ -1,10 +1,10 @@
 class_name ResearchScreen
 extends Control
 
-const INK := Color("#e6f3ff")
-const MUTED := Color("#a2b7ca")
-const MINT := Color("#83f0d3")
-const GOLD := Color("#ffd093")
+const INK := Color("#eee9dc")
+const MUTED := Color("#a5a8a5")
+const MINT := Color("#a9c6bd")
+const GOLD := Color("#dcc197")
 
 var front
 var run: ResearchRun
@@ -49,7 +49,7 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	search.get_popup().max_size = Vector2i(460, 590)
 	search.item_selected.connect(_jump_to_tower.bind(search))
 	front.place(search, self, Rect2(1392, 121, 420, 44))
-	var panel: Panel = front.panel_at(self, Rect2(1392, 183, 420, 746), "#142535", "#375365")
+	var panel: Panel = front.panel_at(self, Rect2(1392, 183, 420, 746), "#191e23", "#414649")
 	heading = front.text_at(panel, "", 23, 19, 28, INK, 374)
 	cost = front.text_at(panel, "", 23, 63, 23, GOLD, 374)
 	description = _wrap(panel, 107, 19, MUTED)
