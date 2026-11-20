@@ -195,7 +195,7 @@ func show_menu() -> void:
 	text_at(screen, "PRISM FRONT", 208, 116, 31, MINT)
 	text_at(screen, "프리즘\n방어선", 125, 209, 102)
 	text_at(screen, "50웨이브 동안 에너지 코어를 지키세요.", 131, 520, 26, MUTED)
-	var play := button_at(screen, "게임 시작", Rect2(132, 615, 418, 68), start_game, true)
+	var play := button_at(screen, "게임 시작", Rect2(132, 615, 418, 68), show_difficulty, true)
 	play.disabled = not map_error.is_empty()
 	button_at(screen, "설정", Rect2(132, 698, 418, 62), show_settings.bind("menu"))
 	button_at(screen, "종료", Rect2(132, 775, 418, 62), get_tree().quit)
@@ -204,7 +204,33 @@ func show_menu() -> void:
 	text_at(screen, "v0.5", 132, 977, 19, MUTED)
 	play.grab_focus()
 
-func start_game() -> void:
+func show_difficulty() -> void:
+	var panel := _open_modal("difficulty", Vector2(932, 376))
+	text_at(panel, "난이도 선택", 34, 21, 40)
+	button_at(panel, "돌아가기", Rect2(768, 28, 130, 46), close_modal)
+	var colors := [MINT, GOLD, PINK]
+	var index := 0
+	for mode: StringName in BattleData.DIFFICULTIES:
+		var x := 34.0 + index * 292.0
+		var option := button_at(panel, "", Rect2(x, 95, 280, 238), start_game.bind(mode), mode == &"normal")
+		var name_text: String = BattleData.DIFFICULTIES[mode]
+		option.accessibility_name = name_text
+		text_at(option, name_text, 20, 20, 35, colors[index], 240)
+		var tuning: Dictionary = data.difficulty_rules[str(mode)]
+		var hp_multiplier := BattleData.curve(tuning.hp, BattleData.FINAL_WAVE)
+		var boss := data.enemy_for_wave(data.mobs.lookup("boss"), BattleData.FINAL_WAVE, mode)
+		var summary := "기존 웨이브 기준" if mode == &"easy" else "후반 적 체력·보호막 %s배" % str(hp_multiplier)
+		text_at(option, "%s\n보스 HP %s만" % [summary, String.num(float(boss.health) / 10000.0, 2)], 20, 84, 17, LIGHT, 240)
+		var entry := Profile.campaign_record(mode)
+		var progress := "최고 %d / 50" % int(entry.wave)
+		if entry.fastest_clear > 0.0:
+			progress = "최단 " + _duration(entry.fastest_clear)
+		text_at(option, progress, 20, 183, 17, colors[index], 240)
+		if mode == &"normal":
+			option.grab_focus()
+		index += 1
+
+func start_game(difficulty: StringName = &"easy") -> void:
 	if not map_error.is_empty():
 		return
 	_replace_screen()
@@ -221,7 +247,7 @@ func start_game() -> void:
 	callout_time = 0.0
 	defeat_delay = 0.0
 	last_base_damage = 0
-	battle = Battle.new(map, data)
+	battle = Battle.new(map, data, difficulty)
 	battle.effect.connect(_battle_effect)
 	battle.tower_installed.connect(Sound.deploy_cue)
 	battle.attack_visual.connect(Sound.attack_cue)
@@ -259,6 +285,7 @@ func _make_hud() -> void:
 	credits_label = _hud_text(screen, "", 442, 43, 28, GOLD, 156)
 	_hud_text(screen, "RP", 626, 22, 17, MUTED, 146)
 	rp_label = _hud_text(screen, "0", 626, 43, 28, Color("#c3b5d0"), 146)
+	_hud_text(screen, BattleData.DIFFICULTIES[battle.difficulty], 800, 46, 19, MUTED, 110)
 
 	# Center the actions on the seam between tile rows, leaving tile centers clickable.
 	_hud_button("일시정지 · Esc", Rect2(1704, 38, 158, 44), show_pause)
@@ -526,7 +553,7 @@ func _process(delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		match modal_kind:
-			"pause", "research", "catalog", "support":
+			"pause", "research", "catalog", "support", "difficulty":
 				close_modal()
 			"effects_settings":
 				show_settings(settings_origin)
@@ -586,7 +613,7 @@ func _boss_event(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color,
 		callout_time = 2.7
 
 func _wave_started(number: int) -> void:
-	Profile.record_wave(number)
+	Profile.record_wave(number, battle.difficulty)
 	result.text = ""
 	if number == BattleData.FINAL_WAVE:
 		wave_callout = ""
@@ -655,23 +682,25 @@ func show_pause() -> void:
 	text_at(panel, "웨이브 %d  /  기지 %d" % [battle.wave, battle.health], 36, 93, 20, MUTED)
 	button_at(panel, "계속하기", Rect2(36, 152, 408, 54), close_modal, true).grab_focus()
 	button_at(panel, "설정", Rect2(36, 214, 408, 54), show_settings.bind("pause_settings"))
-	button_at(panel, "다시 시작", Rect2(36, 276, 408, 54), start_game)
+	button_at(panel, "다시 시작", Rect2(36, 276, 408, 54), start_game.bind(battle.difficulty))
 	button_at(panel, "메인 메뉴", Rect2(36, 338, 408, 54), show_menu)
 
 func _cleared(record: Dictionary) -> void:
 	Sound.play_music()
 	Profile.record_clear(record)
+	var entry := Profile.campaign_record(battle.difficulty)
 	callout_time = 0.0
 	toast.hide()
 	building = false
 	_sync_selection()
 	var panel := _open_modal("victory", Vector2(900, 602))
 	text_at(panel, "50웨이브 클리어", 42, 28, 47, MINT)
+	text_at(panel, BattleData.DIFFICULTIES[battle.difficulty], 750, 48, 23, GOLD, 105)
 	var stats := [
 		["총 플레이 시간", _duration(record.seconds)], ["보스전 시간", _duration(record.finale)],
 		["남은 기지 HP", str(record.health)], ["총 처치", str(record.kills)],
 		["획득 재화", str(record.credits)], ["완료 연구", "%d / 100" % int(record.research)],
-		["타워 설치", "%d회" % int(record.installed)], ["최단 기록", _duration(Profile.fastest_clear)],
+		["타워 설치", "%d회" % int(record.installed)], ["최단 기록", _duration(entry.fastest_clear)],
 	]
 	for i in stats.size():
 		var x := 44 + int(i % 4) * 205
@@ -684,8 +713,8 @@ func _cleared(record: Dictionary) -> void:
 	if Profile.save_error:
 		text_at(panel, "클리어 기록을 저장하지 못했습니다.", 44, 445, 18, PINK)
 	else:
-		text_at(panel, "최고 방어 기록  ·  기지 HP %d" % Profile.best_clear.health, 44, 445, 18, MUTED)
-	button_at(panel, "다시 시작", Rect2(44, 506, 390, 62), start_game, true).grab_focus()
+		text_at(panel, "최고 방어 기록  ·  기지 HP %d" % entry.best_clear.health, 44, 445, 18, MUTED)
+	button_at(panel, "다시 시작", Rect2(44, 506, 390, 62), start_game.bind(battle.difficulty), true).grab_focus()
 	button_at(panel, "메인 메뉴", Rect2(466, 506, 390, 62), show_menu)
 
 func _duration(seconds: float) -> String:
@@ -698,8 +727,8 @@ func show_game_over() -> void:
 	text_at(panel, "도달 웨이브", 39, 116, 19, MUTED)
 	text_at(panel, "최고 기록", 280, 116, 19, MUTED)
 	text_at(panel, str(battle.wave), 39, 148, 31, LIGHT, 222)
-	text_at(panel, str(Profile.best), 280, 148, 31, GOLD, 206)
-	button_at(panel, "다시 시작", Rect2(36, 229, 450, 59), start_game, true).grab_focus()
+	text_at(panel, str(Profile.campaign_record(battle.difficulty).wave), 280, 148, 31, GOLD, 206)
+	button_at(panel, "다시 시작", Rect2(36, 229, 450, 59), start_game.bind(battle.difficulty), true).grab_focus()
 	button_at(panel, "메인 메뉴", Rect2(36, 301, 450, 59), show_menu)
 
 func show_settings(return_to: String) -> void:
@@ -724,11 +753,13 @@ func show_settings(return_to: String) -> void:
 	place(sizes, panel, Rect2(278, 427, 306, 44))
 	mode.item_selected.connect(_set_fullscreen.bind(sizes))
 	sizes.item_selected.connect(_set_resolution)
-	text_at(panel, "캠페인 최고 웨이브", 36, 504, 21, MUTED)
-	var best_label := text_at(panel, "%d / 50" % Profile.campaign_best, 278, 499, 26, GOLD, 306)
+	var record_mode := battle.difficulty if battle != null else &"easy"
+	var entry := Profile.campaign_record(record_mode)
+	text_at(panel, "%s 최고 웨이브" % BattleData.DIFFICULTIES[record_mode], 36, 504, 21, MUTED)
+	var best_label := text_at(panel, "%d / 50" % entry.wave, 278, 499, 26, GOLD, 306)
 	best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	var record_text := "50웨이브 미클리어" if Profile.best_clear.is_empty() else "최고 기지 HP %d  ·  최단 %s" % [Profile.best_clear.health, _duration(Profile.fastest_clear)]
-	if Profile.best > Profile.campaign_best:
+	var record_text := "50웨이브 미클리어" if entry.best_clear.is_empty() else "최고 기지 HP %d  ·  최단 %s" % [entry.best_clear.health, _duration(entry.fastest_clear)]
+	if Profile.best > entry.wave:
 		record_text += "  ·  이전 최고 %d" % Profile.best
 	if Profile.save_error:
 		record_text = "설정을 저장할 수 없습니다."

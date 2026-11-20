@@ -19,6 +19,7 @@ func _run() -> void:
 	check(map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty(), "map loads")
 	check(rules.mobs.error.is_empty() and rules.research.error.is_empty(), "campaign definitions validate")
 	_count_and_timing()
+	_difficulty_and_escorts()
 	_victory_conditions()
 	_preview_matches_spawn()
 	await _ui_and_record()
@@ -47,6 +48,29 @@ func _count_and_timing() -> void:
 	check(sim.primary_spawned == delivered and sim.queued == 820 - delivered, "stalled frame emits all elapsed slots")
 	sim._dispatch(1000.0)
 	check(sim.primary_spawned == 820 and sim.queued == 0, "all original slots retained at W49")
+
+func _difficulty_and_escorts() -> void:
+	var health := [2_400_000, 5_200_000, 9_400_000]
+	var shields := [85_000, 144_500, 212_500]
+	var speed := [0.115, 0.126, 0.14]
+	var expected_guardian := [440, 850, 3.3]
+	var index := 0
+	for mode: StringName in BattleData.DIFFICULTIES:
+		var guardian := rules.enemy_for_wave(rules.mobs.lookup("guardian"), 50, mode)
+		check([int(guardian.health), int(guardian.guardian.shield_hp), float(guardian.guardian.interval)] == expected_guardian, "guardian uses the same nerfed tuning in " + str(mode))
+		var sim := Battle.new(map, rules, mode)
+		sim.wave = 49
+		sim.start_wave()
+		check(sim.bosses.size() == 1 and sim.bosses[0].maximum_health == health[index] and sim.bosses[0].shield_hp == shields[index] and is_equal_approx(sim.bosses[0].speed, speed[index]), "real boss uses selected difficulty " + str(mode))
+		check(sim.queued == 851, "boss still occupies one primary slot")
+		sim._dispatch(4.0)
+		check(sim.primary_spawned == 1 + floori(4.0 / rules.spawn_interval(50)), "supporters stream from the beginning like a normal wave")
+		sim._dispatch(31.0)
+		check(sim.primary_spawned == 852 and sim.bosses.size() == 1 and sim.queued == 0, "all 851 escort slots arrive within 35 seconds while boss lives")
+		var normal := rules.enemy_for_wave(rules.mobs.lookup("normal"), 50, mode)
+		check(int(normal.health) == [5, 11, 18][index], "late regular units have difficulty-appropriate health")
+		index += 1
+	check(rules.mobs.lookup("boss").health == 2_400_000 and rules.mobs.lookup("normal").health == 5, "difficulty does not mutate shared enemy definitions")
 
 func _preview_matches_spawn() -> void:
 	var sim := Battle.new(map, rules)
@@ -106,14 +130,12 @@ func _ui_and_record() -> void:
 	profile.file_path = "user://campaign_qa_profile.cfg"
 	var old := ConfigFile.new()
 	old.set_value("campaign_04", "fastest_clear", 900.0)
+	old.set_value("campaign_05", "fastest_clear", 700.0)
 	old.set_value("visual", "quality", 1)
 	old.save(profile.file_path)
 	profile.load_profile()
-	check(profile.fx_quality == 2 and profile.fastest_clear == 0.0, "legacy quality migrates without mixing campaign records")
+	check(profile.fx_quality == 2 and profile.campaign_record().fastest_clear == 0.0, "legacy quality migrates without mixing campaign records")
 	profile.best = 90
-	profile.campaign_best = 0
-	profile.best_clear = {}
-	profile.fastest_clear = 0.0
 	profile.master = 0.42
 	profile.apply_audio()
 	var sound = root.get_node("Sound")
@@ -187,7 +209,7 @@ func _ui_and_record() -> void:
 	check(ui.modal_kind == "victory" and ui.wave_button.disabled and not ui.can_open_research(), "victory UI differs from defeat and locks play")
 	check(not ui.toast.visible and ui.callout_time == 0.0, "victory dismisses prior combat notices")
 	check(sound.music_track == &"", "victory fades out the battle music")
-	check(profile.best == 90 and profile.campaign_best == 50 and profile.fastest_clear > 0.0, "legacy and campaign records stay separate")
+	check(profile.best == 90 and profile.campaign_record().wave == 50 and profile.campaign_record().fastest_clear > 0.0, "legacy and campaign records stay separate")
 	if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
 		await process_frame
 		await RenderingServer.frame_post_draw
@@ -197,12 +219,18 @@ func _ui_and_record() -> void:
 	shorter.seconds = 1500.0
 	shorter.health = 85
 	profile.record_clear(shorter)
+	profile.record_wave(17, &"normal")
+	var hard_clear := shorter.duplicate(true)
+	hard_clear.difficulty = "hard"
+	hard_clear.seconds = 1900.0
+	profile.record_clear(hard_clear)
 	profile.load_profile()
+	check(profile.campaign_record(&"normal").wave == 17 and profile.campaign_record(&"normal").best_clear.is_empty() and profile.campaign_record(&"hard").fastest_clear == 1900.0, "difficulty records are saved separately")
 	old.load(profile.file_path)
-	check(old.get_value("campaign_04", "fastest_clear") == 900.0, "previous campaign record stays on disk")
-	check(profile.best == 90 and profile.campaign_best == 50 and profile.fastest_clear == 1500.0 and profile.best_clear.health == 100 and profile.master == 0.42, "best defense, fastest time and settings persist")
+	check(old.get_value("campaign_04", "fastest_clear") == 900.0 and old.get_value("campaign_05", "fastest_clear") == 700.0, "previous campaign record stays on disk")
+	check(profile.best == 90 and profile.campaign_record().wave == 50 and profile.campaign_record().fastest_clear == 1500.0 and profile.campaign_record().best_clear.health == 100 and profile.master == 0.42, "best defense, fastest time and settings persist")
 	ui.start_game()
-	check(ui.battle.wave == 0 and ui.battle.credits == 50 and ui.battle.research.points == 0 and ui.battle.total_kills == 0 and ui.battle.total_installs == 0 and not ui.battle.won and profile.fastest_clear == 1500.0, "restart resets campaign but retains saved record")
+	check(ui.battle.wave == 0 and ui.battle.credits == 50 and ui.battle.research.points == 0 and ui.battle.total_kills == 0 and ui.battle.total_installs == 0 and not ui.battle.won and profile.campaign_record().fastest_clear == 1500.0, "restart resets campaign but retains saved record")
 	var retry: Battle = ui.battle
 	retry.wave = 49
 	retry.start_wave()
@@ -211,5 +239,17 @@ func _ui_and_record() -> void:
 	check(retry.lost and sound.music_track == &"", "boss escape fades out boss music")
 	ui.show_menu()
 	check(sound.music_track == &"patrol", "returning from defeat restores normal music")
+	ui.show_difficulty()
+	for button: Button in ui.modal.find_children("*", "Button", true, false):
+		if button.accessibility_name == "어려움":
+			button.pressed.emit()
+			break
+	check(ui.battle.difficulty == &"hard" and ui.battle.wave == 0, "hard difficulty card starts a fresh hard battle")
+	ui.show_pause()
+	for button: Button in ui.modal.find_children("*", "Button", true, false):
+		if button.text == "다시 시작":
+			button.pressed.emit()
+			break
+	check(ui.battle.difficulty == &"hard" and ui.battle.wave == 0, "retry preserves the chosen difficulty")
 	ui.queue_free()
 	await process_frame

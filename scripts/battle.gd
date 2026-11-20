@@ -110,6 +110,8 @@ var boss_escaped := false
 var finale_started := 0.0
 var finale_boss_time := 0.0
 var finale_last_spawn := 0.0
+var escorts_waiting_at_boss_kill := 0
+var difficulty: StringName
 var primary_spawned := 0
 var total_kills := 0
 var total_credits := 0
@@ -123,7 +125,7 @@ var bosses: Array[Drone] = []
 var roster_seed := randi()
 
 var _roster: WaveRoster
-var _finale: FinaleSchedule
+var _wave_enemies: Dictionary = {}
 var _rp_multiplier := 1.0
 var _interval := 0.5
 var elapsed := 0.0
@@ -152,11 +154,11 @@ var _needs_cleanup := false
 var _maximum_step := 0.0
 var _copy_neighbors: Dictionary = {}
 
-func _init(map: FieldMap, rules: BattleData) -> void:
+func _init(map: FieldMap, rules: BattleData, mode: StringName = &"easy") -> void:
 	field = map
 	data = rules
+	difficulty = mode if BattleData.DIFFICULTIES.has(mode) else &"easy"
 	research = ResearchRun.new(data.research)
-	_finale = FinaleSchedule.new(data.balance.finale)
 	health = int(data.balance.base_health)
 	credits = int(data.balance.starting_credits)
 	_range = float(data.turret.range)
@@ -246,6 +248,7 @@ func start_wave() -> bool:
 	wave += 1
 	active = true
 	primary_spawned = 0
+	_wave_enemies.clear()
 	queued = data.wave_count(wave)
 	_rp_multiplier = data.slot_rp_multiplier(wave)
 	_interval = data.spawn_interval(wave)
@@ -253,13 +256,12 @@ func start_wave() -> bool:
 	_roster = WaveRoster.new(data.mobs, wave, queued, roster_seed ^ wave)
 	if wave == BattleData.FINAL_WAVE:
 		finale_started = elapsed
-		_spawn_clock = 0.52
 	wave_started.emit(wave)
 	_spawn_primary(1.0)
 	return true
 
 func _spawn_primary(elite_weight: float) -> void:
-	var drone := spawn(0.0, _roster.next(elite_weight))
+	var drone := spawn(0.0, _wave_enemy(_roster.next(elite_weight)))
 	drone.primary = true
 	primary_spawned += 1
 	queued -= 1
@@ -269,13 +271,19 @@ func _dispatch(delta: float) -> void:
 	while _spawn_clock <= 0.000001 and queued > 0:
 		if wave == BattleData.FINAL_WAVE:
 			var phase := bosses[0].mob.phase if not bosses.is_empty() else 2
-			var stage := _finale.stage(primary_spawned - 1, phase, elapsed - finale_started + _spawn_clock)
-			_spawn_primary(_finale.elite_weight(stage))
-			_spawn_clock += _finale.gap(primary_spawned - 1, stage, enemies.size(), boss_killed)
-			finale_last_spawn = elapsed - finale_started
+			var escorts := primary_spawned - 1
+			var stage := mini(2, maxi(phase, int(escorts >= 180) + int(escorts >= 495)))
+			_spawn_primary(float(data.balance.finale_elite[stage]))
+			finale_last_spawn = elapsed + _spawn_clock - finale_started
 		else:
 			_spawn_primary(1.0)
-			_spawn_clock += _interval
+		_spawn_clock += _interval
+
+func _wave_enemy(definition: Dictionary) -> Dictionary:
+	var id: String = definition.id
+	if not _wave_enemies.has(id):
+		_wave_enemies[id] = data.enemy_for_wave(definition, wave, difficulty)
+	return _wave_enemies[id]
 
 func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
 	var drone: Drone = Drone.new() if _drone_pool.is_empty() else _drone_pool.pop_back()
@@ -362,7 +370,7 @@ func _finish_wave() -> void:
 
 func clear_record() -> Dictionary:
 	return {
-		"wave": wave, "seconds": elapsed, "finale": elapsed - finale_started,
+		"wave": wave, "difficulty": str(difficulty), "seconds": elapsed, "finale": elapsed - finale_started,
 		"health": health, "kills": total_kills, "credits": total_credits,
 		"research": research.completed.size(), "installed": total_installs,
 		"terminal": terminal_used.values(),
@@ -884,6 +892,7 @@ func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool
 			if drone.primary and wave == BattleData.FINAL_WAVE:
 				boss_killed = true
 				finale_boss_time = elapsed - finale_started
+				escorts_waiting_at_boss_kill = queued
 			mob_effect(&"boss_down", drone.position, drone.position, drone.tint, 2.1, true)
 	else:
 		if not control.is_empty():
@@ -902,7 +911,7 @@ func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool
 		effect.emit(&"kill" if killed else &"hit", drone.position, direction)
 
 func queue_birth(progress: float, id: String, count: int) -> void:
-	_births.append([progress, data.mobs.lookup(id), count])
+	_births.append([progress, _wave_enemy(data.mobs.lookup(id)), count])
 
 func _flush_births() -> void:
 	# Retired units can be reused after every combat and support query finished.

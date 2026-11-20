@@ -27,6 +27,9 @@ const SUPPORT_PLANS := {
 }
 
 var support_plan := "none"
+var difficulty := &"easy"
+var trial_health := 0
+var trial_armor := 0.0
 var final_quantum := 0
 var final_syncs := 0
 var rules := BattleData.new()
@@ -39,6 +42,7 @@ var stage_three := -1.0
 var invested := 0
 var peak_live := 0
 var peak_final := 0
+var living_at_boss_kill := -1
 var first_buy: Dictionary = {}
 var first_unlock: Dictionary = {}
 
@@ -52,7 +56,17 @@ func _run() -> void:
 			policy = arg.trim_prefix("--strategy=")
 		if arg.begins_with("--support="):
 			support_plan = arg.trim_prefix("--support=")
-	if not SUPPORT_PLANS.has(support_plan) or not POLICIES.has(policy) or not map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty() or not rules.mobs.error.is_empty():
+		if arg.begins_with("--difficulty="):
+			difficulty = StringName(arg.trim_prefix("--difficulty="))
+		if arg.begins_with("--boss-trial="):
+			var values := arg.trim_prefix("--boss-trial=").split(",")
+			if values.size() != 2 or not values[0].is_valid_int() or int(values[0]) <= 0 or not values[1].is_valid_float() or float(values[1]) < 0.0 or float(values[1]) > 100.0:
+				printerr("Boss trial requires positive HP and armor percent between 0 and 100")
+				quit(2)
+				return
+			trial_health = int(values[0])
+			trial_armor = float(values[1]) / 100.0
+	if not BattleData.DIFFICULTIES.has(difficulty) or not SUPPORT_PLANS.has(support_plan) or not POLICIES.has(policy) or not map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty() or not rules.mobs.error.is_empty():
 		printerr("Invalid campaign fixture")
 		quit(1)
 		return
@@ -74,14 +88,14 @@ func _run() -> void:
 			var tile := Vector2i(x, y)
 			if map.tile_at(tile) == "." and not seats.has(tile):
 				seats.append(tile)
-	var sim := Battle.new(map, rules)
+	var sim := Battle.new(map, rules, difficulty)
 	var ui
 	if "--visual" in args and DisplayServer.get_name() != "headless":
 		var packed := load("res://scenes/Front.tscn") as PackedScene
 		ui = packed.instantiate()
 		root.add_child(ui)
 		await process_frame
-		ui.start_game()
+		ui.start_game(difficulty)
 		ui.set_physics_process(false)
 		ui.set_process_unhandled_input(false)
 		root.gui_disable_input = true
@@ -94,6 +108,13 @@ func _run() -> void:
 		if wave == BattleData.FINAL_WAVE:
 			sim.support_visual.connect(_final_support_event)
 		sim.start_wave()
+		var trial_boss: Battle.Drone
+		if wave == BattleData.FINAL_WAVE and trial_health > 0:
+			trial_boss = sim.bosses[0]
+			trial_boss.health = trial_health
+			trial_boss.maximum_health = trial_health
+			trial_boss.armor = trial_armor
+			print("Boss trial %s: HP=%d armor=%.1f%%" % [difficulty, trial_health, trial_armor * 100.0])
 		var ticks := 0
 		while sim.active and not sim.lost and ticks < 48000:
 			ticks += 1
@@ -101,6 +122,8 @@ func _run() -> void:
 			peak_live = maxi(peak_live, sim.enemies.size())
 			if wave == 50:
 				peak_final = maxi(peak_final, sim.enemies.size())
+				if living_at_boss_kill < 0 and sim.boss_killed:
+					living_at_boss_kill = sim.enemies.size()
 				if not sim.bosses.is_empty():
 					_track_phase(sim)
 		if sim.lost or sim.active:
@@ -108,12 +131,18 @@ func _run() -> void:
 				policy, wave, ticks * STEP, sim.health, sim.queued, sim.enemies.size(), sim.credits,
 				sim.research.points, invested, _build(sim), sim.boss_escaped,
 			])
+			if trial_boss != null and not sim.boss_killed:
+				print("Trial remaining HP=%d shield=%d phase=%d last_escort=%.2fs" % [trial_boss.health, trial_boss.shield_hp, trial_boss.mob.phase + 1, sim.finale_last_spawn])
 			quit(1)
 			return
 		if wave == 1 and leaky:
 			_place_opening(sim)
 		if wave < BattleData.FINAL_WAVE:
 			_prepare(sim)
+		if wave == BattleData.FINAL_WAVE - 1 and "--spend-reserve" in args:
+			for number in [29, 25, 25, 25, 25]:
+				if sim.research.unlocked.has(_id(number)):
+					_buy(sim, _id(number))
 		if ui != null and wave % 5 == 0:
 			await process_frame
 		if wave % 5 == 0 or wave >= 48:
@@ -124,11 +153,14 @@ func _run() -> void:
 	print("%s clear=%.2fs boss_wave=%.2fs boss_kill=%.2fs stage2=%.2fs stage3=%.2fs last_escort=%.2fs peak=%d final_peak=%d" % [
 		policy, sim.elapsed, sim.elapsed - sim.finale_started, sim.finale_boss_time, stage_two, stage_three, sim.finale_last_spawn, peak_live, peak_final,
 	])
+	print("Difficulty %s, at boss kill: escorts queued=%d alive=%d" % [difficulty, sim.escorts_waiting_at_boss_kill, living_at_boss_kill])
 	if support_plan != "none":
 		print("Finale support: %d quantum strikes, %d sync starts" % [final_quantum, final_syncs])
 	if ui != null and sim.won:
 		await RenderingServer.frame_post_draw
 		var name := "campaign-live-victory.png" if support_plan == "none" else "support-campaign-victory.png"
+		if difficulty != &"easy":
+			name = "campaign-%s-victory.png" % difficulty
 		var filename := ProjectSettings.globalize_path("res://reports/" + name)
 		if root.get_texture().get_image().save_png(filename) != OK or ui.modal_kind != "victory":
 			quit(1)

@@ -11,9 +11,7 @@ var music := 0.60
 var fullscreen := false
 var resolution := 1
 var best := 0
-var campaign_best := 0
-var best_clear: Dictionary = {}
-var fastest_clear := 0.0
+var _campaign_records: Dictionary = {}
 var file_path := PATH
 var save_error := false
 var fx_quality := 3
@@ -41,9 +39,7 @@ func load_profile() -> void:
 	fullscreen = false
 	resolution = 1
 	best = 0
-	campaign_best = 0
-	best_clear = {}
-	fastest_clear = 0.0
+	_campaign_records.clear()
 	fx_quality = 3
 	fx_particles = 0.85
 	fx_flash = 0.45
@@ -75,16 +71,26 @@ func load_profile() -> void:
 	var saved_best: Variant = config.get_value("record", "best", 0)
 	if saved_best is int and saved_best >= 0:
 		best = mini(saved_best, BattleData.NUMBER_LIMIT)
-	var section := BattleData.CAMPAIGN_RECORD
-	var recent: Variant = config.get_value(section, "wave", 0)
-	if recent is int:
-		campaign_best = clampi(recent, 0, BattleData.FINAL_WAVE)
-	var record: Variant = config.get_value(section, "best_clear", {})
-	if record is Dictionary and _valid_clear(record):
-		best_clear = record
-	var speed: Variant = config.get_value(section, "fastest_clear", 0.0)
-	if (speed is float or speed is int) and is_finite(float(speed)) and speed > 0 and not best_clear.is_empty():
-		fastest_clear = minf(float(speed), float(best_clear.seconds))
+	for mode: StringName in BattleData.DIFFICULTIES:
+		var entry := campaign_record(mode)
+		var section := _campaign_section(mode)
+		var recent: Variant = config.get_value(section, "wave", 0)
+		if recent is int:
+			entry.wave = clampi(recent, 0, BattleData.FINAL_WAVE)
+		var record: Variant = config.get_value(section, "best_clear", {})
+		if record is Dictionary and _valid_clear(record):
+			entry.best_clear = record
+		var speed: Variant = config.get_value(section, "fastest_clear", 0.0)
+		if (speed is float or speed is int) and is_finite(float(speed)) and speed > 0 and not entry.best_clear.is_empty():
+			entry.fastest_clear = minf(float(speed), float(entry.best_clear.seconds))
+
+func _campaign_section(mode: StringName) -> String:
+	return "%s_%s" % [BattleData.CAMPAIGN_RECORD, mode]
+
+func campaign_record(mode: StringName = &"easy") -> Dictionary:
+	if not _campaign_records.has(mode):
+		_campaign_records[mode] = {"wave": 0, "best_clear": {}, "fastest_clear": 0.0}
+	return _campaign_records[mode]
 
 func _volume(value: Variant, fallback: float) -> float:
 	if (value is int or value is float) and is_finite(float(value)):
@@ -100,10 +106,12 @@ func save_profile() -> void:
 	config.set_value("display", "fullscreen", fullscreen)
 	config.set_value("display", "resolution", resolution)
 	config.set_value("record", "best", best)
-	var section := BattleData.CAMPAIGN_RECORD
-	config.set_value(section, "wave", campaign_best)
-	config.set_value(section, "best_clear", best_clear)
-	config.set_value(section, "fastest_clear", fastest_clear)
+	for mode: StringName in BattleData.DIFFICULTIES:
+		var section := _campaign_section(mode)
+		var entry := campaign_record(mode)
+		config.set_value(section, "wave", entry.wave)
+		config.set_value(section, "best_clear", entry.best_clear)
+		config.set_value(section, "fastest_clear", entry.fastest_clear)
 	config.set_value("visual", "quality_v2", fx_quality)
 	config.set_value("visual", "particles", fx_particles)
 	config.set_value("visual", "flash", fx_flash)
@@ -119,21 +127,27 @@ func save_profile() -> void:
 	if save_error:
 		push_warning("설정 및 기록을 저장할 수 없습니다. 오류 %d" % error)
 
-func record_wave(wave: int) -> void:
-	if wave > best or wave > campaign_best:
+func record_wave(wave: int, mode: StringName = &"easy") -> void:
+	var entry := campaign_record(mode)
+	if wave > best or wave > int(entry.wave):
 		best = maxi(wave, best)
-		campaign_best = maxi(campaign_best, mini(wave, BattleData.FINAL_WAVE))
+		entry.wave = maxi(int(entry.wave), mini(wave, BattleData.FINAL_WAVE))
 		save_profile()
 
 func record_clear(record: Dictionary) -> void:
 	if not _valid_clear(record):
 		return
-	campaign_best = BattleData.FINAL_WAVE
-	best = maxi(best, campaign_best)
+	var mode := StringName(str(record.get("difficulty", "easy")))
+	if not BattleData.DIFFICULTIES.has(mode):
+		return
+	var entry := campaign_record(mode)
+	entry.wave = BattleData.FINAL_WAVE
+	best = maxi(best, BattleData.FINAL_WAVE)
+	var best_clear: Dictionary = entry.best_clear
 	if best_clear.is_empty() or record.health > best_clear.health or (record.health == best_clear.health and record.seconds < best_clear.seconds):
-		best_clear = record.duplicate(true)
-	if fastest_clear <= 0.0 or float(record.seconds) < fastest_clear:
-		fastest_clear = float(record.seconds)
+		entry.best_clear = record.duplicate(true)
+	if entry.fastest_clear <= 0.0 or float(record.seconds) < float(entry.fastest_clear):
+		entry.fastest_clear = float(record.seconds)
 	save_profile()
 
 func _valid_clear(record: Dictionary) -> bool:

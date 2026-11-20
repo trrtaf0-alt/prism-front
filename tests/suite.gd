@@ -177,7 +177,13 @@ func _interface(profile: Node) -> void:
 	check(ui.battle == null and not ui.game and ui.screen.get_child_count() > 4, "main menu loads")
 	await capture("menu")
 	gui_click(ui, Vector2(335, 643))
-	check(ui.game, "menu start receives a viewport click")
+	check(ui.modal_kind == "difficulty" and not ui.game, "menu start opens the difficulty chooser")
+	await capture("difficulty-selection")
+	for button: Button in ui.modal.find_children("*", "Button", true, false):
+		if button.accessibility_name == "쉬움":
+			gui_click(ui, button.get_global_rect().get_center())
+			break
+	check(ui.game and ui.battle.difficulty == &"easy", "difficulty card starts the selected campaign")
 	var sim: Battle = ui.battle
 	check(FieldView.pixel(Vector2(15, 9)) == FieldView.SCREEN.get_center(), "battlefield is centered in the viewport")
 	check(not ui.tower_heading.visible and not ui.sell_button.visible and not ui.support_button.visible, "tower details appear only on selection")

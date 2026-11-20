@@ -139,7 +139,7 @@
     {
       "id": "guardian",
       "name": "수호형",
-      "health": 465,
+      "health": 440,
       "speed": 0.8,
       "reward": 140,
       "reward_rp": 6,
@@ -151,9 +151,9 @@
       "wave_cap": 8,
       "intro_cap": 2,
       "guardian": {
-        "shield_hp": 1000,
+        "shield_hp": 850,
         "range": 4.5,
-        "interval": 3,
+        "interval": 3.3,
         "targets": 5,
         "rearm": 5
       }
@@ -280,7 +280,7 @@
     {
       "id": "boss",
       "name": "보스",
-      "health": 1620000,
+      "health": 2400000,
       "speed": 0.115,
       "reward": 50000,
       "reward_rp": 25,
@@ -290,7 +290,7 @@
       "shape": "boss",
       "scale": 2.55,
       "boss": true,
-      "shield": 65000,
+      "shield": 85000,
       "armor": 0.12,
       "regen": {
         "amount": 460,
@@ -306,7 +306,7 @@
       "phases": [
         {
           "threshold": 0.72,
-          "shield": 90000,
+          "shield": 115000,
           "speed_multiplier": 1.13,
           "regen": {
             "amount": 680,
@@ -322,7 +322,7 @@
         },
         {
           "threshold": 0.35,
-          "shield": 125000,
+          "shield": 160000,
           "speed_multiplier": 1.28,
           "regen": {
             "amount": 630,
