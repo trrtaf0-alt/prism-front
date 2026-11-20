@@ -388,12 +388,17 @@ func _interface() -> void:
 	profile.fx_particles = 0.13
 	profile.fx_flash = 0.24
 	profile.fx_shake = 0.36
+	profile.fx_zoom = 0.57
+	profile.fx_warp = 0.68
 	profile.fx_dim = true
 	profile.save_profile()
 	profile.fx_quality = 2
 	profile.fx_dim = false
+	profile.fx_zoom = 0.0
+	profile.fx_warp = 0.0
 	profile.load_profile()
-	check(profile.fx_quality == 0 and is_equal_approx(profile.fx_particles, 0.13) and is_equal_approx(profile.fx_flash, 0.24) and is_equal_approx(profile.fx_shake, 0.36) and profile.fx_dim, "all visual options persist")
+	check(profile.fx_quality == 0 and is_equal_approx(profile.fx_particles, 0.13) and is_equal_approx(profile.fx_flash, 0.24) and is_equal_approx(profile.fx_shake, 0.36) and profile.fx_dim, "existing visual options persist")
+	check(is_equal_approx(profile.fx_zoom, 0.57) and is_equal_approx(profile.fx_warp, 0.68), "camera options persist")
 	profile.fx_quality = 2
 	profile.fx_dim = false
 	profile.fx_particles = 0.85
@@ -403,8 +408,82 @@ func _interface() -> void:
 	ui.close_modal()
 	if "--visual" in OS.get_cmdline_user_args():
 		await _visual_preview(ui)
+	await _camera_effects(ui)
 	ui.queue_free()
 	await process_frame
+
+func _camera_effects(ui) -> void:
+	var profile = root.get_node("Profile")
+	var previous := Vector3(profile.fx_shake, profile.fx_zoom, profile.fx_warp)
+	profile.fx_shake = 1.0
+	profile.fx_zoom = 1.0
+	profile.fx_warp = 1.0
+	ui.start_game()
+	ui.set_process(false)
+	ui.set_physics_process(false)
+	ui.callout_time = 0.0
+	var sim: Battle = ui.battle
+	var camera: BattleCameraFX = ui.camera_fx
+	var focus := Vector2(15.0, 8.0)
+	var tint := Color("#ffca84")
+	var anchor: Transform2D = ui.wave_button.get_global_transform_with_canvas()
+	var cell := Vector2i(2, 4)
+	check(sim.field.tile_at(cell) == ".", "camera fixture uses buildable cell")
+	for i in 36:
+		sim.spawn(2.0 + i * 1.2)
+	ui.toggle_build()
+	await _capture("camera-steady")
+	sim.attack_visual.emit("cataclysm", focus, focus, 10.0, tint, 1.5, 5)
+	camera.update(0.085)
+	check(ui.field.scale.x < 0.97, "cataclysm pulls the camera out")
+	check(ui.wave_button.get_global_transform_with_canvas() == anchor, "camera leaves HUD anchored")
+	var shown: Vector2 = ui.field.transform * FieldView.pixel(Vector2(cell) + Vector2.ONE * 0.5)
+	check(camera.cell_under(shown) == cell, "shifted board resolves the original grid cell")
+	_click(ui, shown)
+	check(sim.occupied.has(cell), "a real click places a tower during the camera kick")
+	if DisplayServer.get_name() != "headless":
+		check(camera._copy.copy_mode == BackBufferCopy.COPY_MODE_VIEWPORT, "lens enables back-buffer sampling during impact")
+		var probe := camera._lens_center + Vector2(83, 21)
+		check(camera.sample_point(probe).distance_to(probe) > 0.5, "warp shifts sampled pixels")
+		check(_click_warped_cell(ui, camera, sim), "a click near a distorted grid line places the tower on the displayed tile")
+	await _capture("camera-impact")
+	camera.update(0.8)
+	check(ui.field.transform.is_equal_approx(Transform2D.IDENTITY) and camera._copy.copy_mode == BackBufferCopy.COPY_MODE_DISABLED, "camera and lens return to rest")
+	sim.mob_visual.emit(&"phase", focus, focus, tint, 1.0)
+	camera.update(0.065)
+	check(ui.field.scale.x > 1.01, "boss phase pushes the camera in")
+	ui.show_pause()
+	check(camera.suspended and ui.field.transform.is_equal_approx(Transform2D.IDENTITY), "pause stabilizes the field immediately")
+	ui.close_modal()
+	profile.fx_shake = 0.0
+	profile.fx_zoom = 0.0
+	profile.fx_warp = 0.0
+	sim.attack_visual.emit("cataclysm", focus, focus, 10.0, tint, 1.5, 5)
+	camera.update(0.085)
+	check(ui.field.transform.is_equal_approx(Transform2D.IDENTITY) and camera._copy.copy_mode == BackBufferCopy.COPY_MODE_DISABLED, "zero-intensity settings disable camera effects")
+	profile.fx_shake = previous.x
+	profile.fx_zoom = previous.y
+	profile.fx_warp = previous.z
+	ui.set_process(true)
+	ui.set_physics_process(true)
+
+func _click_warped_cell(ui, camera: BattleCameraFX, sim: Battle) -> bool:
+	var field: FieldView = ui.field
+	var region := camera._lens_region
+	for y in range(int(region.position.y), int(region.end.y), 5):
+		for x in range(int(region.position.x), int(region.end.x), 5):
+			var point := Vector2(x, y)
+			var expected := camera.cell_under(point)
+			if expected == field.cell_under(point) or sim.field.tile_at(expected) != ".":
+				continue
+			var shown := camera.sample_point(point)
+			var within_cell := (field.transform.affine_inverse() * shown - FieldView.ORIGIN) / FieldView.CELL
+			var fractional := within_cell.posmod(1.0)
+			if fractional.x < 0.025 or fractional.x > 0.975 or fractional.y < 0.025 or fractional.y > 0.975:
+				continue
+			_click(ui, point)
+			return sim.occupied.has(expected)
+	return false
 
 func _visual_preview(ui) -> void:
 	var sim: Battle = ui.battle

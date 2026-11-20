@@ -41,7 +41,6 @@ var _glow_count := 0
 var _particle_count := 0
 var _flash := 0.0
 var _flash_tint := Color.WHITE
-var _tremor := 0.0
 var _time := 0.0
 var _style_counts: Dictionary = {}
 var _tracked_beams: Dictionary = {}
@@ -162,7 +161,6 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	if style in ["cataclysm", "nova", "doom", "collapse_gravity"]:
 		_flash = maxf(_flash, 0.68 if style == "cataclysm" else 0.31)
 		_flash_tint = tint
-		_tremor = maxf(_tremor, 13.0 if style == "cataclysm" else 5.0)
 		_sound.cue(&"heavy")
 	elif style in ["mob_boss_spawn", "mob_phase"]:
 		_sound.cue(&"charge")
@@ -179,14 +177,13 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	else:
 		_sound.cue(&"fire")
 
-func update(delta: float) -> Vector2:
+func update(delta: float) -> void:
 	_time += delta
 	var dim: bool = _preferences.fx_dim
 	if dim != _dim_beams:
 		_dim_beams = dim
 		_beam_material.set_shader_parameter("white_core", 0.18 if dim else 0.60)
 	_flash = maxf(0.0, _flash - delta * 1.80)
-	_tremor = maxf(0.0, _tremor - delta * 17.0)
 	if not _ordinary.is_empty() or not _huge.is_empty() or _line_count + _ring_count + _glow_count + _particle_count + _plate_count > 0:
 		_line_count = 0
 		_ring_count = 0
@@ -204,7 +201,6 @@ func update(delta: float) -> Vector2:
 		_particles.finish(_particle_count)
 		_plates.finish(_plate_count)
 	queue_redraw()
-	return Vector2(sin(_time * 104), cos(_time * 87)) * _tremor * _preferences.fx_shake
 
 func _step_layer(layer: Array[Effect], delta: float) -> void:
 	for i in range(layer.size() - 1, -1, -1):

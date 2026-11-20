@@ -19,6 +19,8 @@ var fx_quality := 3
 var fx_particles := 0.85
 var fx_flash := 0.45
 var fx_shake := 0.35
+var fx_zoom := 0.60
+var fx_warp := 0.55
 var fx_dim := false
 
 func _ready() -> void:
@@ -44,6 +46,8 @@ func load_profile() -> void:
 	fx_particles = 0.85
 	fx_flash = 0.45
 	fx_shake = 0.35
+	fx_zoom = 0.60
+	fx_warp = 0.55
 	fx_dim = false
 	var config := ConfigFile.new()
 	if config.load(file_path) != OK:
@@ -57,6 +61,8 @@ func load_profile() -> void:
 	fx_particles = _volume(config.get_value("visual", "particles", fx_particles), fx_particles)
 	fx_flash = _volume(config.get_value("visual", "flash", fx_flash), fx_flash)
 	fx_shake = _volume(config.get_value("visual", "shake", fx_shake), fx_shake)
+	fx_zoom = _volume(config.get_value("visual", "zoom", fx_zoom if fx_shake > 0.0 else 0.0), fx_zoom)
+	fx_warp = _volume(config.get_value("visual", "warp", fx_warp if fx_shake > 0.0 else 0.0), fx_warp)
 	fx_dim = config.get_value("visual", "dim", fx_dim) == true
 	var saved_mode: Variant = config.get_value("display", "fullscreen", false)
 	fullscreen = saved_mode == true
@@ -98,6 +104,8 @@ func save_profile() -> void:
 	config.set_value("visual", "particles", fx_particles)
 	config.set_value("visual", "flash", fx_flash)
 	config.set_value("visual", "shake", fx_shake)
+	config.set_value("visual", "zoom", fx_zoom)
+	config.set_value("visual", "warp", fx_warp)
 	config.set_value("visual", "dim", fx_dim)
 	var temp := file_path + ".tmp"
 	var error := config.save(temp)

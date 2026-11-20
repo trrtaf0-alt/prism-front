@@ -109,7 +109,7 @@ static func pixel(point: Vector2) -> Vector2:
 	return ORIGIN + point * CELL
 
 func cell_under(point: Vector2) -> Vector2i:
-	return Vector2i(((point - position - ORIGIN) / CELL).floor())
+	return Vector2i(((transform.affine_inverse() * point - ORIGIN) / CELL).floor())
 
 func _draw_floor(canvas: Node2D) -> void:
 	var map := battle.field
@@ -195,7 +195,7 @@ func _process(delta: float) -> void:
 		i -= 1
 	_update_batches()
 	_update_flares()
-	position = advanced_fx.update(delta)
+	advanced_fx.update(delta)
 	queue_redraw()
 	_overlay.queue_redraw()
 	support_fx.queue_redraw()

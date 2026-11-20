@@ -15,6 +15,7 @@ var map := FieldMap.new()
 var map_error := ""
 var battle: Battle
 var field: FieldView
+var camera_fx: BattleCameraFX
 var screen: Control
 var modal: Control
 var modal_kind := ""
@@ -167,7 +168,9 @@ func _drop(node: Node) -> void:
 func _replace_screen() -> void:
 	close_modal()
 	_drop(screen)
+	_drop(camera_fx)
 	_drop(field)
+	camera_fx = null
 	field = null
 	battle = null
 	screen = Control.new()
@@ -225,6 +228,10 @@ func start_game() -> void:
 	field.battle = battle
 	add_child(field)
 	move_child(field, 0)
+	camera_fx = BattleCameraFX.new()
+	add_child(camera_fx)
+	move_child(camera_fx, 1)
+	camera_fx.setup(field, Profile)
 	_make_hud()
 	_update_hud()
 
@@ -454,8 +461,9 @@ func _process(delta: float) -> void:
 	if not game or modal == null:
 		clock += delta
 	if game and modal == null:
+		camera_fx.update(delta)
 		if not battle.lost:
-			field.hovered = field.cell_under(get_local_mouse_position())
+			field.hovered = camera_fx.cell_under(get_local_mouse_position())
 		flash = maxf(0.0, flash - delta * 1.65)
 		_credit_flash = maxf(0.0, _credit_flash - delta)
 		callout_time = maxf(0.0, callout_time - delta)
@@ -502,7 +510,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			building = false
 			selected = NONE
 		elif event.button_index == MOUSE_BUTTON_LEFT:
-			var cell := field.cell_under(make_input_local(event).position)
+			var cell := camera_fx.cell_under(make_input_local(event).position)
 			if battle.occupied.has(cell):
 				selected = cell
 				building = false
@@ -570,6 +578,7 @@ func close_modal() -> void:
 				control.focus_mode = Control.FOCUS_ALL
 	if is_instance_valid(field):
 		field.frozen = false
+		camera_fx.suspend(false)
 
 func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 	close_modal()
@@ -579,6 +588,7 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 			control.focus_mode = Control.FOCUS_NONE
 	if is_instance_valid(field):
 		field.frozen = true
+		camera_fx.suspend(true)
 	var shade := ColorRect.new()
 	shade.color = Color(0.018, 0.020, 0.025, 0.86)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -803,7 +813,7 @@ func _choose_tower(id: String) -> void:
 	_sync_selection()
 
 func show_effect_settings() -> void:
-	var panel := _open_modal("effects_settings", Vector2(692, 638))
+	var panel := _open_modal("effects_settings", Vector2(692, 810))
 	text_at(panel, "전투 효과 설정", 35, 24, 39)
 	text_at(panel, "효과 품질", 38, 108, 22, MUTED)
 	var quality := OptionButton.new()
@@ -815,12 +825,14 @@ func show_effect_settings() -> void:
 	_visual_slider(panel, "파티클 밀도", "fx_particles", 174)
 	_visual_slider(panel, "화면 섬광", "fx_flash", 262)
 	_visual_slider(panel, "화면 흔들림", "fx_shake", 350)
+	_visual_slider(panel, "순간 줌", "fx_zoom", 438)
+	_visual_slider(panel, "충격 왜곡", "fx_warp", 526)
 	var dim := CheckButton.new()
 	dim.text = "강한 밝기 낮추기"
 	dim.button_pressed = Profile.fx_dim
 	dim.toggled.connect(_set_fx_dim)
-	place(dim, panel, Rect2(36, 438, 618, 55))
-	button_at(panel, "설정으로 돌아가기", Rect2(36, 550, 618, 54), show_settings.bind(settings_origin), true).grab_focus()
+	place(dim, panel, Rect2(36, 614, 618, 55))
+	button_at(panel, "설정으로 돌아가기", Rect2(36, 722, 618, 54), show_settings.bind(settings_origin), true).grab_focus()
 
 func _visual_slider(parent: Control, title: String, key: String, y: float) -> void:
 	var value := float(Profile.get(key))
