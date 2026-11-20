@@ -40,6 +40,12 @@ var tower_stats: Label
 var sell_button: Button
 var build_button: Button
 var wave_button: Button
+var boss_panel: Panel
+var boss_title: Label
+var boss_values: Label
+var boss_body: ColorRect
+var boss_shield: ColorRect
+var last_base_damage := 0
 var flash := 0.0
 var toast: Panel
 var toast_text: Label
@@ -64,6 +70,8 @@ func _ready() -> void:
 	map_error = map.load_map(BattleData.read_json(map_path))
 	if not data.towers.error.is_empty() or not data.research.error.is_empty():
 		map_error = "%s %s" % [data.towers.error, data.research.error]
+	if not data.mobs.error.is_empty():
+		map_error = data.mobs.error
 	if not map_error.is_empty():
 		push_error(map_error)
 	show_menu()
@@ -180,7 +188,7 @@ func show_menu() -> void:
 	button_at(screen, "종료", Rect2(132, 775, 418, 62), get_tree().quit)
 	if not map_error.is_empty():
 		text_at(screen, "맵 오류 · " + map_error, 132, 859, 21, PINK)
-	text_at(screen, "v0.2", 132, 977, 19, MUTED)
+	text_at(screen, "v0.3", 132, 977, 19, MUTED)
 	play.grab_focus()
 
 func start_game() -> void:
@@ -198,11 +206,14 @@ func start_game() -> void:
 	wave_callout = ""
 	callout_time = 0.0
 	defeat_delay = 0.0
+	last_base_damage = 0
 	battle = Battle.new(map, data)
 	battle.effect.connect(_battle_effect)
 	battle.wave_started.connect(_wave_started)
 	battle.wave_finished.connect(_wave_finished)
 	battle.defeated.connect(_defeated)
+	battle.base_damaged.connect(_base_damage)
+	battle.mob_visual.connect(_mob_announcement)
 	battle.research.purchased.connect(_research_purchased)
 	field = FieldView.new()
 	field.battle = battle
@@ -256,8 +267,33 @@ func _make_hud() -> void:
 	toast_text = text_at(toast, "", 13, 8, 27, MINT, 468)
 	toast_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	toast.hide()
+	boss_panel = panel_at(screen, Rect2(696, 1015, 792, 53), "#181e2b", "#ab7b54")
+	boss_title = text_at(boss_panel, "", 14, 2, 16, GOLD, 234)
+	boss_values = text_at(boss_panel, "", 250, 2, 16, LIGHT, 524)
+	boss_values.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	panel_at(boss_panel, Rect2(14, 34, 760, 7), "#3d2934", "#3d2934")
+	boss_body = ColorRect.new()
+	boss_body.color = Color("#ff926f")
+	boss_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place(boss_body, boss_panel, Rect2(14, 34, 760, 7))
+	boss_shield = ColorRect.new()
+	boss_shield.color = Color("#69dfff")
+	boss_shield.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place(boss_shield, boss_panel, Rect2(14, 43, 760, 3))
+
+func _update_boss_hud() -> void:
+	boss_panel.visible = not battle.bosses.is_empty()
+	if battle.bosses.is_empty():
+		return
+	var boss := battle.bosses[0]
+	boss_title.text = "%s  ·  %d단계" % [boss.definition.name, boss.mob.phase + 1]
+	var shield_text := "  /  보호막 %d" % boss.shield_hp if boss.shield_hp > 0 else ""
+	boss_values.text = "본체 %d / %d%s" % [boss.health, boss.maximum_health, shield_text]
+	boss_body.size.x = 760.0 * float(boss.health) / float(boss.maximum_health)
+	boss_shield.size.x = 760.0 * float(boss.shield_hp) / maxi(1, boss.shield_max)
 
 func _update_hud() -> void:
+	_update_boss_hud()
 	wave_label.text = str(battle.wave)
 	health_label.text = "%d / %d" % [battle.health, int(data.balance.base_health)]
 	var ratio := float(battle.health) / float(data.balance.base_health)
@@ -403,6 +439,20 @@ func _battle_effect(kind: StringName, _point: Vector2, _direction: Vector2) -> v
 	if kind == &"base":
 		flash = 1.0
 
+func _base_damage(amount: int) -> void:
+	last_base_damage = amount
+	if amount >= 25:
+		wave_callout = "기지 피격  ·  %d 피해" % amount
+		callout_time = 1.6
+
+func _mob_announcement(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color, _life: float) -> void:
+	if kind == &"boss_spawn":
+		wave_callout = "종결 보스 출현"
+		callout_time = 2.7
+	elif kind == &"boss_down":
+		wave_callout = "종결 보스 격파"
+		callout_time = 2.7
+
 func _wave_started(number: int) -> void:
 	Profile.record_wave(number)
 	result.text = ""
@@ -423,7 +473,7 @@ func _defeated(_number: int) -> void:
 	selected = NONE
 	_sync_selection()
 	field.hovered = NONE
-	wave_callout = "기지 코어 붕괴"
+	wave_callout = "기지 코어 붕괴  ·  %d 피해" % last_base_damage
 	callout_time = 0.95
 	defeat_delay = 0.95
 

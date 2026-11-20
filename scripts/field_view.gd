@@ -8,7 +8,6 @@ const PINK := Color("#ff467d")
 const GOLD := Color("#ffc879")
 const GRID := Color("#1b2a3a")
 const MAX_EFFECTS := 160
-const DRONE_TEXTURE := preload("res://assets/drone.png")
 const TURRET_BASE := preload("res://assets/turret_base.png")
 const TURRET_HEAD := preload("res://assets/turret_head.png")
 const BOLT_TEXTURE := preload("res://assets/bolt.png")
@@ -39,15 +38,12 @@ var _turret_color: Color
 var _drone_color: Color
 var _bases: SpriteBatch
 var _heads: SpriteBatch
-var _drones: SpriteBatch
+var _mobs := MobView.new()
 var _bolts: SpriteBatch
 var _overlay: Node2D
 var _sparks: SpriteBatch
 var _rings: SpriteBatch
 var _effect_glows: SpriteBatch
-var _health_back: SpriteBatch
-var _health_front: SpriteBatch
-var _marks: SpriteBatch
 
 func _ready() -> void:
 	_preferences = get_tree().root.get_node("Profile")
@@ -62,10 +58,12 @@ func _ready() -> void:
 	material_mask.shader = NEON_SHADER
 	_bases = SpriteBatch.new(TURRET_BASE, 48.0, material_mask)
 	_heads = SpriteBatch.new(TURRET_HEAD, 48.0, material_mask)
-	_drones = SpriteBatch.new(DRONE_TEXTURE, 48.0, material_mask)
 	_bolts = SpriteBatch.new(BOLT_TEXTURE, 55.0, material_mask)
-	for batch: SpriteBatch in [_bases, _heads, _drones, _bolts]:
-		add_child(batch)
+	add_child(_bases)
+	add_child(_heads)
+	_mobs.setup(material_mask)
+	add_child(_mobs)
+	add_child(_bolts)
 	_overlay = Node2D.new()
 	add_child(_overlay)
 	_overlay.draw.connect(_draw_overlay)
@@ -75,14 +73,12 @@ func _ready() -> void:
 	_rings = SpriteBatch.new(SHOCKWAVE, 2.0, null)
 	var dot := ImageTexture.create_from_image(white)
 	_sparks = SpriteBatch.new(dot, 1.0, null)
-	_health_back = SpriteBatch.new(dot, 1.0, null)
-	_health_front = SpriteBatch.new(dot, 1.0, null)
-	_marks = SpriteBatch.new(dot, 1.0, null)
-	for batch: SpriteBatch in [_health_back, _health_front, _marks, _effect_glows, _rings, _sparks]:
+	for batch: SpriteBatch in [_effect_glows, _rings, _sparks]:
 		add_child(batch)
 	advanced_fx.setup(_glow, _preferences, get_tree().root.get_node("Sound"))
 	add_child(advanced_fx)
 	battle.attack_visual.connect(advanced_fx.capture)
+	battle.mob_visual.connect(advanced_fx.capture_mob)
 	battle.effect.connect(impact)
 
 static func make_glow() -> ImageTexture:
@@ -193,33 +189,7 @@ func _update_batches() -> void:
 		_heads.item(i, at - aim * (tower.recoil * 34.0), aim * scale, tint)
 	_bases.finish()
 	_heads.finish()
-	var count := battle.enemies.size()
-	_drones.begin(count)
-	_health_back.begin(count)
-	_health_front.begin(count)
-	_marks.begin(count)
-	var damaged := 0
-	var marked := 0
-	for i in count:
-		var drone := battle.enemies[i]
-		var color := drone.tint.lerp(Color.WHITE, 0.64 if not _preferences.fx_dim else 0.27) if drone.flash > 0.0 else drone.tint
-		if drone.status.stun_left > 0.0:
-			color = color.lerp(Color("#8fc9ff"), 0.65)
-		var at := pixel(drone.position)
-		_drones.item(i, at, battle.field.heading_at(drone.progress), color)
-		if drone.health < drone.maximum_health:
-			var width := maxf(1.0, 18.0 * drone.health / float(drone.maximum_health))
-			_health_back.item(damaged, at + Vector2(0, -13), Vector2(18, 0), Color("#3a1b34"), 2.0 / 18.0)
-			_health_front.item(damaged, at + Vector2(-9.0 + width * 0.5, -13), Vector2(width, 0), Color("#ffa4bd"), 2.0 / width)
-			damaged += 1
-		if drone.status.mark_stacks > 0:
-			var width := 3.0 + 2.0 * drone.status.mark_stacks
-			_marks.item(marked, at + Vector2(13 + width * 0.5, -13), Vector2(width, 0), Color("#ddb3ff"), 3.0 / width)
-			marked += 1
-	_drones.finish()
-	_health_back.finish(damaged)
-	_health_front.finish(damaged)
-	_marks.finish(marked)
+	_mobs.submit(battle, ORIGIN, _preferences.fx_dim)
 	_bolts.begin(battle.bolts.size())
 	for i in battle.bolts.size():
 		var bolt := battle.bolts[i]

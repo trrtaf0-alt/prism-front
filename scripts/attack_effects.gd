@@ -77,8 +77,12 @@ static func _annulus() -> ArrayMesh:
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface)
 	return mesh
 
+func capture_mob(kind: StringName, start: Vector2, finish: Vector2, tint: Color, life: float) -> void:
+	var radius := 2.7 if kind in [&"boss_spawn", &"boss_down", &"phase"] else 0.65
+	capture("mob_" + String(kind), start, finish, radius, tint, life, 0)
+
 func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint: Color, life: float, _stage: int) -> void:
-	var large := style.begins_with("charge_") or style in ["cataclysm", "nova", "singularity", "collapse_gravity", "doom", "orbit"]
+	var large := style.begins_with("charge_") or style in ["cataclysm", "nova", "singularity", "collapse_gravity", "doom", "orbit", "mob_boss_spawn", "mob_boss_down", "mob_phase"]
 	var layer := _huge if large else _ordinary
 	var limit: int = HUGE_LIMIT if large else LIMITS[_preferences.fx_quality]
 	var from := FIELD.position + start * 48.0
@@ -116,6 +120,14 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 		_flash_tint = tint
 		_tremor = maxf(_tremor, 13.0 if style == "cataclysm" else 5.0)
 		_sound.cue(&"heavy")
+	elif style in ["mob_boss_spawn", "mob_phase"]:
+		_sound.cue(&"charge")
+	elif style == "mob_boss_down":
+		_sound.cue(&"heavy")
+	elif style == "mob_shield_break":
+		_sound.cue(&"arc")
+	elif style.begins_with("mob_"):
+		return
 	elif style.begins_with("charge_"):
 		_sound.cue(&"charge")
 	elif style in ["arc", "storm"]:
@@ -170,6 +182,28 @@ func _render(fx: Effect) -> void:
 	var at := fx.origin
 	var reach := maxf(12, fx.radius * 48.0)
 	match fx.style:
+		"mob_grant", "mob_boost":
+			_beam(at, fx.end, 3.0, Color(tint, fade * 0.78))
+			_ring(fx.end, 16 + 12 * t, tint)
+		"mob_shield_break":
+			_ring(at, 15.0 + 29.0 * t, tint)
+			_hoop(at, 18.0 + 37.0 * t, 6, 0.3 + t * 1.5, tint)
+			_spray(at, 55, tint, t, 13)
+		"mob_divide":
+			for side in 4:
+				var direction := Vector2.from_angle(side * PI * 0.5 + PI * 0.25)
+				var shard := at + direction * (7.0 + 29.0 * t)
+				_hoop(shard, 9.0 * (1.0 - t) + 4.0, 4, side + t, tint)
+			_glow(at, 44, tint)
+		"mob_boss_spawn", "mob_boss_down", "mob_phase":
+			_blast(at, reach * 1.6, tint, t)
+			_hoop(at, 36 + t * 82, 6, _time * 1.3, tint)
+			_hoop(at, 28 + t * 114, 8, -_time * 0.6, Color(tint, fade * 0.64))
+			if fx.style == "mob_boss_down":
+				_spray(at, 153, tint, t, 40)
+		"mob_regen", "mob_brood":
+			_ring(at, 10 + 33 * t, tint)
+			_glow(at, 37 + t * 14, Color(tint, fade * 0.58))
 		"cataclysm":
 			_terminal(fx, t, fade, true)
 		"charge_cataclysm":

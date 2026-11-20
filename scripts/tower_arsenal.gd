@@ -71,7 +71,7 @@ func _cone(sim, tower, _target, def: Dictionary, direction: Vector2, efficiency:
 	_visual(sim, def, tower.position, tower.position + direction * float(def.range), def.spread, 0.20)
 
 func _multi(sim, tower, _target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
-	var targets: Array = sim.enemies if def.global and def.max_targets == 0 else sim.leading_targets(tower.position, def.range, def.global, def.max_targets)
+	var targets: Array = sim.enemies if def.global and def.max_targets == 0 else sim.leading_targets(tower.position, def.range, def.global, def.max_targets, def.get("detect_cloak", false))
 	var stride := maxi(1, ceili(targets.size() / 13.0))
 	for i in range(0, targets.size(), stride):
 		_visual(sim, def, tower.position, targets[i].position, 0.0, 0.16)
@@ -90,10 +90,10 @@ func _chain(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency
 		_visual(sim, def, from, target.position, 0.0, 0.22)
 		from = target.position
 		sim.damage(target, def, efficiency)
-		target = sim.nearest_in_radius(from, def.jump_radius, seen)
+		target = sim.nearest_in_radius(from, def.jump_radius, seen, def.get("detect_cloak", false))
 
 func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float) -> void:
-	var pool: Array = sim.leading_targets(origin, 0.0, true, def.max_targets)
+	var pool: Array = sim.leading_targets(origin, 0.0, true, def.max_targets, def.get("detect_cloak", false))
 	# Group the selected targets into spatially coherent strike columns.
 	var columns: Dictionary = {}
 	for drone in pool:

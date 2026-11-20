@@ -5,6 +5,8 @@ signal effect(kind: StringName, point: Vector2, direction: Vector2)
 signal wave_started(number: int)
 signal wave_finished(number: int, reward: int)
 signal defeated(number: int)
+signal base_damaged(amount: int)
+signal mob_visual(kind: StringName, start: Vector2, finish: Vector2, tint: Color, lifetime: float)
 signal attack_visual(style: String, origin: Vector2, end: Vector2, radius: float, tint: Color, life: float, stage: int)
 
 # All distances are measured in tiles. The display converts them to pixels.
@@ -23,6 +25,26 @@ class Drone:
 	var speed: float
 	var tint: Color
 	var status := StatusEffects.new()
+	var mob := MobAbilities.State.new()
+	var shield_hp := 0
+	var shield_max := 0
+	var shield_source := 0
+	var shield_rearm := 0.0
+	var shield_ready := 0.0
+	var armor := 0.0
+	var control_resist := 0.0
+	var boost_bonus := 0.0
+	var boost_until := 0.0
+	var hidden := false
+	var boss := false
+	var shape := 0
+	var scale := 1.0
+
+	func give_shield(amount: int, source: int, rearm: float) -> void:
+		shield_hp = amount
+		shield_max = amount
+		shield_source = source
+		shield_rearm = rearm
 
 class Turret:
 	var cell: Vector2i
@@ -66,6 +88,14 @@ var enemies: Array[Drone] = []
 var towers: Array[Turret] = []
 var bolts: Array[Bolt] = []
 var occupied := {}
+var bosses: Array[Drone] = []
+var roster_seed := randi()
+
+var _roster: WaveRoster
+var elapsed := 0.0
+var _ability_units: Array[Drone] = []
+var _births: Array[Array] = []
+var _mob_fx_budget := 20
 
 var _spawn_clock := 0.0
 var _buckets: Array[Array] = []
@@ -144,8 +174,9 @@ func start_wave() -> bool:
 	active = true
 	queued = data.wave_count(wave) - 1
 	_spawn_clock = data.spawn_interval(wave)
+	_roster = WaveRoster.new(data.mobs, wave, queued + 1, roster_seed ^ wave)
 	wave_started.emit(wave)
-	spawn()
+	spawn(0.0, _roster.next())
 	return true
 
 func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
@@ -162,7 +193,24 @@ func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
 	drone.tint = Color(str(drone.definition.color))
 	drone.flash = 0.0
 	drone.status.reset()
+	drone.mob.reset(drone.definition, elapsed)
+	drone.give_shield(int(drone.definition.get("shield", 0)), 0, 0.0)
+	drone.shield_ready = 0.0
+	drone.armor = float(drone.definition.get("armor", 0))
+	drone.control_resist = float(drone.definition.get("control_resist", 0))
+	drone.boost_bonus = 0.0
+	drone.boost_until = 0.0
+	drone.hidden = false
+	drone.boss = bool(drone.definition.get("boss", false))
+	drone.shape = maxi(0, EnemyRegistry.SHAPES.find(drone.definition.get("shape", "drone")))
+	drone.scale = float(drone.definition.get("scale", 1.0))
 	enemies.append(drone)
+	if drone.mob.has_periodic():
+		drone.mob.slot = _ability_units.size()
+		_ability_units.append(drone)
+	if drone.boss:
+		bosses.append(drone)
+		mob_effect(&"boss_spawn", drone.position, drone.position, drone.tint, 2.4, true)
 	if is_zero_approx(progress):
 		effect.emit(&"spawn", drone.position, field.heading_at(progress))
 	return drone
@@ -170,8 +218,10 @@ func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
 func tick(delta: float) -> void:
 	if lost:
 		return
+	elapsed += delta
 	_impact_budget = 64
 	_advanced_impact_budget = 4
+	_mob_fx_budget = 20
 	_needs_cleanup = false
 	_update_drones(delta)
 	_update_bolts(delta)
@@ -184,12 +234,15 @@ func tick(delta: float) -> void:
 	_update_towers(delta)
 	if _needs_cleanup:
 		_remove_drones()
+	for drone in _ability_units:
+		MobAbilities.periodic(self, drone, elapsed)
+	_flush_births()
 	if queued > 0:
 		_spawn_clock -= delta
 		while _spawn_clock <= 0.000001 and queued > 0:
 			queued -= 1
 			_spawn_clock += data.spawn_interval(wave)
-			spawn()
+			spawn(0.0, _roster.next())
 	if active and queued == 0 and enemies.is_empty():
 		active = false
 		var reward := data.wave_reward(wave)
@@ -208,9 +261,17 @@ func _update_drones(delta: float) -> void:
 	var last_segment := path.size() - 2
 	for drone in enemies:
 		drone.previous = drone.position
-		var move := drone.speed * delta
+		var mob := drone.mob
+		if mob.cloak_cycle > 0.0:
+			drone.hidden = fposmod(elapsed - mob.spawn_at, mob.cloak_cycle) >= mob.cloak_cycle - mob.hidden_for
+		if mob.acceleration > 0.0:
+			drone.speed = minf(mob.speed_limit, mob.base_speed + (elapsed - mob.spawn_at) * mob.acceleration)
+		if drone.boost_bonus > 0.0 and elapsed >= drone.boost_until:
+			drone.boost_bonus = 0.0
+		var speed := drone.speed * (1.0 + drone.boost_bonus)
+		var move := speed * delta
 		if drone.status.engaged:
-			move = drone.status.step(drone.progress, drone.speed, delta, data.status_rules)
+			move = drone.status.step(drone.progress, speed, delta, data.status_rules)
 		drone.progress = clampf(drone.progress + move, 0.0, _path_length)
 		var segment := mini(floori(drone.progress), last_segment)
 		drone.position = path[segment].lerp(path[segment + 1], drone.progress - segment)
@@ -223,9 +284,9 @@ func _update_drones(delta: float) -> void:
 			_used_buckets.append(i)
 		_buckets[i].append(drone)
 		var leader := _bucket_leaders[i]
-		if drone.progress < _path_length and (leader == null or drone.progress > leader.progress):
+		if not drone.hidden and drone.progress < _path_length and (leader == null or drone.progress > leader.progress):
 			_bucket_leaders[i] = drone
-		if drone.health > 0 and drone.progress < _path_length and (_global_leader == null or drone.progress > _global_leader.progress):
+		if not drone.hidden and drone.health > 0 and drone.progress < _path_length and (_global_leader == null or drone.progress > _global_leader.progress):
 			_global_leader = drone
 
 func _remove_drones() -> void:
@@ -235,7 +296,9 @@ func _remove_drones() -> void:
 		if drone.health <= 0:
 			_recycle_drone(i)
 		elif drone.progress >= _path_length:
-			health = maxi(0, health - drone.health)
+			var remaining := drone.health
+			health = maxi(0, health - remaining)
+			base_damaged.emit(remaining)
 			effect.emit(&"base", drone.position, Vector2.ZERO)
 			_recycle_drone(i)
 			if health == 0:
@@ -248,8 +311,18 @@ func _remove_drones() -> void:
 		i -= 1
 
 func _recycle_drone(index: int) -> void:
-	if _drone_pool.size() < 1024:
-		_drone_pool.append(enemies[index])
+	var drone := enemies[index]
+	var slot := drone.mob.slot
+	if slot >= 0:
+		var last: Drone = _ability_units.back()
+		_ability_units[slot] = last
+		last.mob.slot = slot
+		_ability_units.pop_back()
+		drone.mob.slot = -1
+	if drone.boss:
+		bosses.erase(drone)
+	if _drone_pool.size() < 4096:
+		_drone_pool.append(drone)
 	enemies[index] = enemies.back()
 	enemies.pop_back()
 
@@ -263,7 +336,7 @@ func _update_towers(delta: float) -> void:
 		if enemies.is_empty():
 			tower.field_age = 0.0
 			continue
-		var target := _global_target() if tower.definition.global else _target_in_range(tower)
+		var target := _select_target(tower, tower.definition, true)
 		if target == null:
 			tower.field_age = 0.0
 			continue
@@ -309,7 +382,7 @@ func _update_copy(tower: Turret, delta: float) -> void:
 		if timer > 0.000001 or enemies.is_empty():
 			continue
 		var def := other.definition
-		var target := _global_target() if def.global else _nearest_leading(tower.position, float(def.range))
+		var target := _select_target(tower, def, false)
 		if target == null:
 			tower.mirror_fields.erase(other)
 			continue
@@ -329,15 +402,27 @@ func _update_copy(tower: Turret, delta: float) -> void:
 		if def.ramp > 0.0:
 			tower.mirror_fields[other] = tower.field_age
 
+func _select_target(tower: Turret, def: Dictionary, cached: bool) -> Drone:
+	if def.get("detect_cloak", false):
+		return _nearest_leading(tower.position, float(def.range), def.global, true)
+	var target := _global_target() if def.global else (_target_in_range(tower) if cached else _nearest_leading(tower.position, float(def.range)))
+	if target != null:
+		return target
+	var global_coverage: bool = def.global and (def.attack in ["strike", "singularity"] or def.attack == "multi" and def.max_targets == 0)
+	var local_coverage: bool = def.center == "self" and def.attack in ["field", "pulse"]
+	if global_coverage or local_coverage:
+		return _nearest_leading(tower.position, float(def.range), def.global, true)
+	return target
+
 func _global_target() -> Drone:
-	if not _valid(_global_leader):
+	if not _valid(_global_leader) or _global_leader.hidden:
 		_global_leader = _nearest_leading(Vector2.ZERO, 0.0, true)
 	return _global_leader
 
-func _nearest_leading(origin: Vector2, radius: float, anywhere: bool = false) -> Drone:
+func _nearest_leading(origin: Vector2, radius: float, anywhere: bool = false, detect_cloak: bool = false) -> Drone:
 	var best: Drone
 	for drone in query_radius(origin, radius, anywhere):
-		if best == null or drone.progress > best.progress:
+		if (detect_cloak or not drone.hidden) and (best == null or drone.progress > best.progress):
 			best = drone
 	return best
 
@@ -378,7 +463,7 @@ func _target_in_range(tower: Turret) -> Drone:
 			progress = leader.progress
 		else:
 			for drone: Drone in _buckets[index]:
-				if drone.progress > progress and drone.progress < _path_length and drone.health > 0:
+				if not drone.hidden and drone.progress > progress and drone.progress < _path_length and drone.health > 0:
 					best = drone
 					progress = drone.progress
 	var radius_squared := pow(float(tower.definition.range), 2.0)
@@ -387,7 +472,7 @@ func _target_in_range(tower: Turret) -> Drone:
 		if leader == null or leader.progress <= progress:
 			continue
 		for drone: Drone in _buckets[index]:
-			if drone.progress > progress and drone.progress < _path_length and drone.health > 0 and tower.position.distance_squared_to(drone.position) <= radius_squared:
+			if not drone.hidden and drone.progress > progress and drone.progress < _path_length and drone.health > 0 and tower.position.distance_squared_to(drone.position) <= radius_squared:
 				best = drone
 				progress = drone.progress
 	return best
@@ -397,15 +482,16 @@ func aim_at(origin: Vector2, target: Drone, speed: float = 12.0) -> Vector2:
 	# even through turns. The path sampler clamps the prediction at the exit.
 	var low := 0.0
 	var max_drift := target.status.pull * target.status.pull_left
-	var high := (origin.distance_to(target.position) + max_drift) / maxf(0.001, speed - target.speed)
+	var enemy_speed := target.speed * (1.0 + target.boost_bonus)
+	var high := (origin.distance_to(target.position) + max_drift) / maxf(0.001, speed - enemy_speed)
 	for i in 12:
 		var time := (low + high) * 0.5
-		var future := field.position_at(target.status.predict(target.progress, target.speed, time))
+		var future := field.position_at(target.status.predict(target.progress, enemy_speed, time))
 		if origin.distance_to(future) > BARREL_LENGTH + speed * time:
 			low = time
 		else:
 			high = time
-	var direction := origin.direction_to(field.position_at(target.status.predict(target.progress, target.speed, high)))
+	var direction := origin.direction_to(field.position_at(target.status.predict(target.progress, enemy_speed, high)))
 	return Vector2.RIGHT if direction.is_zero_approx() else direction
 
 func _fire(origin: Vector2, direction: Vector2, definition: Dictionary = {}, target: Drone = null, efficiency: float = 1.0, source: Vector2 = Vector2.ZERO, show: bool = true) -> Bolt:
@@ -439,8 +525,9 @@ func _update_bolts(delta: float) -> void:
 		var bolt := bolts[i]
 		var def := bolt.definition
 		if def.guided:
-			if not _valid(bolt.guided_target) or bolt.guided_target.serial != bolt.target_serial:
-				bolt.guided_target = _nearest_leading(bolt.position, bolt.remaining)
+			var detect: bool = def.get("detect_cloak", false)
+			if not _valid(bolt.guided_target) or bolt.guided_target.serial != bolt.target_serial or (bolt.guided_target.hidden and not detect):
+				bolt.guided_target = _nearest_leading(bolt.position, bolt.remaining, false, detect)
 				bolt.target_serial = bolt.guided_target.serial if bolt.guided_target != null else 0
 			if bolt.guided_target != null:
 				var angle := bolt.position.angle_to_point(bolt.guided_target.position)
@@ -510,6 +597,8 @@ func _collide(from: Vector2, to: Vector2, tick_fraction: float, delta: float, vi
 				var motion := to - from - (drone.position - drone.previous) * tick_fraction
 				var time := sweep(offset, motion, HIT_RADIUS)
 				if time >= 0.0 and time < first:
+					if time == 0.0:
+						return drone
 					first = time
 					hit = drone
 	return hit
@@ -532,39 +621,109 @@ func _damage_drone(drone: Drone, direction: Vector2) -> void:
 func damage(drone: Drone, def: Dictionary, efficiency: float = 1.0, anchor: float = -1.0) -> void:
 	if drone.health <= 0:
 		return
-	if def.shock or def.slow > 0 or def.pull > 0:
-		drone.status.apply(def, data.status_rules, anchor)
 	var amount := maxi(1, roundi(float(def.damage) * efficiency)) if def.damage > 0 else 0
-	_apply_damage(drone, amount, Vector2.ZERO, int(def.stage) >= 2)
+	var control := def if def.shock or def.slow > 0 or def.pull > 0 else {}
+	_apply_damage(drone, amount, Vector2.ZERO, int(def.stage) >= 2, control, anchor)
 
 func barrage(targets: Array, def: Dictionary, efficiency: float, anchor: float = -1.0) -> void:
-	var amount := maxi(1, roundi(float(def.damage) * efficiency))
-	var with_status: bool = def.shock or def.slow > 0 or def.pull > 0
+	var amount := maxi(1, roundi(float(def.damage) * efficiency)) if def.damage > 0 else 0
+	var control := def if def.shock or def.slow > 0 or def.pull > 0 else {}
 	for drone: Drone in targets:
-		if drone.health <= 0:
-			continue
-		if with_status:
-			drone.status.apply(def, data.status_rules, anchor)
-		_apply_damage(drone, amount, Vector2.ZERO, true)
+		_apply_damage(drone, amount, Vector2.ZERO, true, control, anchor)
 
-func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool = false) -> void:
-	if drone.health <= 0 or amount <= 0:
+func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool = false, control: Dictionary = {}, anchor: float = -1.0) -> void:
+	if drone.health <= 0 or (amount <= 0 and control.is_empty()):
 		return
 	if drone.status.mark_stacks > 0:
 		amount = drone.status.boosted_damage(amount)
-	drone.health -= amount
+	if drone.shield_hp > 0 and amount > 0:
+		var absorbed := mini(amount, drone.shield_hp)
+		drone.shield_hp -= absorbed
+		amount -= absorbed
+		if drone.shield_hp == 0:
+			drone.shield_ready = elapsed + drone.shield_rearm
+			drone.shield_source = 0
+			mob_effect(&"shield_break", drone.position, drone.position, Color("#78e4ff"), 0.58)
+	if amount > 0:
+		drone.health -= ceili(amount * (1.0 - drone.armor)) if drone.armor > 0 else amount
 	drone.flash = 0.09
 	var killed := drone.health <= 0
 	if killed:
 		_needs_cleanup = true
 		_credit(int(drone.definition.reward))
 		research.earn(int(drone.definition.get("reward_rp", 0)))
+		var child: String = drone.definition.get("split_to", "")
+		if not child.is_empty():
+			queue_birth(drone.progress, child, EnemyRegistry.SPLIT_COUNT)
+			mob_effect(&"divide", drone.position, drone.position, drone.tint, 0.55)
+		if drone.boss:
+			mob_effect(&"boss_down", drone.position, drone.position, drone.tint, 2.1, true)
+	else:
+		if not control.is_empty():
+			var multiplier := data.mobs.control_multiplier(drone.control_resist, drone.shield_hp > 0)
+			drone.status.apply(control, data.status_rules, anchor, multiplier)
+		if drone.mob.phase < drone.mob.phases.size():
+			MobAbilities.advance_phase(self, drone, elapsed)
 	if advanced and _advanced_impact_budget > 0:
 		_advanced_impact_budget -= 1
 		effect.emit(&"kill" if killed else &"hit", drone.position, direction)
 	elif not advanced and _impact_budget > 0:
 		_impact_budget -= 1
 		effect.emit(&"kill" if killed else &"hit", drone.position, direction)
+
+func queue_birth(progress: float, id: String, count: int) -> void:
+	_births.append([progress, data.mobs.lookup(id), count])
+
+func _flush_births() -> void:
+	# Retired units can be reused after every combat and support query finished.
+	for birth in _births:
+		for i in int(birth[2]):
+			spawn(float(birth[0]), birth[1])
+	_births.clear()
+
+func mob_effect(kind: StringName, start: Vector2, finish: Vector2, tint: Color, lifetime: float, major: bool = false) -> void:
+	if major or _mob_fx_budget > 0:
+		if not major:
+			_mob_fx_budget -= 1
+		mob_visual.emit(kind, start, finish, tint, lifetime)
+
+func apply_support(caster: Drone, config: Dictionary, shield: bool) -> void:
+	var left := int(config.targets)
+	var radius := float(config.range)
+	var squared := radius * radius
+	var padding := Vector2.ONE * (radius + 0.00001)
+	var min_cell := (caster.position - padding).floor()
+	var max_cell := (caster.position + padding).floor()
+	var links := 0
+	var nominal := int(config.get("shield_hp", 0))
+	var rearm := float(config.get("rearm", 0))
+	var bonus := float(config.get("bonus", 0))
+	var duration := float(config.get("duration", 0))
+	for index in _used_buckets:
+		var x := index % field.size.x
+		var y := floori(float(index) / field.size.x)
+		if x < min_cell.x or x > max_cell.x or y < min_cell.y or y > max_cell.y:
+			continue
+		for target: Drone in _buckets[index]:
+			if target == caster or not _valid(target):
+				continue
+			if shield and (target.shield_hp > 0 or target.shield_ready > elapsed or not target.mob.guardian.is_empty() or target.boss):
+				continue
+			if not shield and target.boost_bonus > bonus and target.boost_until > elapsed:
+				continue
+			if caster.position.distance_squared_to(target.position) > squared:
+				continue
+			if shield:
+				target.give_shield(nominal, caster.serial, rearm)
+			else:
+				target.boost_bonus = bonus
+				target.boost_until = maxf(target.boost_until, elapsed + duration)
+			if links < 2:
+				links += 1
+				mob_effect(&"grant" if shield else &"boost", caster.position, target.position, caster.tint, 0.6)
+			left -= 1
+			if left == 0:
+				return
 
 func query_box(first: Vector2, last: Vector2, padding: float = 0.0) -> Array[Drone]:
 	var pad := Vector2.ONE * (padding + 0.00001)
@@ -594,7 +753,7 @@ func query_radius(center: Vector2, radius: float, anywhere: bool = false) -> Arr
 			matches.append(drone)
 	return matches
 
-func leading_targets(center: Vector2, radius: float, anywhere: bool, limit: int) -> Array[Drone]:
+func leading_targets(center: Vector2, radius: float, anywhere: bool, limit: int, detect_cloak: bool = false) -> Array[Drone]:
 	if limit <= 0:
 		return query_radius(center, radius, anywhere)
 	var matched: Array[Drone] = []
@@ -616,18 +775,18 @@ func leading_targets(center: Vector2, radius: float, anywhere: bool, limit: int)
 				_sorted_buckets[index] = ordered
 			bucket = _sorted_buckets[index]
 		for drone: Drone in bucket:
-			if _valid(drone) and (anywhere or drone.position.distance_squared_to(center) <= squared):
+			if _valid(drone) and (detect_cloak or not drone.hidden) and (anywhere or drone.position.distance_squared_to(center) <= squared):
 				matched.append(drone)
 				if matched.size() == limit:
 					return matched
 	return matched
 
-func nearest_in_radius(center: Vector2, radius: float, seen: Dictionary) -> Drone:
+func nearest_in_radius(center: Vector2, radius: float, seen: Dictionary, detect_cloak: bool = false) -> Drone:
 	var nearest: Drone
 	var distance := INF
 	for drone in query_radius(center, radius):
 		var squared := drone.position.distance_squared_to(center)
-		if not seen.has(drone.serial) and squared < distance:
+		if (detect_cloak or not drone.hidden) and not seen.has(drone.serial) and squared < distance:
 			nearest = drone
 			distance = squared
 	return nearest

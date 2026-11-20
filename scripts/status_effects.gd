@@ -30,23 +30,27 @@ func reset() -> void:
 	mark_stacks = 0
 	mark_bonus = 0.0
 
-func shock(rules: Dictionary) -> void:
+func shock(rules: Dictionary, multiplier: float = 1.0) -> void:
 	engaged = true
 	shock_age = 0.0
 	if stun_left <= 0.0 and move_window <= 0.0:
-		stun_left = maxf(rules.shock_minimum, rules.shock_duration * pow(rules.shock_multiplier, resistance))
+		stun_left = maxf(rules.shock_minimum, rules.shock_duration * pow(rules.shock_multiplier, resistance)) * multiplier
 		move_window = float(rules.shock_move_window)
 	resistance = minf(24.0, resistance + 1.0)
 
-func apply(def: Dictionary, rules: Dictionary, gravity_anchor: float) -> void:
+func apply(def: Dictionary, rules: Dictionary, gravity_anchor: float, multiplier: float = 1.0) -> void:
+	if multiplier <= 0.0:
+		return
 	engaged = true
 	if def.shock:
-		shock(rules)
-	if def.slow > 0 and (slow_left <= 0.0 or def.slow >= slow):
-		slow = float(def.slow)
+		shock(rules, multiplier)
+	var slow_strength := float(def.slow) * multiplier
+	if slow_strength > 0 and (slow_left <= 0.0 or slow_strength >= slow):
+		slow = slow_strength
 		slow_left = maxf(slow_left, def.status_time)
-	if def.pull > 0 and gravity_anchor >= 0.0 and (pull_left <= 0.0 or def.pull >= pull):
-		pull = float(def.pull)
+	var pull_strength := float(def.pull) * multiplier
+	if pull_strength > 0 and gravity_anchor >= 0.0 and (pull_left <= 0.0 or pull_strength >= pull):
+		pull = pull_strength
 		pull_left = float(def.status_time)
 		anchor = gravity_anchor
 
