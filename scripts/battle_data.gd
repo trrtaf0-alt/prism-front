@@ -2,6 +2,8 @@ class_name BattleData
 extends RefCounted
 
 const NUMBER_LIMIT: int = 9_000_000_000_000_000
+const FINAL_WAVE := 50
+const CAMPAIGN_RECORD := "campaign_04"
 
 static func read_json(path: String) -> Dictionary:
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
@@ -16,16 +18,28 @@ var towers := TowerRegistry.new(turret, read_json("res://data/towers.json").get(
 var research := ResearchGraph.new(read_json("res://data/research.json").get("nodes", []), towers)
 
 func wave_count(wave: int) -> int:
-	return wave_value(int(balance.first_wave_count), wave)
+	if wave < 1 or wave > FINAL_WAVE:
+		return 0
+	if wave <= 10:
+		return roundi(10.0 * pow(1.2, wave - 1))
+	var k := wave - 10
+	return roundi(52.0 + 8 * k + 0.3 * k * k)
 
 func wave_reward(wave: int) -> int:
-	return wave_value(int(balance.first_wave_reward), wave)
+	return roundi(wave_count(wave) * curve(balance.clearance_per_slot, wave))
 
-func wave_value(first: int, wave: int) -> int:
-	var value := first * pow(float(balance.wave_growth), wave - 1)
-	if not is_finite(value) or value >= NUMBER_LIMIT:
-		return NUMBER_LIMIT
-	return roundi(value)
+func slot_rp_multiplier(wave: int) -> float:
+	return curve(balance.rp_scale, wave)
 
-func spawn_interval(_wave: int) -> float:
-	return maxf(0.001, float(balance.temporary_spawn_interval))
+func spawn_interval(wave: int) -> float:
+	return maxf(0.04, 0.5 * pow(0.95, maxi(0, wave - 1)))
+
+static func curve(anchors: Array, wave: int) -> float:
+	var previous: Array = anchors[0]
+	if wave <= int(previous[0]):
+		return float(previous[1])
+	for point: Array in anchors:
+		if wave <= int(point[0]):
+			return lerpf(float(previous[1]), float(point[1]), float(wave - int(previous[0])) / float(int(point[0]) - int(previous[0])))
+		previous = point
+	return float(previous[1])

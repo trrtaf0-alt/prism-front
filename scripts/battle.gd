@@ -5,6 +5,7 @@ signal effect(kind: StringName, point: Vector2, direction: Vector2)
 signal wave_started(number: int)
 signal wave_finished(number: int, reward: int)
 signal defeated(number: int)
+signal cleared(result: Dictionary)
 signal base_damaged(amount: int)
 signal mob_visual(kind: StringName, start: Vector2, finish: Vector2, tint: Color, lifetime: float)
 signal attack_visual(style: String, origin: Vector2, end: Vector2, radius: float, tint: Color, life: float, stage: int)
@@ -42,6 +43,7 @@ class Drone:
 	var motion_skill := false
 	var phase_pending := false
 	var boss := false
+	var primary := false
 	var shape := 0
 	var scale := 1.0
 
@@ -89,6 +91,17 @@ var wave := 0
 var queued := 0
 var active := false
 var lost := false
+var won := false
+var boss_killed := false
+var boss_escaped := false
+var finale_started := 0.0
+var finale_boss_time := 0.0
+var finale_last_spawn := 0.0
+var primary_spawned := 0
+var total_kills := 0
+var total_credits := 0
+var total_installs := 0
+var terminal_used: Dictionary = {}
 var enemies: Array[Drone] = []
 var towers: Array[Turret] = []
 var bolts: Array[Bolt] = []
@@ -97,6 +110,9 @@ var bosses: Array[Drone] = []
 var roster_seed := randi()
 
 var _roster: WaveRoster
+var _finale: FinaleSchedule
+var _rp_multiplier := 1.0
+var _interval := 0.5
 var elapsed := 0.0
 var _ability_units: Array[Drone] = []
 var _births: Array[Array] = []
@@ -127,6 +143,7 @@ func _init(map: FieldMap, rules: BattleData) -> void:
 	field = map
 	data = rules
 	research = ResearchRun.new(data.research)
+	_finale = FinaleSchedule.new(data.balance.finale)
 	health = int(data.balance.base_health)
 	credits = int(data.balance.starting_credits)
 	_range = float(data.turret.range)
@@ -145,7 +162,7 @@ func _init(map: FieldMap, rules: BattleData) -> void:
 
 func can_install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	var definition := data.towers.lookup(id)
-	return not lost and research.unlocked.has(id) and not definition.is_empty() 		and credits >= int(definition.cost) and field.tile_at(cell) == "." and not occupied.has(cell)
+	return not lost and not won and research.unlocked.has(id) and not definition.is_empty() 		and credits >= int(definition.cost) and field.tile_at(cell) == "." and not occupied.has(cell)
 
 func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	if not can_install(cell, id):
@@ -158,12 +175,15 @@ func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	towers.append(tower)
 	occupied[cell] = tower
 	credits -= int(tower.definition.cost)
+	total_installs += 1
+	if int(tower.definition.stage) == 5:
+		terminal_used[id] = tower.definition.name
 	_refresh_copies()
 	effect.emit(&"install", tower.position, Vector2.ZERO)
 	return true
 
 func sell(cell: Vector2i) -> bool:
-	if lost or not occupied.has(cell):
+	if lost or won or not occupied.has(cell):
 		return false
 	var tower: Turret = occupied[cell]
 	occupied.erase(cell)
@@ -174,16 +194,41 @@ func sell(cell: Vector2i) -> bool:
 	return true
 
 func start_wave() -> bool:
-	if active or lost:
+	if active or lost or won or wave >= BattleData.FINAL_WAVE:
 		return false
-	wave = mini(wave + 1, BattleData.NUMBER_LIMIT)
+	wave += 1
 	active = true
-	queued = data.wave_count(wave) - 1
-	_spawn_clock = data.spawn_interval(wave)
-	_roster = WaveRoster.new(data.mobs, wave, queued + 1, roster_seed ^ wave)
+	primary_spawned = 0
+	queued = data.wave_count(wave)
+	_rp_multiplier = data.slot_rp_multiplier(wave)
+	_interval = data.spawn_interval(wave)
+	_spawn_clock = _interval
+	_roster = WaveRoster.new(data.mobs, wave, queued, roster_seed ^ wave)
+	if wave == BattleData.FINAL_WAVE:
+		finale_started = elapsed
+		_spawn_clock = 0.52
 	wave_started.emit(wave)
-	spawn(0.0, _roster.next())
+	_spawn_primary(1.0)
 	return true
+
+func _spawn_primary(elite_weight: float) -> void:
+	var drone := spawn(0.0, _roster.next(elite_weight))
+	drone.primary = true
+	primary_spawned += 1
+	queued -= 1
+
+func _dispatch(delta: float) -> void:
+	_spawn_clock -= delta
+	while _spawn_clock <= 0.000001 and queued > 0:
+		if wave == BattleData.FINAL_WAVE:
+			var phase := bosses[0].mob.phase if not bosses.is_empty() else 2
+			var stage := _finale.stage(primary_spawned - 1, phase, elapsed - finale_started + _spawn_clock)
+			_spawn_primary(_finale.elite_weight(stage))
+			_spawn_clock += _finale.gap(primary_spawned - 1, stage, enemies.size(), boss_killed)
+			finale_last_spawn = elapsed - finale_started
+		else:
+			_spawn_primary(1.0)
+			_spawn_clock += _interval
 
 func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
 	var drone: Drone = Drone.new() if _drone_pool.is_empty() else _drone_pool.pop_back()
@@ -211,6 +256,7 @@ func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
 	drone.boost_until = 0.0
 	drone.hidden = false
 	drone.boss = bool(drone.definition.get("boss", false))
+	drone.primary = false
 	drone.shape = maxi(0, EnemyRegistry.SHAPES.find(drone.definition.get("shape", "drone")))
 	drone.scale = float(drone.definition.get("scale", 1.0))
 	enemies.append(drone)
@@ -226,7 +272,7 @@ func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
 	return drone
 
 func tick(delta: float) -> void:
-	if lost:
+	if lost or won:
 		return
 	elapsed += delta
 	_impact_budget = 64
@@ -248,16 +294,31 @@ func tick(delta: float) -> void:
 		MobAbilities.periodic(self, drone, elapsed)
 	_flush_births()
 	if queued > 0:
-		_spawn_clock -= delta
-		while _spawn_clock <= 0.000001 and queued > 0:
-			queued -= 1
-			_spawn_clock += data.spawn_interval(wave)
-			spawn(0.0, _roster.next())
+		_dispatch(delta)
 	if active and queued == 0 and enemies.is_empty():
-		active = false
-		var reward := data.wave_reward(wave)
-		_credit(reward)
-		wave_finished.emit(wave, reward)
+		_finish_wave()
+
+func _finish_wave() -> void:
+	active = false
+	var final := wave == BattleData.FINAL_WAVE
+	if final and (not boss_killed or health <= 0):
+		lost = true
+		defeated.emit(wave)
+		return
+	var reward := data.wave_reward(wave)
+	_award_credits(reward)
+	won = final
+	wave_finished.emit(wave, reward)
+	if won:
+		cleared.emit(clear_record())
+
+func clear_record() -> Dictionary:
+	return {
+		"wave": wave, "seconds": elapsed, "finale": elapsed - finale_started,
+		"health": health, "kills": total_kills, "credits": total_credits,
+		"research": research.completed.size(), "installed": total_installs,
+		"terminal": terminal_used.values(),
+	}
 
 func _update_drones(delta: float) -> void:
 	_bucket_leaders.fill(null)
@@ -331,6 +392,8 @@ func _remove_drones() -> void:
 			_recycle_drone(i)
 		elif drone.progress >= _path_length:
 			var remaining := drone.health
+			if drone.primary and drone.boss and wave == BattleData.FINAL_WAVE:
+				boss_escaped = true
 			health = maxi(0, health - remaining)
 			base_damaged.emit(remaining)
 			effect.emit(&"base", drone.position, Vector2.ZERO)
@@ -715,13 +778,18 @@ func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool
 	var killed := drone.health <= 0
 	if killed:
 		_needs_cleanup = true
-		_credit(int(drone.definition.reward))
-		research.earn(int(drone.definition.get("reward_rp", 0)))
+		total_kills += 1
+		_award_credits(int(drone.definition.reward))
+		var base_rp := int(drone.definition.get("reward_rp", 0))
+		research.earn(roundi(base_rp * _rp_multiplier) if drone.primary else base_rp)
 		var child: String = drone.definition.get("split_to", "")
 		if not child.is_empty():
 			queue_birth(drone.progress, child, EnemyRegistry.SPLIT_COUNT)
 			mob_effect(&"divide", drone.position, drone.position, drone.tint, 0.55)
 		if drone.boss:
+			if drone.primary and wave == BattleData.FINAL_WAVE:
+				boss_killed = true
+				finale_boss_time = elapsed - finale_started
 			mob_effect(&"boss_down", drone.position, drone.position, drone.tint, 2.1, true)
 	else:
 		if not control.is_empty():
@@ -885,6 +953,10 @@ func projection(point: Vector2) -> float:
 			closest = distance
 			progress = i + part
 	return progress
+
+func _award_credits(amount: int) -> void:
+	total_credits += amount
+	_credit(amount)
 
 func _credit(amount: int) -> void:
 	credits = mini(BattleData.NUMBER_LIMIT, credits + amount)

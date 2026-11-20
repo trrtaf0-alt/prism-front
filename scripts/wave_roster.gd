@@ -7,20 +7,17 @@ var _ids: Array[String] = []
 var _caps := PackedInt32Array()
 var _total := 0.0
 var _cursor := 0
-var _boss_slot := -1
-var _boss := ""
+var _finale: bool
+var _elite := PackedByteArray()
+var _elite_total := 0.0
 var _rng := RandomNumberGenerator.new()
 
-func _init(registry: EnemyRegistry, number: int, amount: int, seed: int) -> void:
+func _init(registry: EnemyRegistry, number: int, _amount: int, seed: int) -> void:
 	_registry = registry
+	_finale = number == BattleData.FINAL_WAVE
 	_rng.seed = seed
 	for def: Dictionary in registry.definitions.values():
-		if def.child or number < int(def.first_wave):
-			continue
-		if def.boss:
-			if _boss.is_empty() and (number - int(def.first_wave)) % int(def.boss_period) == 0 and amount > 1:
-				_boss = def.id
-				_boss_slot = mini(24, maxi(1, floori(float(amount) / 3.0)))
+		if def.child or def.boss or number < int(def.first_wave):
 			continue
 		if def.weight <= 0:
 			continue
@@ -28,19 +25,25 @@ func _init(registry: EnemyRegistry, number: int, amount: int, seed: int) -> void
 		var weight := float(def.weight) * maturity
 		_ids.append(def.id)
 		_weights.append(weight)
-		_caps.append(int(def.wave_cap) if def.wave_cap > 0 else -1)
+		var limit := int(def.wave_cap) if def.wave_cap > 0 else -1
+		if def.has("intro_cap") and limit > 0:
+			limit = mini(limit, int(def.intro_cap) + floori((number - int(def.first_wave)) / 2.0))
+		_caps.append(limit)
 		_total += weight
+		var elite := int(int(def.first_wave) >= 20)
+		_elite.append(elite)
+		_elite_total += weight * elite
 
-func next() -> Dictionary:
+func next(elite_weight: float = 1.0) -> Dictionary:
 	var slot := _cursor
 	_cursor += 1
+	if slot == 0 and _finale:
+		return _registry.lookup("boss")
 	if slot == 0 or _ids.is_empty():
 		return _registry.lookup("normal")
-	if slot == _boss_slot:
-		return _registry.lookup(_boss)
-	var ticket := _rng.randf() * _total
+	var ticket := _rng.randf() * (_total + _elite_total * (elite_weight - 1.0))
 	for i in _ids.size():
-		ticket -= _weights[i]
+		ticket -= _weights[i] * (elite_weight if _elite[i] else 1.0)
 		if ticket >= 0.0 and i < _ids.size() - 1:
 			continue
 		var def := _registry.lookup(_ids[i])
@@ -48,6 +51,8 @@ func next() -> Dictionary:
 			_caps[i] -= 1
 			if _caps[i] == 0:
 				_total -= _weights[i]
+				_elite_total -= _weights[i] * _elite[i]
+				_elite.remove_at(i)
 				_weights.remove_at(i)
 				_ids.remove_at(i)
 				_caps.remove_at(i)

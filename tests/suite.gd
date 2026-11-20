@@ -59,10 +59,10 @@ func _map_and_economy() -> void:
 	check(sim.install(Vector2i(2, 2)) and sim.credits == 0, "reinstall after sale")
 
 func _wave_rules() -> void:
-	var expected := [10, 12, 14, 17, 21, 25, 30, 36, 43, 52, 62, 74, 89, 107, 128, 154, 185]
+	var expected := [10, 12, 14, 17, 21, 25, 30, 36, 43, 52]
 	for i in expected.size():
 		check(rules.wave_count(i + 1) == expected[i] and rules.wave_reward(i + 1) == expected[i], "original wave formula n=%d" % (i + 1))
-	check(rules.wave_count(2000) == BattleData.NUMBER_LIMIT, "overflow saturates")
+	check(rules.wave_count(51) == 0, "campaign has no wave 51")
 	var sim := Battle.new(arena, rules)
 	check(sim.start_wave() and sim.enemies.size() == 1 and sim.queued == 9, "immediate first drone")
 	check(not sim.start_wave(), "no overlapping waves")

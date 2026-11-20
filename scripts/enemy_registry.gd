@@ -4,7 +4,7 @@ extends RefCounted
 const SHIELD_CONTROL_MULTIPLIER := 0.5
 const SPLIT_COUNT := 4
 const DEFAULTS := {
-	"first_wave": 1, "weight": 0.0, "wave_cap": 0, "boss": false, "boss_period": 0,
+	"first_wave": 1, "weight": 0.0, "wave_cap": 0, "boss": false,
 	"child": false, "generation": 0, "split_to": "", "shield": 0, "armor": 0.0,
 	"control_resist": 0.0, "shape": "drone", "scale": 1.0, "regen": {}, "cloak": {},
 	"acceleration": {}, "guardian": {}, "boost": {}, "brood": {}, "phases": [],
@@ -59,6 +59,9 @@ func _init(base: Dictionary, content: Dictionary) -> void:
 	if original.get("child", true) or original.get("split_to") != "split_1" or definitions.get("split_1", {}).get("split_to") != "split_2":
 		error = "분열형은 원본, 1차, 2차가 모두 필요합니다."
 		return
+	if not bool(definitions.get("boss", {}).get("boss", false)):
+		error = "50웨이브 종결 보스가 필요합니다."
+		return
 	var guardian: Dictionary = definitions.get("guardian", {})
 	if guardian.get("child", true) or guardian.get("guardian", {}).is_empty():
 		error = "수호형에는 지속 보호막 공급이 필요합니다."
@@ -73,9 +76,11 @@ func _register(raw: Dictionary) -> bool:
 		return false
 	if def.first_wave < 0 or def.weight < 0 or def.wave_cap < 0 or def.shield < 0 or def.scale <= 0 or def.shape not in SHAPES:
 		return false
+	if def.has("intro_cap") and (def.intro_cap < 1 or def.intro_cap > def.wave_cap):
+		return false
 	if def.armor < 0 or def.armor >= 1 or def.control_resist < 0 or def.control_resist >= 1 or int(def.generation) not in [0, 1, 2] or float(def.generation) != int(def.generation):
 		return false
-	if def.boss and (def.boss_period < 1 or def.child):
+	if def.boss and (id != "boss" or int(def.first_wave) != BattleData.FINAL_WAVE or def.child):
 		return false
 	for ability in ["regen", "cloak", "acceleration", "guardian", "boost", "brood"]:
 		if not def[ability] is Dictionary:

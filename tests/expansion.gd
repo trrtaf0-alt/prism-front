@@ -55,12 +55,11 @@ func _research() -> void:
 		if id != "survey":
 			check(run.purchase(id), "can purchase " + id)
 	check(run.completed.size() == 100 and run.unlocked.size() == 30 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
-	for pair: Array in [["singularity", 20000], ["spectrum", 40000], ["cataclysm", 90000]]:
+	for pair: Array in [["singularity", 20000], ["spectrum", 30000], ["cataclysm", 45000]]:
 		var cost := graph.minimum_cost(pair[0])
 		check(cost == pair[1], "minimum unique RP cost for %s = %d" % [pair[0], cost])
-		print("Economy: %s requires %d RP; 100%% kills first reach wave %d (%s)" % [pair[0], cost, _first_wave(cost), _clock_text(cost * 0.5)])
 	check(graph.minimum_cost("cataclysm", run.completed) == 0, "completed shared prerequisites not billed")
-	print("Economy: full web %d RP; 100%% kills first reach wave %d" % [full_cost, _first_wave(full_cost)])
+	check(full_cost == 48680, "full web campaign cost")
 	var raw: Array = BattleData.read_json("res://data/research.json").nodes
 	_bad_graph(raw, "survey", "survey", "self reference")
 	_bad_graph(raw, "survey", "imaginary", "missing reference")
@@ -86,17 +85,6 @@ func _bad_graph(raw: Array, target: String, req: Variant, desc: String) -> void:
 		if entry.id == target:
 			entry.requirements = req
 	check(not ResearchGraph.new(entries, rules.towers).error.is_empty(), desc)
-
-func _first_wave(rp: int) -> int:
-	var total := 0
-	var wave := 0
-	while total < rp:
-		wave += 1
-		total += rules.wave_count(wave)
-	return wave
-
-func _clock_text(seconds: float) -> String:
-	return "%dh %02dm of spawns" % [floori(seconds / 3600.0), floori(fmod(seconds, 3600.0) / 60.0)]
 
 func _new_battle() -> Battle:
 	return Battle.new(map, rules)
@@ -186,7 +174,7 @@ func _attack_details() -> void:
 	sim.tick(STEP)
 	var touched := 0
 	for drone in fixture:
-		touched += int(drone.health == 999975 and drone.status.stun_left > 0.0)
+		touched += int(drone.health == 999969 and drone.status.stun_left > 0.0)
 	check(touched == 300, "storm targets exactly 300 globally and applies shock")
 	sim = _new_battle()
 	_unlock(sim)
@@ -241,7 +229,7 @@ func _projectile_behaviors() -> void:
 	sim.tick(STEP)
 	var touched := 0
 	for drone in row:
-		touched += int(drone.health == 998)
+		touched += int(drone.health == 997)
 	check(touched == 8, "piercing line damages exactly eight in order")
 	sim = _new_battle()
 	_unlock(sim)
@@ -251,7 +239,7 @@ func _projectile_behaviors() -> void:
 	sim.occupied[cell].cooldown = 9.0
 	for i in 85:
 		sim.tick(STEP)
-	check(target.health == 980, "returning bolt hits once in each direction")
+	check(target.health == 976, "returning bolt hits once in each direction")
 	sim = _new_battle()
 	_unlock(sim)
 	sim.install(cell, "tower_16")
@@ -262,7 +250,7 @@ func _projectile_behaviors() -> void:
 	for i in 12:
 		sim.tick(STEP)
 		shards = maxi(shards, sim.bolts.size())
-	check(target.health == 988 and shards == 16, "split bolt spawns sixteen real secondary bolts")
+	check(target.health == 985 and shards == 16, "split bolt spawns sixteen real secondary bolts")
 	sim = _new_battle()
 	_unlock(sim)
 	var launcher := Vector2i(3, 4)
@@ -289,7 +277,7 @@ func _projectile_behaviors() -> void:
 	sim.tick(STEP)
 	touched = 0
 	for drone in row:
-		touched += int(drone.health == 960)
+		touched += int(drone.health == 952)
 	check(touched == 64, "photon cap counts hits instead of visible beams")
 
 func _interface() -> void:
@@ -340,7 +328,7 @@ func _interface() -> void:
 	board.overview()
 	await _capture("research-overview")
 	board.select_node("cataclysm", true)
-	check(board.highlighted.size() > 80 and ui.research_screen.buy.disabled, "terminal path and locked condition display")
+	check(board.highlighted.size() > 75 and ui.research_screen.buy.disabled, "terminal path and locked condition display")
 	await _capture("research-network")
 	sim.research.earn(100)
 	board.select_node("survey", true)

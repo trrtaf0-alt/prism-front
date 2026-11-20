@@ -18,9 +18,9 @@
     {
       "id": "armored",
       "name": "중장갑형",
-      "health": 23,
+      "health": 28,
       "speed": 0.68,
-      "reward": 10,
+      "reward": 12,
       "reward_rp": 2,
       "first_wave": 5,
       "weight": 10,
@@ -45,9 +45,9 @@
     {
       "id": "shield",
       "name": "보호막형",
-      "health": 42,
+      "health": 46,
       "speed": 0.91,
-      "reward": 16,
+      "reward": 20,
       "reward_rp": 3,
       "first_wave": 10,
       "weight": 9,
@@ -59,9 +59,9 @@
     {
       "id": "regen",
       "name": "재생형",
-      "health": 65,
+      "health": 66,
       "speed": 0.87,
-      "reward": 20,
+      "reward": 27,
       "reward_rp": 3,
       "first_wave": 11,
       "weight": 7,
@@ -76,7 +76,7 @@
     {
       "id": "split",
       "name": "분열형",
-      "health": 75,
+      "health": 77,
       "speed": 0.9,
       "reward": 25,
       "reward_rp": 2,
@@ -91,9 +91,9 @@
     {
       "id": "cloak",
       "name": "은신형",
-      "health": 45,
+      "health": 49,
       "speed": 1.35,
-      "reward": 20,
+      "reward": 23,
       "reward_rp": 3,
       "first_wave": 13,
       "weight": 8,
@@ -108,9 +108,9 @@
     {
       "id": "resist",
       "name": "저항형",
-      "health": 120,
+      "health": 122,
       "speed": 0.85,
-      "reward": 26,
+      "reward": 32,
       "reward_rp": 4,
       "first_wave": 15,
       "weight": 8,
@@ -122,9 +122,9 @@
     {
       "id": "accelerate",
       "name": "가속형",
-      "health": 160,
+      "health": 168,
       "speed": 1,
-      "reward": 29,
+      "reward": 35,
       "reward_rp": 4,
       "first_wave": 16,
       "weight": 8,
@@ -139,9 +139,9 @@
     {
       "id": "guardian",
       "name": "수호형",
-      "health": 400,
+      "health": 465,
       "speed": 0.8,
-      "reward": 100,
+      "reward": 140,
       "reward_rp": 6,
       "first_wave": 20,
       "weight": 3,
@@ -149,6 +149,7 @@
       "shape": "guardian",
       "scale": 1.22,
       "wave_cap": 8,
+      "intro_cap": 2,
       "guardian": {
         "shield_hp": 1000,
         "range": 4.5,
@@ -160,9 +161,9 @@
     {
       "id": "amplifier",
       "name": "강화형",
-      "health": 300,
+      "health": 358,
       "speed": 1,
-      "reward": 85,
+      "reward": 100,
       "reward_rp": 5,
       "first_wave": 21,
       "weight": 4,
@@ -181,9 +182,9 @@
     {
       "id": "heavy",
       "name": "초중장갑형",
-      "health": 2000,
+      "health": 2300,
       "speed": 0.55,
-      "reward": 185,
+      "reward": 290,
       "reward_rp": 7,
       "first_wave": 23,
       "weight": 3,
@@ -196,9 +197,9 @@
     {
       "id": "brood",
       "name": "증식형",
-      "health": 600,
+      "health": 850,
       "speed": 0.8,
-      "reward": 120,
+      "reward": 170,
       "reward_rp": 5,
       "first_wave": 25,
       "weight": 3,
@@ -215,9 +216,9 @@
     {
       "id": "energy",
       "name": "에너지형",
-      "health": 1500,
+      "health": 2600,
       "speed": 1.05,
-      "reward": 220,
+      "reward": 300,
       "reward_rp": 8,
       "first_wave": 27,
       "weight": 3,
@@ -231,9 +232,9 @@
     {
       "id": "giant",
       "name": "거대형",
-      "health": 10000,
-      "speed": 0.4,
-      "reward": 850,
+      "health": 16000,
+      "speed": 0.48,
+      "reward": 1250,
       "reward_rp": 12,
       "first_wave": 30,
       "weight": 2,
@@ -246,9 +247,9 @@
     {
       "id": "calamity",
       "name": "재앙형",
-      "health": 40000,
-      "speed": 0.65,
-      "reward": 2200,
+      "health": 66000,
+      "speed": 0.62,
+      "reward": 3200,
       "reward_rp": 18,
       "first_wave": 35,
       "weight": 1.5,
@@ -279,21 +280,20 @@
     {
       "id": "boss",
       "name": "종결 보스형",
-      "health": 300000,
-      "speed": 0.3,
-      "reward": 12500,
+      "health": 1620000,
+      "speed": 0.115,
+      "reward": 50000,
       "reward_rp": 25,
-      "first_wave": 45,
+      "first_wave": 50,
       "weight": 0,
       "color": "#ffcb78",
       "shape": "boss",
       "scale": 2.55,
       "boss": true,
-      "shield": 18000,
+      "shield": 65000,
       "armor": 0.12,
-      "boss_period": 5,
       "regen": {
-        "amount": 360,
+        "amount": 460,
         "interval": 2
       },
       "boost": {
@@ -306,10 +306,10 @@
       "phases": [
         {
           "threshold": 0.72,
-          "shield": 14000,
-          "speed_multiplier": 1.3,
+          "shield": 90000,
+          "speed_multiplier": 1.13,
           "regen": {
-            "amount": 720,
+            "amount": 680,
             "interval": 2
           },
           "boost": {
@@ -322,10 +322,10 @@
         },
         {
           "threshold": 0.35,
-          "shield": 22000,
-          "speed_multiplier": 1.75,
+          "shield": 125000,
+          "speed_multiplier": 1.28,
           "regen": {
-            "amount": 1100,
+            "amount": 630,
             "interval": 1.5
           },
           "boost": {
@@ -336,7 +336,8 @@
             "duration": 2
           }
         }
-      ]
+      ],
+      "control_resist": 0.65
     },
     {
       "id": "split_1",

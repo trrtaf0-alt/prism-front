@@ -10,6 +10,9 @@ var effects := 0.75
 var fullscreen := false
 var resolution := 1
 var best := 0
+var campaign_best := 0
+var best_clear: Dictionary = {}
+var fastest_clear := 0.0
 var file_path := PATH
 var save_error := false
 var fx_quality := 2
@@ -34,6 +37,9 @@ func load_profile() -> void:
 	fullscreen = false
 	resolution = 1
 	best = 0
+	campaign_best = 0
+	best_clear = {}
+	fastest_clear = 0.0
 	fx_quality = 2
 	fx_particles = 0.85
 	fx_flash = 0.45
@@ -59,6 +65,16 @@ func load_profile() -> void:
 	var saved_best: Variant = config.get_value("record", "best", 0)
 	if saved_best is int and saved_best >= 0:
 		best = mini(saved_best, BattleData.NUMBER_LIMIT)
+	var section := BattleData.CAMPAIGN_RECORD
+	var recent: Variant = config.get_value(section, "wave", 0)
+	if recent is int:
+		campaign_best = clampi(recent, 0, BattleData.FINAL_WAVE)
+	var record: Variant = config.get_value(section, "best_clear", {})
+	if record is Dictionary and _valid_clear(record):
+		best_clear = record
+	var speed: Variant = config.get_value(section, "fastest_clear", 0.0)
+	if (speed is float or speed is int) and is_finite(float(speed)) and speed > 0 and not best_clear.is_empty():
+		fastest_clear = minf(float(speed), float(best_clear.seconds))
 
 func _volume(value: Variant, fallback: float) -> float:
 	if (value is int or value is float) and is_finite(float(value)):
@@ -72,6 +88,10 @@ func save_profile() -> void:
 	config.set_value("display", "fullscreen", fullscreen)
 	config.set_value("display", "resolution", resolution)
 	config.set_value("record", "best", best)
+	var section := BattleData.CAMPAIGN_RECORD
+	config.set_value(section, "wave", campaign_best)
+	config.set_value(section, "best_clear", best_clear)
+	config.set_value(section, "fastest_clear", fastest_clear)
 	config.set_value("visual", "quality", fx_quality)
 	config.set_value("visual", "particles", fx_particles)
 	config.set_value("visual", "flash", fx_flash)
@@ -86,9 +106,26 @@ func save_profile() -> void:
 		push_warning("설정 및 기록을 저장할 수 없습니다. 오류 %d" % error)
 
 func record_wave(wave: int) -> void:
-	if wave > best:
-		best = wave
+	if wave > best or wave > campaign_best:
+		best = maxi(wave, best)
+		campaign_best = maxi(campaign_best, mini(wave, BattleData.FINAL_WAVE))
 		save_profile()
+
+func record_clear(record: Dictionary) -> void:
+	if not _valid_clear(record):
+		return
+	campaign_best = BattleData.FINAL_WAVE
+	best = maxi(best, campaign_best)
+	if best_clear.is_empty() or record.health > best_clear.health or (record.health == best_clear.health and record.seconds < best_clear.seconds):
+		best_clear = record.duplicate(true)
+	if fastest_clear <= 0.0 or float(record.seconds) < fastest_clear:
+		fastest_clear = float(record.seconds)
+	save_profile()
+
+func _valid_clear(record: Dictionary) -> bool:
+	var seconds: Variant = record.get("seconds")
+	var health: Variant = record.get("health")
+	return record.get("wave") == BattleData.FINAL_WAVE and health is int and health > 0 and health <= 100 and (seconds is float or seconds is int) and is_finite(float(seconds)) and seconds > 0
 
 func apply_audio() -> void:
 	_set_bus(0, master)

@@ -181,14 +181,14 @@ func show_menu() -> void:
 	place(icon, screen, Rect2(128, 108, 58, 58))
 	text_at(screen, "PRISM FRONT", 208, 116, 31, MINT)
 	text_at(screen, "프리즘\n방어선", 125, 209, 102)
-	text_at(screen, "포탑을 배치하고 에너지 코어를 지키세요.", 131, 520, 26, MUTED)
+	text_at(screen, "50웨이브 동안 에너지 코어를 지키세요.", 131, 520, 26, MUTED)
 	var play := button_at(screen, "게임 시작", Rect2(132, 615, 418, 68), start_game, true)
 	play.disabled = not map_error.is_empty()
 	button_at(screen, "설정", Rect2(132, 698, 418, 62), show_settings.bind("menu"))
 	button_at(screen, "종료", Rect2(132, 775, 418, 62), get_tree().quit)
 	if not map_error.is_empty():
 		text_at(screen, "맵 오류 · " + map_error, 132, 859, 21, PINK)
-	text_at(screen, "v0.3", 132, 977, 19, MUTED)
+	text_at(screen, "v0.4", 132, 977, 19, MUTED)
 	play.grab_focus()
 
 func start_game() -> void:
@@ -212,6 +212,7 @@ func start_game() -> void:
 	battle.wave_started.connect(_wave_started)
 	battle.wave_finished.connect(_wave_finished)
 	battle.defeated.connect(_defeated)
+	battle.cleared.connect(_cleared)
 	battle.base_damaged.connect(_base_damage)
 	battle.mob_visual.connect(_mob_announcement)
 	battle.research.purchased.connect(_research_purchased)
@@ -294,7 +295,7 @@ func _update_boss_hud() -> void:
 
 func _update_hud() -> void:
 	_update_boss_hud()
-	wave_label.text = str(battle.wave)
+	wave_label.text = "%d / %d" % [battle.wave, BattleData.FINAL_WAVE]
 	health_label.text = "%d / %d" % [battle.health, int(data.balance.base_health)]
 	var ratio := float(battle.health) / float(data.balance.base_health)
 	health_bar.size.x = 140 * ratio
@@ -305,14 +306,23 @@ func _update_hud() -> void:
 	_credits_shown = battle.credits
 	credits_label.text = str(battle.credits)
 	credits_label.modulate = Color.WHITE.lerp(Color(1.45, 1.4, 1.22), _credit_flash)
-	wave_button.disabled = battle.active or battle.lost
-	if battle.lost:
-		status.text = "기지 코어 소실"
+	wave_button.disabled = battle.active or battle.lost or battle.won
+	if battle.won:
+		status.text = "최종 방어 성공"
+	elif battle.lost:
+		status.text = "방어 실패"
 	elif battle.active:
 		status.text = "남은 적  %d" % (battle.queued + battle.enemies.size())
 	else:
 		status.text = "다음 적  %d" % data.wave_count(battle.wave + 1)
-	wave_button.text = "교전 중" if battle.active else "웨이브 %d 시작" % (battle.wave + 1)
+	if battle.won or battle.lost:
+		wave_button.text = "작전 종료"
+	elif battle.active:
+		wave_button.text = "최종 보스전" if battle.wave == BattleData.FINAL_WAVE else "교전 중"
+	elif battle.wave == BattleData.FINAL_WAVE - 1:
+		wave_button.text = "50웨이브  ·  최종 보스"
+	else:
+		wave_button.text = "웨이브 %d 시작" % (battle.wave + 1)
 	var blueprint := data.towers.lookup(build_id)
 	var cost := int(blueprint.cost)
 	rp_label.text = str(battle.research.points)
@@ -473,7 +483,7 @@ func _defeated(_number: int) -> void:
 	selected = NONE
 	_sync_selection()
 	field.hovered = NONE
-	wave_callout = "기지 코어 붕괴  ·  %d 피해" % last_base_damage
+	wave_callout = "종결 보스 탈출" if battle.boss_escaped and battle.health > 0 else "기지 코어 붕괴  ·  %d 피해" % last_base_damage
 	callout_time = 0.95
 	defeat_delay = 0.95
 
@@ -517,9 +527,41 @@ func show_pause() -> void:
 	button_at(panel, "다시 시작", Rect2(36, 276, 408, 54), start_game)
 	button_at(panel, "메인 메뉴", Rect2(36, 338, 408, 54), show_menu)
 
+func _cleared(record: Dictionary) -> void:
+	Profile.record_clear(record)
+	building = false
+	_sync_selection()
+	var panel := _open_modal("victory", Vector2(900, 660))
+	text_at(panel, "50웨이브 클리어", 42, 28, 47, MINT)
+	text_at(panel, "종결 보스를 격파하고 기지 코어를 지켰습니다.", 43, 103, 21, LIGHT)
+	var stats := [
+		["총 플레이 시간", _duration(record.seconds)], ["최종 보스전", _duration(record.finale)],
+		["남은 기지 HP", str(record.health)], ["총 처치", str(record.kills)],
+		["획득 재화", str(record.credits)], ["완료 연구", "%d / 100" % int(record.research)],
+		["타워 설치", "%d회" % int(record.installed)], ["최단 기록", _duration(Profile.fastest_clear)],
+	]
+	for i in stats.size():
+		var x := 44 + int(i % 4) * 205
+		var y := 170 + floori(i / 4.0) * 110
+		text_at(panel, stats[i][0], x, y, 18, MUTED)
+		text_at(panel, stats[i][1], x, y + 30, 29, LIGHT)
+	text_at(panel, "설치한 종결 타워", 44, 402, 19, MUTED)
+	var terminal := " · ".join(PackedStringArray(record.terminal))
+	text_at(panel, terminal if not terminal.is_empty() else "없음", 44, 438, 23, GOLD, 812)
+	if Profile.save_error:
+		text_at(panel, "클리어 기록을 저장하지 못했습니다.", 44, 503, 18, PINK)
+	else:
+		text_at(panel, "최고 방어 기록  ·  기지 HP %d" % Profile.best_clear.health, 44, 503, 18, MUTED)
+	button_at(panel, "다시 시작", Rect2(44, 564, 390, 62), start_game, true).grab_focus()
+	button_at(panel, "메인 메뉴", Rect2(466, 564, 390, 62), show_menu)
+
+func _duration(seconds: float) -> String:
+	var whole := maxi(0, floori(seconds))
+	return "%02d:%02d:%02d" % [floori(whole / 3600.0), floori(whole / 60.0) % 60, whole % 60]
+
 func show_game_over() -> void:
 	var panel := _open_modal("defeat", Vector2(522, 412))
-	text_at(panel, "게임 오버", 36, 27, 47, PINK)
+	text_at(panel, "보스 탈출" if battle.boss_escaped and battle.health > 0 else "게임 오버", 36, 27, 47, PINK)
 	text_at(panel, "도달 웨이브", 39, 116, 19, MUTED)
 	text_at(panel, "최고 기록", 280, 116, 19, MUTED)
 	text_at(panel, str(battle.wave), 39, 148, 31, LIGHT, 222)
@@ -548,17 +590,20 @@ func show_settings(return_to: String) -> void:
 	place(sizes, panel, Rect2(278, 346, 306, 44))
 	mode.item_selected.connect(_set_fullscreen.bind(sizes))
 	sizes.item_selected.connect(_set_resolution)
-	text_at(panel, "최고 웨이브", 36, 423, 21, MUTED)
-	var best_label := text_at(panel, str(Profile.best), 278, 418, 26, GOLD, 306)
+	text_at(panel, "캠페인 최고 웨이브", 36, 423, 21, MUTED)
+	var best_label := text_at(panel, "%d / 50" % Profile.campaign_best, 278, 418, 26, GOLD, 306)
 	best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	var message := text_at(panel, "", 36, 467, 17, PINK, 548)
+	var record_text := "50웨이브 미클리어" if Profile.best_clear.is_empty() else "최고 기지 HP %d  ·  최단 %s" % [Profile.best_clear.health, _duration(Profile.fastest_clear)]
+	if Profile.best > Profile.campaign_best:
+		record_text += "  ·  이전 최고 %d" % Profile.best
 	if Profile.save_error:
-		message.text = "설정을 저장할 수 없습니다."
+		record_text = "설정을 저장할 수 없습니다."
+	text_at(panel, record_text, 36, 467, 17, PINK if Profile.save_error else MUTED, 548)
 	button_at(panel, "전투 효과 설정", Rect2(36, 514, 266, 56), show_effect_settings)
 	button_at(panel, "닫기", Rect2(318, 514, 266, 56), _leave_settings, true).grab_focus()
 
 func can_open_research() -> bool:
-	return game and not battle.lost and (not battle.active or bool(data.balance.research_available_during_wave))
+	return game and not battle.lost and not battle.won and (not battle.active or bool(data.balance.research_available_during_wave))
 
 func show_research(tower_id: String = "") -> void:
 	if not can_open_research():

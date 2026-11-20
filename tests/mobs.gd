@@ -52,7 +52,7 @@ func _registry() -> void:
 		var unit := sim.spawn(7.0, def)
 		sim.tick(STEP)
 		_check(unit.progress > 7.0 and unit.position.is_equal_approx(map.position_at(unit.progress)), "valid route " + str(def.id))
-		sim._apply_damage(unit, 1_000_000, Vector2.ZERO)
+		sim._apply_damage(unit, 10_000_000, Vector2.ZERO)
 		sim.tick(STEP)
 		_check(sim.credits == 50 + int(def.reward) and sim.research.points == int(def.reward_rp), "exact separate bounty " + str(def.id))
 		sim = _fresh()
@@ -61,7 +61,7 @@ func _registry() -> void:
 		sim.base_damaged.connect(func(amount: int): leaks.append(amount))
 		sim.spawn(map.length(), def)
 		sim.tick(STEP)
-		_check(leaks == [int(def.health)] and sim.health == 999_999 - int(def.health) and sim.enemies.is_empty(), "raw body leak without shield or births " + str(def.id))
+		_check(leaks == [int(def.health)] and sim.health == maxi(0, 999_999 - int(def.health)) and sim.enemies.is_empty(), "raw body leak without shield or births " + str(def.id))
 		_check(sim.credits == 50 and sim.research.points == 0, "no leak reward " + str(def.id))
 	_check(originals == 18 and rules.mobs.definitions.size() == 21, "18 main enemies and three child definitions")
 	var base := rules.mobs.lookup("normal")
@@ -92,7 +92,7 @@ func _damage_and_control() -> void:
 	var control := rules.towers.lookup("tower_01").duplicate()
 	control.merge({"shock": true, "slow": 0.4, "pull": 1.6, "status_time": 1.0}, true)
 	sim.damage(barrier, control, 1.0, 2.0)
-	_check(barrier.health == 42 and barrier.shield_hp == 24, "shield takes full incoming damage first")
+	_check(barrier.health == 46 and barrier.shield_hp == 24, "shield takes full incoming damage first")
 	_check(is_equal_approx(barrier.status.stun_left, 0.1) and is_equal_approx(barrier.status.slow, 0.20) and is_equal_approx(barrier.status.pull, 0.8), "shield halves all three impairments")
 	barrier.status.reset()
 	barrier.status.resistance = 2.0
@@ -102,7 +102,7 @@ func _damage_and_control() -> void:
 	barrier.status.reset()
 	control.damage = 17
 	sim.damage(barrier, control, 1.0, 2.0)
-	_check(barrier.health == 31 and barrier.shield_hp == 0, "breaking hit sends exact overflow to body")
+	_check(barrier.health == 35 and barrier.shield_hp == 0, "breaking hit sends exact overflow to body")
 	_check(is_equal_approx(barrier.status.stun_left, 0.2) and is_equal_approx(barrier.status.slow, 0.4) and is_equal_approx(barrier.status.pull, 1.6), "breaking hit applies full control")
 	var innate := sim.spawn(4.0, rules.mobs.lookup("resist"))
 	control.damage = 1
@@ -115,7 +115,7 @@ func _damage_and_control() -> void:
 	var armored := sim.spawn(4.0, rules.mobs.lookup("armored"))
 	armored.give_shield(3, 7, 5)
 	sim._apply_damage(armored, 13, Vector2.ZERO)
-	_check(armored.shield_hp == 0 and armored.health == 14, "armor applies to body overflow only")
+	_check(armored.shield_hp == 0 and armored.health == 19, "armor applies to body overflow only")
 
 func _exit_collision() -> void:
 	var exit := map.path[map.path.size() - 1]
@@ -141,8 +141,8 @@ func _guardian() -> void:
 	_check(first.shield_hp == 0 and second.shield_hp == 0 and outside.shield_hp == 0, "guardians exclude each other and distant targets")
 	var shock := rules.towers.lookup("tower_06")
 	sim.damage(ally, shock)
-	_check(ally.health == 5 and ally.shield_hp == 998 and is_equal_approx(ally.status.stun_left, 0.1), "guarded normal inherits shield rules")
-	sim._apply_damage(ally, 998, Vector2.ZERO)
+	_check(ally.health == 5 and ally.shield_hp == 995 and is_equal_approx(ally.status.stun_left, 0.1), "guarded normal inherits shield rules")
+	sim._apply_damage(ally, 995, Vector2.ZERO)
 	_advance(sim, 180)
 	_check(ally.shield_hp == 0, "five second rearm blocks next pulse")
 	_advance(sim, 180)
@@ -162,8 +162,8 @@ func _split() -> void:
 	sim.queued = 0
 	sim._apply_damage(sim.enemies[0], 5, Vector2.ZERO)
 	var parent := sim.spawn(5.25, rules.mobs.lookup("split"))
-	sim._apply_damage(parent, 75, Vector2.ZERO)
-	sim._apply_damage(parent, 75, Vector2.ZERO)
+	sim._apply_damage(parent, 77, Vector2.ZERO)
+	sim._apply_damage(parent, 77, Vector2.ZERO)
 	sim.tick(STEP)
 	_check(sim.active and sim.enemies.size() == 4, "four first children hold wave open")
 	var stage_one := sim.enemies.duplicate()
@@ -200,7 +200,7 @@ func _periodic() -> void:
 	hunter.detect_cloak = true
 	_check(sim._select_target(fake, hunter, false) == cloak, "detector can acquire hidden enemy")
 	sim._apply_damage(cloak, 4, Vector2.ZERO)
-	_check(cloak.health == 41, "concealment does not block area or existing hits")
+	_check(cloak.health == 45, "concealment does not block area or existing hits")
 	_advance(sim, 100)
 	_check(not cloak.hidden and regen.health == regen.maximum_health, "cloak ends and healing caps")
 	_advance(sim, 1150)
@@ -239,29 +239,28 @@ func _rosters() -> void:
 			correct = correct and def.id == replay.next().id and not def.child and def.first_wave <= wave
 			counts[def.id] = counts.get(def.id, 0) + 1
 			rp += int(def.reward_rp)
-		_check(correct and total == roundi(10 * pow(1.2, wave - 1)), "deterministic exact wave " + str(wave))
+		_check(correct and total == (roundi(10 * pow(1.2, wave - 1)) if wave <= 10 else roundi(52 + 8 * (wave - 10) + 0.3 * pow(wave - 10, 2))), "deterministic exact wave " + str(wave))
 		_check(counts.get("normal", 0) > 0 and (wave > 4 or counts.size() == 1), "ordinary enemies remain present " + str(wave))
-		_check(counts.get("boss", 0) == int(wave >= 45 and wave % 5 == 0), "one scheduled boss when eligible " + str(wave))
+		_check(counts.get("boss", 0) == int(wave == 50), "one scheduled boss when eligible " + str(wave))
 		for id: String in counts:
 			var cap := int(rules.mobs.lookup(id).wave_cap)
 			_check(cap == 0 or counts[id] <= cap, "type cap " + id)
 		print("Wave %d roster: %d scheduled, %.3f RP per kill, %d types" % [wave, total, float(rp) / total, counts.size()])
 	var sim := _fresh()
-	sim.wave = 44
+	sim.wave = 49
 	sim.start_wave()
-	_advance(sim, 720)
-	_check(sim.bosses.size() == 1 and sim.queued == rules.wave_count(45) - 25, "actual wave 45 schedules boss at slot 25 at fixed 0.5 s")
+	_check(sim.bosses.size() == 1 and sim.queued == 851, "actual wave 50 immediately spawns exactly one boss")
 
 func _boss() -> void:
 	var sim := _fresh()
 	var boss := sim.spawn(27.0, rules.mobs.lookup("boss"))
-	_check(boss.maximum_health == 300000 and boss.shield_hp == 18000 and sim.bosses.size() == 1, "boss stats and runtime tracking")
-	sim._apply_damage(boss, 138000, Vector2.ZERO)
-	_check(boss.mob.phase == 1 and boss.shield_hp == 14000 and is_equal_approx(boss.speed, 0.39), "phase two shield and movement")
-	sim._apply_damage(boss, 132000, Vector2.ZERO)
-	_check(boss.mob.phase == 2 and boss.shield_hp == 22000 and is_equal_approx(boss.speed, 0.525) and boss.mob.regen.amount == 1100, "phase three support and regeneration")
+	_check(boss.maximum_health == 1620000 and boss.shield_hp == 65000 and sim.bosses.size() == 1, "boss stats and runtime tracking")
+	sim._apply_damage(boss, 585000, Vector2.ZERO)
+	_check(boss.mob.phase == 1 and boss.shield_hp == 90000 and is_equal_approx(boss.speed, 0.115 * 1.13), "phase two shield and movement")
+	sim._apply_damage(boss, 780000, Vector2.ZERO)
+	_check(boss.mob.phase == 2 and boss.shield_hp == 125000 and is_equal_approx(boss.speed, 0.115 * 1.28) and boss.mob.regen.amount == 630, "phase three support and regeneration")
 	_advance(sim, 90)
-	_check(boss.mob.phase == 2 and boss.health > 90560, "boss heals in phase without reverting")
+	_check(boss.mob.phase == 2 and boss.health > 555200, "boss heals in phase without reverting")
 	sim = _fresh()
 	var leaks: Array[int] = []
 	sim.base_damaged.connect(func(amount: int): leaks.append(amount))
@@ -275,7 +274,7 @@ func _crowd() -> void:
 	for i in 250:
 		sim.spawn(5.0 + i * 0.023, rules.mobs.lookup("split"))
 	for unit in sim.enemies:
-		sim._apply_damage(unit, 75, Vector2.ZERO)
+		sim._apply_damage(unit, 77, Vector2.ZERO)
 	sim.tick(STEP)
 	_check(sim.enemies.size() == 1000, "mass birth first generation")
 	for unit in sim.enemies:
@@ -300,7 +299,7 @@ func _interface() -> void:
 	for i in ids.size():
 		sim.spawn(i * 2.6 + 2.0, rules.mobs.lookup(ids[i]))
 	var boss := sim.bosses[0]
-	sim._apply_damage(boss, 138000, Vector2.ZERO)
+	sim._apply_damage(boss, 585000, Vector2.ZERO)
 	_advance(sim, 190)
 	ui._update_hud()
 	_check(ui.boss_panel.visible and ui.boss_title.text.contains("2단계") and ui.boss_values.text.contains("보호막"), "boss phase, health and shield readout")
