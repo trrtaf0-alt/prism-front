@@ -1,7 +1,7 @@
 class_name ResearchGraph
 extends RefCounted
 
-const ZONES := ["시작 허브", "초반", "중반", "후반", "극후반", "종결"]
+const ZONES := ["허브", "1단계", "2단계", "3단계", "4단계", "5단계"]
 const LANES := ["탄도 · 관통", "연사 · 다중", "에너지 · 전기", "광역 · 폭발", "제어 · 지원"]
 const COLORS := ["#f5c078", "#6ddfc4", "#7dcaff", "#ff9a9c", "#c9a9ff"]
 

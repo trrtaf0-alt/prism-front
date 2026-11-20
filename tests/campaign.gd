@@ -142,8 +142,16 @@ func _ui_and_record() -> void:
 		ui.set_process(true)
 	ui.toggle_build()
 	sim.wave = 49
+	ui._update_hud()
+	check(ui.forecast.text.begins_with("보스 1 · 지원군 851"), "wave 50 forecast identifies the boss and escorts concisely")
+	ui.wave_callout = "이전 알림"
+	ui.callout_time = 1.0
+	ui.toast.show()
 	sim.elapsed = 2010.0
 	sim.start_wave()
+	ui._update_hud()
+	check(ui.wave_callout.is_empty() and ui.callout_time == 0.0 and not ui.toast.visible, "the boss entrance clears the prior toast and does not open a new one")
+	check(ui.boss_panel.visible and ui.boss_title.text == "보스  ·  1단계" and ui.wave_button.text == "보스전", "boss information stays in the health HUD")
 	check(sound.music_track == &"boss", "real wave 50 boss spawn selects the boss score")
 	if DisplayServer.get_name() != "headless":
 		var patrol: AudioStreamPlayer = sound._music[&"patrol"]
@@ -155,6 +163,10 @@ func _ui_and_record() -> void:
 		ui.set_physics_process(false)
 		await create_timer(0.75).timeout
 		check(not patrol.playing and boss.playing and boss.get_playback_position() > 0.0 and boss.volume_linear > 0.5, "fade completes and boss playback advances")
+		if "--visual" in OS.get_cmdline_user_args():
+			await RenderingServer.frame_post_draw
+			var file := ProjectSettings.globalize_path("res://reports/boss-entrance.png")
+			check(root.get_texture().get_image().save_png(file) == OK, "boss entrance captured without a popup")
 		var music_bus := AudioServer.get_bus_index("Music")
 		var capture := AudioEffectCapture.new()
 		AudioServer.add_bus_effect(music_bus, capture)
@@ -169,6 +181,7 @@ func _ui_and_record() -> void:
 		ui.set_physics_process(true)
 	sim._apply_damage(sim.bosses[0], 9_000_000, Vector2.ZERO)
 	check(sound.music_track == &"patrol" and sim.active, "boss death returns to normal music while escorts remain")
+	check(ui.wave_callout == "보스 격파", "boss kill keeps a concise combat confirmation")
 	sim.queued = 0
 	_drain(sim)
 	check(ui.modal_kind == "victory" and ui.wave_button.disabled and not ui.can_open_research(), "victory UI differs from defeat and locks play")

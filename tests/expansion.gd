@@ -317,6 +317,7 @@ func _interface() -> void:
 	ui._physics_process(STEP)
 	check(first.progress == progress and ui.field.frozen, "opening research pauses combat by default")
 	check(ui.research_screen.board._states.size() == 100, "board contains all nodes")
+	check(ui.research_screen._zone_buttons[0].text == "허브" and ui.research_screen._zone_buttons[5].text == "5단계", "research navigation uses concise stage labels")
 	var board: ResearchBoard = ui.research_screen.board
 	board.overview()
 	check(board.bounds.size.x * board.zoom < board.size.x, "research overview fits full network")

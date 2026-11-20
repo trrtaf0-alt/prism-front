@@ -230,7 +230,7 @@ func start_game() -> void:
 	battle.defeated.connect(_defeated)
 	battle.cleared.connect(_cleared)
 	battle.base_damaged.connect(_base_damage)
-	battle.mob_visual.connect(_mob_announcement)
+	battle.mob_visual.connect(_boss_event)
 	battle.research.purchased.connect(_research_purchased)
 	field = FieldView.new()
 	field.battle = battle
@@ -332,7 +332,7 @@ func _update_hud() -> void:
 	credits_label.modulate = Color.WHITE.lerp(Color(1.45, 1.4, 1.22), _credit_flash)
 	wave_button.disabled = battle.active or battle.lost or battle.won
 	if battle.won:
-		status.text = "최종 방어 성공"
+		status.text = "방어 성공"
 	elif battle.lost:
 		status.text = "방어 실패"
 	elif battle.active:
@@ -342,9 +342,9 @@ func _update_hud() -> void:
 	if battle.won or battle.lost:
 		wave_button.text = "작전 종료"
 	elif battle.active:
-		wave_button.text = "최종 보스전" if battle.wave == BattleData.FINAL_WAVE else "교전 중"
+		wave_button.text = "보스전" if battle.wave == BattleData.FINAL_WAVE else "교전 중"
 	elif battle.wave == BattleData.FINAL_WAVE - 1:
-		wave_button.text = "50웨이브  ·  최종 보스"
+		wave_button.text = "50웨이브 시작"
 	else:
 		wave_button.text = "웨이브 %d 시작" % (battle.wave + 1)
 	_update_forecast()
@@ -418,7 +418,7 @@ func _update_forecast() -> void:
 	_forecast_seed = battle.roster_seed
 	var forecast_text := ""
 	if upcoming == BattleData.FINAL_WAVE:
-		forecast_text = "종결 보스 1 · 지원군 %d\n체력 단계마다 보호막 갱신" % (data.wave_count(upcoming) - 1)
+		forecast_text = "보스 1 · 지원군 %d\n단계 전환 시 보호막 갱신" % (data.wave_count(upcoming) - 1)
 	else:
 		var counts := battle.preview_wave()
 		var threats: Array = counts.keys()
@@ -542,26 +542,29 @@ func _base_damage(amount: int) -> void:
 		wave_callout = "기지 피격  ·  %d 피해" % amount
 		callout_time = 1.6
 
-func _mob_announcement(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color, _life: float) -> void:
+func _boss_event(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color, _life: float) -> void:
 	if kind == &"boss_spawn":
 		Sound.play_music(&"boss", 0.55)
-		wave_callout = "종결 보스 출현"
-		callout_time = 2.7
 	elif kind == &"boss_down":
 		Sound.play_music(&"patrol", 1.8)
-		wave_callout = "종결 보스 격파"
+		wave_callout = "보스 격파"
 		callout_time = 2.7
 
 func _wave_started(number: int) -> void:
 	Profile.record_wave(number)
 	result.text = ""
-	wave_callout = "웨이브 %d 시작" % number
-	callout_time = 1.55
+	if number == BattleData.FINAL_WAVE:
+		wave_callout = ""
+		callout_time = 0.0
+		toast.hide()
+	else:
+		wave_callout = "웨이브 %d 시작" % number
+		callout_time = 1.55
 	Sound.cue(&"wave")
 
 func _wave_finished(number: int, amount: int) -> void:
 	result.text = "웨이브 %d 완료  +%d" % [number, amount]
-	wave_callout = "웨이브 %d 클리어" % number
+	wave_callout = "웨이브 %d 완료" % number
 	callout_time = 2.0
 	Sound.cue(&"clear")
 
@@ -573,7 +576,7 @@ func _defeated(_number: int) -> void:
 	selected = NONE
 	_sync_selection()
 	field.hovered = NONE
-	wave_callout = "종결 보스 탈출" if battle.boss_escaped and battle.health > 0 else "기지 코어 붕괴  ·  %d 피해" % last_base_damage
+	wave_callout = "보스 탈출" if battle.boss_escaped and battle.health > 0 else "기지 붕괴  ·  %d 피해" % last_base_damage
 	callout_time = 0.95
 	defeat_delay = 0.95
 
@@ -626,29 +629,28 @@ func _cleared(record: Dictionary) -> void:
 	toast.hide()
 	building = false
 	_sync_selection()
-	var panel := _open_modal("victory", Vector2(900, 660))
+	var panel := _open_modal("victory", Vector2(900, 602))
 	text_at(panel, "50웨이브 클리어", 42, 28, 47, MINT)
-	text_at(panel, "종결 보스를 격파하고 기지 코어를 지켰습니다.", 43, 103, 21, LIGHT)
 	var stats := [
-		["총 플레이 시간", _duration(record.seconds)], ["최종 보스전", _duration(record.finale)],
+		["총 플레이 시간", _duration(record.seconds)], ["보스전 시간", _duration(record.finale)],
 		["남은 기지 HP", str(record.health)], ["총 처치", str(record.kills)],
 		["획득 재화", str(record.credits)], ["완료 연구", "%d / 100" % int(record.research)],
 		["타워 설치", "%d회" % int(record.installed)], ["최단 기록", _duration(Profile.fastest_clear)],
 	]
 	for i in stats.size():
 		var x := 44 + int(i % 4) * 205
-		var y := 170 + floori(i / 4.0) * 110
+		var y := 112 + floori(i / 4.0) * 110
 		text_at(panel, stats[i][0], x, y, 18, MUTED)
 		text_at(panel, stats[i][1], x, y + 30, 29, LIGHT)
-	text_at(panel, "설치한 종결 타워", 44, 402, 19, MUTED)
+	text_at(panel, "설치한 5단계 공격 타워", 44, 344, 19, MUTED)
 	var terminal := " · ".join(PackedStringArray(record.terminal))
-	text_at(panel, terminal if not terminal.is_empty() else "없음", 44, 438, 23, GOLD, 812)
+	text_at(panel, terminal if not terminal.is_empty() else "없음", 44, 380, 23, GOLD, 812)
 	if Profile.save_error:
-		text_at(panel, "클리어 기록을 저장하지 못했습니다.", 44, 503, 18, PINK)
+		text_at(panel, "클리어 기록을 저장하지 못했습니다.", 44, 445, 18, PINK)
 	else:
-		text_at(panel, "최고 방어 기록  ·  기지 HP %d" % Profile.best_clear.health, 44, 503, 18, MUTED)
-	button_at(panel, "다시 시작", Rect2(44, 564, 390, 62), start_game, true).grab_focus()
-	button_at(panel, "메인 메뉴", Rect2(466, 564, 390, 62), show_menu)
+		text_at(panel, "최고 방어 기록  ·  기지 HP %d" % Profile.best_clear.health, 44, 445, 18, MUTED)
+	button_at(panel, "다시 시작", Rect2(44, 506, 390, 62), start_game, true).grab_focus()
+	button_at(panel, "메인 메뉴", Rect2(466, 506, 390, 62), show_menu)
 
 func _duration(seconds: float) -> String:
 	var whole := maxi(0, floori(seconds))

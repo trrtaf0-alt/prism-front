@@ -63,7 +63,7 @@ func _init(base: Dictionary, content: Dictionary) -> void:
 		error = "분열형은 원본, 1차, 2차가 모두 필요합니다."
 		return
 	if not bool(definitions.get("boss", {}).get("boss", false)):
-		error = "50웨이브 종결 보스가 필요합니다."
+		error = "50웨이브 보스가 필요합니다."
 		return
 	var guardian: Dictionary = definitions.get("guardian", {})
 	if guardian.get("child", true) or guardian.get("guardian", {}).is_empty():
