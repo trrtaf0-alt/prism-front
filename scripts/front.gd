@@ -229,6 +229,10 @@ func start_game() -> void:
 	_update_hud()
 
 func _make_hud() -> void:
+	panel_at(screen, Rect2(0, 0, 1920, 53), "#0a0d10", "#0a0d10")
+	var footer := panel_at(screen, Rect2(0, 1021, 1920, 59), "#0a0d10", "#0a0d10")
+	for entry: Array in [[52, "#667069"], [152, "#62605a"], [268, "#b77a7d"], [413, "#a9c6bd"]]:
+		panel_at(footer, Rect2(entry[0], 19, 9, 9), entry[1], entry[1])
 	text_at(screen, "웨이브", 34, 15, 18, MUTED)
 	wave_label = text_at(screen, "", 106, 8, 26, LIGHT, 138)
 	text_at(screen, "기지", 278, 15, 18, MUTED)
@@ -890,14 +894,8 @@ func _leave_settings() -> void:
 
 func _draw() -> void:
 	draw_rect(Rect2(0, 0, 1920, 1080), Color("#101316"))
-	if game:
-		draw_rect(Rect2(0, 0, 1920, 53), Color("#0a0d10"))
-		draw_rect(Rect2(0, 1021, 1920, 59), Color("#0a0d10"))
-		draw_line(Vector2(34, 52), Vector2(1886, 52), LINE, 1.0)
-		for entry: Array in [[52, "#667069"], [152, "#62605a"], [268, "#b77a7d"], [413, "#a9c6bd"]]:
-			draw_rect(Rect2(entry[0], 1040, 9, 9), Color(entry[1]))
-		return
-	_draw_menu_art()
+	if not game:
+		_draw_menu_art()
 
 func _draw_menu_art() -> void:
 	var center := Vector2(1315, 526)

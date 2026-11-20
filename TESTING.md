@@ -21,6 +21,16 @@ Windows 11, Godot 4.7.2와 GeForce RTX 2060에서 실행했습니다. [지원 �
 
 `--support=`에는 `none`, `pair`, `overdrive`, `quantum`, `command`, `all`을 지정합니다.
 
+## 공격 연출 갱신
+
+폭풍·광자포는 낙뢰 지면 흔적과 별도의 발광 초점을 표시합니다. 소용돌이·특이점은 에너지 문양과 회전 잔해를 그리고, 대격변은 상공 전개, 격발, 잔광을 서로 다른 시간 구간으로 표현합니다. 같은 궤적을 반복해서 지나는 광선은 화면용 효과를 재사용합니다. 이펙트 수 제한과 축소 렌더링은 피해나 표적 수에 관여하지 않습니다.
+
+RTX 2060, 1080p, 높음, 지원 타워를 포함한 전투에서 동시 적 100/500/1,000기와 타워 44/46/48기를 대상으로 2초 예열 뒤 8초씩 측정했습니다. 평균 FPS는 83.6/49.4/23.1, 프레임 시간 p95는 16.53/33.09/60.24ms였습니다. 광선 궤적을 통합하기 전 같은 부하는 평균 72.9/34.3/20.7 FPS였습니다.
+
+검증 캡처는 `reports/fx-electrical-optics.png`, `reports/fx-vortex-pulse.png`, `reports/fx-nova-burst.png`, `reports/terminal-charge.png`, `reports/terminal-strike.png`, `reports/terminal-afterglow.png`에 있습니다.
+
+Windows 렌더링에서 연구·타워 513개, 지원 70개, 기본 108개, 몹 293개, 캠페인 92개를 통과했습니다. Windows x64 릴리스 EXE의 시작과 정상 종료를 확인했습니다. SHA-256은 `E1ED4C0E3EFBA0FCFB58994B666DB627CCC994C945592065DFC48B68B59DD700`입니다.
+
 # v0.4 50웨이브 캠페인 검증
 
 Windows 11 Pro, Core i7-10750H, GeForce RTX 2060, Godot 4.7.2에서 실행했습니다. [수식과 타워 수치](BALANCE.md) · [18종 몹과 생성체 수치 및 능력](MOBS.md) · [웨이브별 편성](WAVES.md)

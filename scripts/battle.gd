@@ -676,7 +676,16 @@ func _fire(origin: Vector2, direction: Vector2, definition: Dictionary = {}, tar
 		if def.id == TowerRegistry.BASE:
 			effect.emit(&"fire", origin, direction)
 		else:
-			attack_visual.emit("muzzle", origin, origin + direction, 0, def.tint, 0.13, int(def.stage))
+			var style := "muzzle"
+			if def.guided:
+				style = "missile_launch"
+			elif def.returning or def.split > 0:
+				style = "phase_launch"
+			elif def.slow > 0:
+				style = "cryogenic_launch"
+			elif def.shots > 1:
+				style = "scatter_launch"
+			attack_visual.emit(style, origin, origin + direction, def.spread, def.tint, 0.17, int(def.stage))
 	return bolt
 
 func _update_bolts(delta: float) -> void:

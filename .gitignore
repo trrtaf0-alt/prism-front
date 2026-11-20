@@ -4,3 +4,4 @@
 *.tmp
 *.log
 Thumbs.db
+__pycache__/

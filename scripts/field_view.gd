@@ -207,11 +207,18 @@ func _update_batches() -> void:
 	_bases.finish()
 	_heads.finish()
 	_mobs.submit(battle, ORIGIN, _preferences.fx_dim)
-	_bolts.begin(battle.bolts.size())
+	var traces := 0
+	var detail: bool = _preferences.fx_quality >= 2
+	_bolts.begin(battle.bolts.size() + (mini(80, battle.bolts.size()) if detail else 0))
 	for i in battle.bolts.size():
 		var bolt := battle.bolts[i]
 		_bolts.item(i, pixel(bolt.position), bolt.direction * (0.68 if bolt.fragment else 1.0), bolt.definition.tint)
-	_bolts.finish()
+		if detail and traces < 80 and not bolt.fragment and (bolt.definition.guided or bolt.definition.returning):
+			var stretch := 1.58 if bolt.definition.guided else 1.30
+			var back := pixel(bolt.position) - bolt.direction * (34.0 if bolt.definition.guided else 22.0)
+			_bolts.item(battle.bolts.size() + traces, back, bolt.direction * stretch, Color(bolt.definition.tint, 0.54), 0.62)
+			traces += 1
+	_bolts.finish(battle.bolts.size() + traces)
 
 func path_in_range(cell: Vector2i, def: Dictionary) -> float:
 	var range_key := "%s:%s" % [def.id, def.range]

@@ -412,6 +412,7 @@ func _visual_preview(ui) -> void:
 	sim.install(Vector2i(12, 9), "tower_30")
 	sim.install(Vector2i(22, 12), "tower_28")
 	sim.install(Vector2i(5, 12), "tower_29")
+	ui.callout_time = 0.0
 	for i in 90:
 		sim.spawn(1.0 + i * 0.61, heavy)
 	for i in 173:
@@ -420,7 +421,8 @@ func _visual_preview(ui) -> void:
 	for i in 44:
 		sim.tick(STEP)
 	await _capture("terminal-strike")
-	await create_timer(0.35).timeout
+	await create_timer(0.60).timeout
+	await _capture("terminal-afterglow")
 	ui.start_game()
 	sim = ui.battle
 	_unlock(sim)
@@ -438,6 +440,31 @@ func _visual_preview(ui) -> void:
 	check(sim.towers.size() == 36, "all 36 tower silhouettes are installed for visual QA")
 	ui.callout_time = 0.0
 	await _capture("tower-lineup")
+	await _attack_showcase(ui)
+
+func _attack_showcase(ui) -> void:
+	var test_groups := {
+		"fx-electrical-optics": ["tower_23", "tower_25"],
+		"fx-vortex-pulse": ["tower_21", "tower_22"],
+		"fx-nova-burst": ["tower_24"],
+	}
+	var times := {"fx-electrical-optics": 12, "fx-vortex-pulse": 23, "fx-nova-burst": 158}
+	for name in test_groups:
+		ui.start_game()
+		ui.callout_time = 0.0
+		var sim: Battle = ui.battle
+		_unlock(sim)
+		ui.callout_time = 0.0
+		var ids: Array = test_groups[name]
+		for i in ids.size():
+			check(sim.install(Vector2i(13 + i * 7, 7), ids[i]) if i > 0 else sim.install(Vector2i(12, 8), ids[i]), "showcase tower placed " + ids[i])
+		var tough := rules.mobs.lookup("normal").duplicate()
+		tough.health = 200_000
+		for i in 42:
+			sim.spawn(2.0 + i * 1.79, tough)
+		for i in int(times[name]):
+			sim.tick(STEP)
+		await _capture(name)
 
 func _click(ui: Control, logical: Vector2) -> void:
 	var point := ui.get_global_transform_with_canvas() * logical

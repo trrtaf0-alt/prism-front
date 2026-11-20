@@ -72,9 +72,11 @@ func _cone(sim, tower, _target, def: Dictionary, direction: Vector2, efficiency:
 
 func _multi(sim, tower, _target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
 	var targets: Array = sim.enemies if def.global and def.max_targets == 0 else sim.leading_targets(tower.position, def.range, def.global, def.max_targets, def.get("detect_cloak", false))
-	var stride := maxi(1, ceili(targets.size() / 13.0))
+	if not targets.is_empty():
+		_visual(sim, def, tower.position, tower.position, 0.0, 0.28, str(def.fx) + "_source")
+	var stride := maxi(1, ceili(targets.size() / 10.0))
 	for i in range(0, targets.size(), stride):
-		_visual(sim, def, tower.position, targets[i].position, 0.0, 0.16)
+		_visual(sim, def, tower.position, targets[i].position, 0.0, 0.22)
 	sim.barrage(targets, def, efficiency, -1.0, tower)
 
 func _chain(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
@@ -94,6 +96,8 @@ func _chain(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency
 
 func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float, tower) -> void:
 	var pool: Array = sim.leading_targets(origin, 0.0, true, def.max_targets, def.get("detect_cloak", false))
+	if not pool.is_empty():
+		_visual(sim, def, origin, origin, 0.0, 0.28, "storm_source")
 	# Group the selected targets into spatially coherent strike columns.
 	var columns: Dictionary = {}
 	for drone in pool:
@@ -103,7 +107,7 @@ func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float, tower) -> 
 		columns[key].append(drone)
 	for group: Array in columns.values():
 		var previous: Vector2 = group[0].position
-		_visual(sim, def, previous - Vector2(1.5, 5), previous, 0.15, 0.27)
+		_visual(sim, def, previous - Vector2(1.5, 5.6), previous, 0.15, 0.37, "storm_column")
 		var stride := maxi(1, ceili(group.size() / 4.0))
 		for i in group.size():
 			var drone = group[i]
@@ -133,6 +137,7 @@ func _singularity(sim, tower, target, def: Dictionary, direction: Vector2, effic
 	_stage(sim, tower, target.position, direction, def, efficiency)
 	var sequence: Sequence = sequences.back()
 	sequence.anchor = sim.projection(target.position)
+	_visual(sim, def, tower.position, target.position, 0.0, 0.85, "singularity_feed")
 	_visual(sim, def, target.position, target.position, sim.field_diagonal * 0.46, def.duration)
 
 func _stage(sim, tower, point: Vector2, direction: Vector2, def: Dictionary, efficiency: float) -> void:
@@ -181,7 +186,7 @@ func _step(sim, seq: Sequence) -> bool:
 	else:
 		area(sim, seq.point, def.radius, def, seq.efficiency, -1.0, seq.tower)
 		var reach: float = sim.field_diagonal * 0.59 if def.global else float(def.radius)
-		_visual(sim, def, seq.point, seq.point, reach, 1.65 if def.global else 0.65)
+		_visual(sim, def, seq.point, seq.point, reach, 2.15 if def.global else 0.65)
 	return true
 
 func area(sim, center: Vector2, radius: float, def: Dictionary, efficiency: float, anchor: float = -1.0, tower = null) -> void:

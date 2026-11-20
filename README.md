@@ -42,6 +42,7 @@ Windows 10/11 x64에서 `dist/PrismFront.exe`를 실행합니다. 게임 리소�
 | `data/research.json` | 연구 이름, 비용, 분기·교차 조건, 위치, 해금 타워 |
 | `data/turret.json`, `data/towers.json` | 기본 포탑과 추가 타워의 공격 형태 및 수치 |
 | `assets/make_towers.py`, `assets/tower_atlas.png` | 타워 36종의 본체·포신 그림과 재생성 스크립트 |
+| `assets/make_attack_art.py`, `assets/attack_atlas.png` | 폭풍·광선·흡입장·종결 공격에 쓰는 에너지 문양과 재생성 스크립트 |
 | `data/drone.json`, `data/enemies.json`, `data/status.json` | 몹 능력·보상·편성과 상태 효과 조정 |
 | `data/balance.json` | RP 배율, 완료 재화, 50웨이브 지원군과 연구 화면 정책 |
 | `data/sample_map.json` | 30×18 샘플 맵과 원래 경로·장애물 |
