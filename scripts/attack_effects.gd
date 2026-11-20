@@ -10,6 +10,7 @@ const TRACK_CELL := 24.0
 const PLATES := preload("res://assets/attack_atlas.png")
 const PLATE_FRAME := 512.0
 const RING_SHADER := preload("res://assets/attack_ring.gdshader")
+const BEAM_SHADER := preload("res://assets/neon_beam.gdshader")
 const PLATE_LIMIT := 60
 
 class Effect:
@@ -27,6 +28,8 @@ var _ordinary: Array[Effect] = []
 var _huge: Array[Effect] = []
 var _pool: Array[Effect] = []
 var _lines: SpriteBatch
+var _beam_material: ShaderMaterial
+var _dim_beams := false
 var _rings: SpriteBatch
 var _glows: SpriteBatch
 var _particles: SpriteBatch
@@ -55,22 +58,20 @@ func setup(glow: Texture2D, preferences: Node, sound: Node, bounds: Rect2, cell:
 	var white := Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
 	white.fill(Color.WHITE)
 	var dot := ImageTexture.create_from_image(white)
-	var beam := Image.create_empty(4, 64, false, Image.FORMAT_RGBA8)
-	for y in 64:
-		var strength := 1.0 - smoothstep(0.25, 1.0, absf((y - 31.5) / 31.5))
-		for x in 4:
-			beam.set_pixel(x, y, Color(1.0, 1.0, 1.0, strength))
-	var beam_texture := ImageTexture.create_from_image(beam)
+	_beam_material = ShaderMaterial.new()
+	_beam_material.shader = BEAM_SHADER
 	var plate_material := ShaderMaterial.new()
 	plate_material.shader = TowerArt.SHADER
 	plate_material.set_shader_parameter("frame_side", PLATE_FRAME)
 	_plates = SpriteBatch.new(PLATES, 1.0, plate_material)
 	_plates.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
-	_lines = SpriteBatch.new(beam_texture, 1.0, null)
+	_lines = SpriteBatch.new(null, 1.0, _beam_material)
 	var ring_material := ShaderMaterial.new()
 	ring_material.shader = RING_SHADER
 	_rings = SpriteBatch.new(null, 2.0, ring_material, _annulus())
-	_glows = SpriteBatch.new(glow, 2.0, null)
+	var light_material := CanvasItemMaterial.new()
+	light_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_glows = SpriteBatch.new(glow, 2.0, light_material)
 	_particles = SpriteBatch.new(dot, 1.0, null)
 	for batch: SpriteBatch in [_glows, _plates, _rings, _lines, _particles]:
 		add_child(batch)
@@ -180,6 +181,10 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 
 func update(delta: float) -> Vector2:
 	_time += delta
+	var dim: bool = _preferences.fx_dim
+	if dim != _dim_beams:
+		_dim_beams = dim
+		_beam_material.set_shader_parameter("white_core", 0.18 if dim else 0.60)
 	_flash = maxf(0.0, _flash - delta * 1.80)
 	_tremor = maxf(0.0, _tremor - delta * 17.0)
 	if not _ordinary.is_empty() or not _huge.is_empty() or _line_count + _ring_count + _glow_count + _particle_count + _plate_count > 0:
@@ -620,11 +625,8 @@ func _hoop(center: Vector2, radius: float, sides: int, angle: float, tint: Color
 		previous = point
 
 func _beam(at: Vector2, end: Vector2, width: float, tint: Color) -> void:
-	if _preferences.fx_quality > 0:
-		_line(at, end, width * 2.6, Color(tint, tint.a * 0.19))
-	_line(at, end, width, tint)
-	if _preferences.fx_quality > 1 and not _preferences.fx_dim:
-		_line(at, end, maxf(1, width * 0.22), Color(tint.lerp(Color.WHITE, 0.67), tint.a * 0.78))
+	var spread := 2.15 if _preferences.fx_quality > 0 and not _dim_beams else 1.52
+	_line(at, end, maxf(1.0, width * spread), tint)
 
 func _line(at: Vector2, end: Vector2, width: float, tint: Color) -> void:
 	var heading := end - at
@@ -641,7 +643,7 @@ func _ring(at: Vector2, radius: float, tint: Color) -> void:
 
 func _glow(at: Vector2, radius: float, tint: Color) -> void:
 	if _glow_count < BUDGET:
-		_glows.item(_glow_count, at, Vector2.RIGHT * clampf(radius, 1.0, 480.0), tint)
+		_glows.item(_glow_count, at, Vector2.RIGHT * clampf(radius, 1.0, 410.0), Color(tint, tint.a * 0.74))
 		_glow_count += 1
 
 func _spray(at: Vector2, reach: float, tint: Color, t: float, requested: int) -> void:

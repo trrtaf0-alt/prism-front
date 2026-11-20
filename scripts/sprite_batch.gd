@@ -6,9 +6,9 @@ const STRIDE := 12
 var _buffer := PackedFloat32Array()
 var _count := 0
 
-func _init(sprite: Texture2D, side: float, shader_material: ShaderMaterial, shape: Mesh = null) -> void:
+func _init(sprite: Texture2D, side: float, sprite_material: Material, shape: Mesh = null) -> void:
 	texture = sprite
-	material = shader_material
+	material = sprite_material
 	if shape == null:
 		var quad := QuadMesh.new()
 		quad.size = Vector2.ONE * side

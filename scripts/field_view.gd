@@ -34,6 +34,9 @@ var _available: Array[Flare] = []
 var _glow: ImageTexture
 var _turret_color: Color
 var _drone_color: Color
+var _tower_material: ShaderMaterial
+var _tower_halos: SpriteBatch
+var _dim_towers := false
 var _bases: SpriteBatch
 var _heads: SpriteBatch
 var _mobs := MobView.new()
@@ -58,10 +61,15 @@ func _ready() -> void:
 	_drone_color = Color(battle.data.drone.color)
 	var material_mask := ShaderMaterial.new()
 	material_mask.shader = NEON_SHADER
-	var tower_material := ShaderMaterial.new()
-	tower_material.shader = TowerArt.SHADER
-	_bases = SpriteBatch.new(TowerArt.ATLAS, CELL, tower_material)
-	_heads = SpriteBatch.new(TowerArt.ATLAS, CELL, tower_material)
+	_tower_material = ShaderMaterial.new()
+	_tower_material.shader = TowerArt.SHADER
+	_tower_material.set_shader_parameter("emission", 0.68)
+	var emission_material := CanvasItemMaterial.new()
+	emission_material.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_tower_halos = SpriteBatch.new(_glow, 2.0, emission_material)
+	add_child(_tower_halos)
+	_bases = SpriteBatch.new(TowerArt.ATLAS, CELL, _tower_material)
+	_heads = SpriteBatch.new(TowerArt.ATLAS, CELL, _tower_material)
 	_bolts = SpriteBatch.new(BOLT_TEXTURE, 55.0, material_mask)
 	add_child(_bases)
 	add_child(_heads)
@@ -73,7 +81,7 @@ func _ready() -> void:
 	_overlay.draw.connect(_draw_overlay)
 	var white := Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
 	white.fill(Color.WHITE)
-	_effect_glows = SpriteBatch.new(_glow, 2.0, null)
+	_effect_glows = SpriteBatch.new(_glow, 2.0, emission_material)
 	_rings = SpriteBatch.new(SHOCKWAVE, 2.0, null)
 	var dot := ImageTexture.create_from_image(white)
 	_sparks = SpriteBatch.new(dot, 1.0, null)
@@ -108,27 +116,27 @@ func _draw_floor(canvas: Node2D) -> void:
 	var extent := Vector2(map.size) * CELL
 	var bounds := Rect2(ORIGIN, extent)
 	canvas.draw_rect(bounds.grow(12), Color("#090c10"))
-	canvas.draw_rect(bounds, Color("#151a1f"))
+	canvas.draw_rect(bounds, Color("#0c1016"))
 	for y in map.size.y:
 		for x in range(y % 2, map.size.x, 2):
 			var tile_origin := ORIGIN + Vector2(x, y) * CELL
-			canvas.draw_rect(Rect2(tile_origin, Vector2.ONE * CELL), Color("#191e23"))
-	canvas.draw_texture_rect(_glow, bounds, false, Color("#39434a"))
+			canvas.draw_rect(Rect2(tile_origin, Vector2.ONE * CELL), Color("#10151c"))
+	canvas.draw_texture_rect(_glow, bounds, false, Color("#242d3a"))
 	for y in map.size.y:
 		for x in map.size.x:
 			if map.tile_at(Vector2i(x, y)) != "#":
 				continue
 			var at := ORIGIN + Vector2(x, y) * CELL
 			var plate := Rect2(at + Vector2(4, 4), Vector2.ONE * (CELL - 8.0))
-			canvas.draw_rect(plate, Color("#101419"))
-			canvas.draw_rect(plate, Color("#2e3438"), false, 1.0)
-			canvas.draw_line(plate.position + Vector2(1, 1), plate.position + Vector2(16, 1), Color("#4a4843"), 1.5)
+			canvas.draw_rect(plate, Color("#0a0e14"))
+			canvas.draw_rect(plate, Color("#26313a"), false, 1.0)
+			canvas.draw_line(plate.position + Vector2(1, 1), plate.position + Vector2(16, 1), Color("#40515a"), 1.5)
 	var track := PackedVector2Array()
 	for point in map.path:
 		track.append(pixel(point))
-	canvas.draw_polyline(track, Color("#0f1418"), 20.0, true)
-	canvas.draw_polyline(track, Color("#293130"), 16.0, true)
-	canvas.draw_polyline(track, Color("#353c39"), 1.3, true)
+	canvas.draw_polyline(track, Color("#080d12"), 20.0, true)
+	canvas.draw_polyline(track, Color("#1c2630"), 16.0, true)
+	canvas.draw_polyline(track, Color("#2d3d48"), 1.3, true)
 	for i in range(1, track.size() - 1):
 		var direction := track[i + 1] - track[i]
 		if i % 5 != 0 and direction == track[i] - track[i - 1]:
@@ -136,7 +144,7 @@ func _draw_floor(canvas: Node2D) -> void:
 		var at := track[i]
 		var forward := direction.normalized()
 		var side := forward.orthogonal()
-		canvas.draw_polyline(PackedVector2Array([at - forward * 4 + side * 4, at + forward * 3, at - forward * 4 - side * 4]), Color("#59605a"), 1.2, true)
+		canvas.draw_polyline(PackedVector2Array([at - forward * 4 + side * 4, at + forward * 3, at - forward * 4 - side * 4]), Color("#526772"), 1.2, true)
 	canvas.draw_rect(bounds, Color("#3d4140"), false, 1.0)
 	for corner: Vector2 in [Vector2.ZERO, Vector2(extent.x, 0), Vector2(0, extent.y), extent]:
 		var at := ORIGIN + corner
@@ -193,6 +201,13 @@ func _process(delta: float) -> void:
 	support_fx.queue_redraw()
 
 func _update_batches() -> void:
+	var dim: bool = _preferences.fx_dim
+	if _dim_towers != dim:
+		_dim_towers = dim
+		_tower_material.set_shader_parameter("emission", 0.29 if dim else 0.68)
+	var halos: bool = _preferences.fx_quality > 0
+	var glow_strength := 0.46 if dim else 1.0
+	_tower_halos.begin(battle.towers.size() if halos else 0)
 	_bases.begin(battle.towers.size())
 	_heads.begin(battle.towers.size())
 	for i in battle.towers.size():
@@ -202,8 +217,20 @@ func _update_batches() -> void:
 		var aim := Vector2.from_angle(tower.angle + TowerArt.rotation_offset(id, elapsed))
 		var scale := TowerArt.size_for_stage(int(tower.definition.stage))
 		var frame := TowerArt.first_frame(id)
-		_bases.item(i, at, Vector2.RIGHT * scale, TowerArt.batch_color(frame))
-		_heads.item(i, at - aim * (tower.recoil * 31.0), aim * scale, TowerArt.batch_color(frame + 1))
+		var weight := float(tower.definition.stage)
+		var recoil := tower.recoil / 0.12
+		var breath := 0.91 + 0.09 * sin(elapsed * 2.8 + i * 0.79)
+		var lit_base := TowerArt.batch_color(frame)
+		lit_base.g = 0.43 * breath
+		var lit_head := TowerArt.batch_color(frame + 1)
+		lit_head.g = lerpf(0.65 + 0.045 * weight, 1.0, recoil) * breath
+		_bases.item(i, at, Vector2.RIGHT * scale, lit_base)
+		_heads.item(i, at - aim * (tower.recoil * 31.0), aim * scale, lit_head)
+		if halos:
+			var radius := 31.0 + weight * 8.0 + recoil * 11.0
+			var power := (0.34 + 0.041 * weight + 0.26 * recoil) * breath * glow_strength
+			_tower_halos.item(i, at, Vector2.RIGHT * radius, Color(tower.definition.tint, power))
+	_tower_halos.finish()
 	_bases.finish()
 	_heads.finish()
 	_mobs.submit(battle, ORIGIN, _preferences.fx_dim)
