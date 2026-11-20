@@ -4,7 +4,9 @@ Windows용 2D 타워 디펜스입니다. 일반 재화로 타워를 배치하고
 
 ## 실행과 조작
 
-Windows 10/11 x64에서 `dist/PrismFront.exe`를 실행합니다. 게임 리소스와 한글 글꼴은 EXE에 내장됩니다. 소스를 실행하려면 Godot 4.7.2에서 `project.godot`을 가져온 뒤 F5로 실행하세요.
+Windows 10/11 64비트에서는 `dist/PrismFront-Setup-Windows-x64.exe`로 설치하거나 `dist/PrismFront.exe`를 바로 실행합니다. 설치판은 현재 사용자 계정에 설치하고 기본으로 바탕화면 바로가기를 만듭니다. ZIP 배포판은 모두 압축을 푼 뒤 실행 파일을 더블 클릭합니다. 게임 리소스와 한글 글꼴은 EXE에 내장됩니다.
+
+소스를 실행하려면 Godot 4.7.2에서 `project.godot`을 가져온 뒤 F5로 실행하세요. Windows Desktop 릴리스 내보내기 뒤 [Inno Setup 6](https://jrsoftware.org/inno-setup/downloads)의 `ISCC.exe`로 `packaging/Windows.iss`를 컴파일하면 설치용 EXE를 다시 만들 수 있습니다.
 
 - 전장은 화면 전체에 표시됩니다. 웨이브와 자원은 위쪽, 타워 배치와 연구는 아래쪽 HUD에 표시됩니다. 배치한 타워를 선택하면 세부 정보와 판매 버튼이 나타납니다.
 - **타워 선택**에서 해금된 타워를 고르면 곧바로 배치가 시작됩니다. **전체**에서 잠긴 타워의 연구도 확인할 수 있습니다. **1** 또는 HUD의 포탑 버튼으로 같은 타워를 빠르게 배치합니다. 타일 옆에서 조준 범위와 설치 가능 여부를 확인하고, 좌클릭으로 계속 배치하거나 **Esc**·우클릭으로 취소합니다.
