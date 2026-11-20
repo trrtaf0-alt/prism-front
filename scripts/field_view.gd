@@ -45,6 +45,9 @@ var _overlay: Node2D
 var _sparks: SpriteBatch
 var _rings: SpriteBatch
 var _effect_glows: SpriteBatch
+var _health_back: SpriteBatch
+var _health_front: SpriteBatch
+var _marks: SpriteBatch
 
 func _ready() -> void:
 	_preferences = get_tree().root.get_node("Profile")
@@ -70,8 +73,12 @@ func _ready() -> void:
 	white.fill(Color.WHITE)
 	_effect_glows = SpriteBatch.new(_glow, 2.0, null)
 	_rings = SpriteBatch.new(SHOCKWAVE, 2.0, null)
-	_sparks = SpriteBatch.new(ImageTexture.create_from_image(white), 1.0, null)
-	for batch: SpriteBatch in [_effect_glows, _rings, _sparks]:
+	var dot := ImageTexture.create_from_image(white)
+	_sparks = SpriteBatch.new(dot, 1.0, null)
+	_health_back = SpriteBatch.new(dot, 1.0, null)
+	_health_front = SpriteBatch.new(dot, 1.0, null)
+	_marks = SpriteBatch.new(dot, 1.0, null)
+	for batch: SpriteBatch in [_health_back, _health_front, _marks, _effect_glows, _rings, _sparks]:
 		add_child(batch)
 	advanced_fx.setup(_glow, _preferences, get_tree().root.get_node("Sound"))
 	add_child(advanced_fx)
@@ -186,14 +193,33 @@ func _update_batches() -> void:
 		_heads.item(i, at - aim * (tower.recoil * 34.0), aim * scale, tint)
 	_bases.finish()
 	_heads.finish()
-	_drones.begin(battle.enemies.size())
-	for i in battle.enemies.size():
+	var count := battle.enemies.size()
+	_drones.begin(count)
+	_health_back.begin(count)
+	_health_front.begin(count)
+	_marks.begin(count)
+	var damaged := 0
+	var marked := 0
+	for i in count:
 		var drone := battle.enemies[i]
 		var color := drone.tint.lerp(Color.WHITE, 0.64 if not _preferences.fx_dim else 0.27) if drone.flash > 0.0 else drone.tint
 		if drone.status.stun_left > 0.0:
 			color = color.lerp(Color("#8fc9ff"), 0.65)
-		_drones.item(i, pixel(drone.position), battle.field.heading_at(drone.progress), color)
+		var at := pixel(drone.position)
+		_drones.item(i, at, battle.field.heading_at(drone.progress), color)
+		if drone.health < drone.maximum_health:
+			var width := maxf(1.0, 18.0 * drone.health / float(drone.maximum_health))
+			_health_back.item(damaged, at + Vector2(0, -13), Vector2(18, 0), Color("#3a1b34"), 2.0 / 18.0)
+			_health_front.item(damaged, at + Vector2(-9.0 + width * 0.5, -13), Vector2(width, 0), Color("#ffa4bd"), 2.0 / width)
+			damaged += 1
+		if drone.status.mark_stacks > 0:
+			var width := 3.0 + 2.0 * drone.status.mark_stacks
+			_marks.item(marked, at + Vector2(13 + width * 0.5, -13), Vector2(width, 0), Color("#ddb3ff"), 3.0 / width)
+			marked += 1
 	_drones.finish()
+	_health_back.finish(damaged)
+	_health_front.finish(damaged)
+	_marks.finish(marked)
 	_bolts.begin(battle.bolts.size())
 	for i in battle.bolts.size():
 		var bolt := battle.bolts[i]
@@ -226,13 +252,6 @@ func _draw() -> void:
 		draw_arc(pixel(battle.occupied[selected].position), 21.0, 0, TAU, 32, battle.occupied[selected].definition.tint, 2.0, true)
 
 func _draw_overlay() -> void:
-	for drone in battle.enemies:
-		var at := pixel(drone.position) + Vector2(-9, -14)
-		if drone.health < drone.maximum_health:
-			_overlay.draw_rect(Rect2(at, Vector2(18, 2)), Color("#3a1b34"))
-			_overlay.draw_rect(Rect2(at, Vector2(18 * drone.health / float(drone.maximum_health), 2)), Color("#ffa4bd"))
-		if drone.status.mark_stacks > 0:
-			_overlay.draw_rect(Rect2(at + Vector2(21, 0), Vector2(3 + 2 * drone.status.mark_stacks, 3)), Color("#ddb3ff"))
 	for tower in battle.towers:
 		if tower.definition.stage >= 3 and tower.recoil > 0.0:
 			var tint: Color = Color(tower.definition.tint, tower.recoil * 5.0)

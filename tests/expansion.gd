@@ -197,6 +197,17 @@ func _attack_details() -> void:
 	check(far.health == 995000, "cataclysm lands 5000 at remote location after windup")
 	sim = _new_battle()
 	_unlock(sim)
+	var cat_site := Vector2i(2, 4)
+	var copy_site := Vector2i(3, 4)
+	sim.install(cat_site, "tower_30")
+	sim.install(copy_site, "tower_27")
+	far = sim.spawn(50.0, armored)
+	for i in 211:
+		sim.tick(STEP)
+	check(far.health == 994250, "mirrored cataclysm applies its per-weapon 15 percent rate")
+	check(is_equal_approx(sim.occupied[copy_site].mirror_timers[sim.occupied[cat_site]], 46.5), "mirrored cataclysm uses a 50 second cadence")
+	sim = _new_battle()
+	_unlock(sim)
 	sim.install(Vector2i(2, 4), "tower_28")
 	var near := sim.spawn(5.0, armored)
 	far = sim.spawn(50.0, armored)
@@ -204,6 +215,17 @@ func _attack_details() -> void:
 		sim.tick(STEP)
 	check(near.health == 998000 and far.health == 998000, "singularity delivers 20 global damage ticks")
 	check(far.position.is_equal_approx(map.position_at(far.progress)) and absf(far.progress - 50.0) < 16.0, "gravity keeps exact path coordinates")
+	sim = _new_battle()
+	_unlock(sim)
+	sim.install(Vector2i(2, 4), "tower_29")
+	var distant: Array[Battle.Drone] = []
+	for i in 1000:
+		distant.append(sim.spawn(1.0 + i * 0.05, armored))
+	sim.tick(STEP)
+	var struck := 0
+	for drone in distant:
+		struck += int(drone.health == 999920)
+	check(struck == 1000, "spectrum hits 1000 enemies despite sampled visuals")
 
 func _projectile_behaviors() -> void:
 	var stationary := rules.drone.duplicate()
@@ -315,6 +337,8 @@ func _interface() -> void:
 	wheel.position = Vector2(550, 300)
 	board._gui_input(wheel)
 	check(board.zoom > old_zoom, "research board zooms with scroll wheel")
+	board.overview()
+	await _capture("research-overview")
 	board.select_node("cataclysm", true)
 	check(board.highlighted.size() > 80 and ui.research_screen.buy.disabled, "terminal path and locked condition display")
 	await _capture("research-network")
@@ -339,6 +363,20 @@ func _interface() -> void:
 	ui.start_game()
 	check(ui.battle.research.points == 0 and ui.battle.research.completed.is_empty() and ui.battle.research.unlocked.size() == 1 and ui.research_view.is_empty(), "new game resets the entire research run")
 	check(root.get_node("Profile").best >= original_best, "new game preserves highest wave")
+	var policy: Dictionary = ui.data.balance
+	ui.battle.start_wave()
+	policy.research_available_during_wave = false
+	ui.show_research()
+	check(ui.modal == null, "research availability policy can block active waves")
+	policy.research_available_during_wave = true
+	policy.research_pauses_battle = false
+	ui.show_research()
+	var advancing: Battle.Drone = ui.battle.enemies[0]
+	var current := advancing.progress
+	ui._physics_process(STEP)
+	check(ui.modal_kind == "research" and not ui.field.frozen and advancing.progress > current, "live research policy advances battle")
+	ui.close_modal()
+	policy.research_pauses_battle = true
 	var profile = root.get_node("Profile")
 	profile.file_path = "user://expansion_test_profile.cfg"
 	profile.fx_quality = 0

@@ -71,16 +71,11 @@ func _cone(sim, tower, _target, def: Dictionary, direction: Vector2, efficiency:
 	_visual(sim, def, tower.position, tower.position + direction * float(def.range), def.spread, 0.20)
 
 func _multi(sim, tower, _target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
-	var targets: Array = sim.query_radius(tower.position, def.range, def.global)
-	if def.max_targets > 0 and targets.size() > int(def.max_targets):
-		targets.sort_custom(func(a, b): return a.progress > b.progress)
-		targets.resize(int(def.max_targets))
-	var stride := maxi(1, ceili(targets.size() / 22.0))
-	for i in targets.size():
-		var drone = targets[i]
-		if i % stride == 0:
-			_visual(sim, def, tower.position, drone.position, 0.0, 0.16)
-		sim.damage(drone, def, efficiency)
+	var targets: Array = sim.enemies if def.global and def.max_targets == 0 else sim.leading_targets(tower.position, def.range, def.global, def.max_targets)
+	var stride := maxi(1, ceili(targets.size() / 13.0))
+	for i in range(0, targets.size(), stride):
+		_visual(sim, def, tower.position, targets[i].position, 0.0, 0.16)
+	sim.barrage(targets, def, efficiency)
 
 func _chain(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
 	if def.global:
@@ -98,14 +93,11 @@ func _chain(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency
 		target = sim.nearest_in_radius(from, def.jump_radius, seen)
 
 func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float) -> void:
-	var pool: Array = sim.query_radius(origin, 0.0, true)
-	if pool.size() > int(def.max_targets):
-		pool.sort_custom(func(a, b): return a.progress > b.progress)
-		pool.resize(int(def.max_targets))
+	var pool: Array = sim.leading_targets(origin, 0.0, true, def.max_targets)
 	# Group the selected targets into spatially coherent strike columns.
 	var columns: Dictionary = {}
 	for drone in pool:
-		var key := Vector2i(drone.position / float(def.jump_radius))
+		var key := Vector2i(drone.position / (float(def.jump_radius) / sqrt(2.0)))
 		if not columns.has(key):
 			columns[key] = []
 		columns[key].append(drone)
@@ -118,7 +110,7 @@ func _storm(sim, origin: Vector2, def: Dictionary, efficiency: float) -> void:
 			if i > 0 and i % stride == 0:
 				_visual(sim, def, previous, drone.position, 0.0, 0.22)
 				previous = drone.position
-			sim.damage(drone, def, efficiency)
+	sim.barrage(pool, def, efficiency)
 
 func _field(sim, tower, target, def: Dictionary, _direction: Vector2, efficiency: float) -> void:
 	var center: Vector2 = tower.position if def.center == "self" else target.position
@@ -195,8 +187,8 @@ func _step(sim, seq: Sequence) -> bool:
 func area(sim, center: Vector2, radius: float, def: Dictionary, efficiency: float, anchor: float = -1.0) -> void:
 	if def.pull > 0 and anchor < 0:
 		anchor = sim.projection(center)
-	for drone in sim.query_radius(center, radius, def.global):
-		sim.damage(drone, def, efficiency, anchor)
+	var targets: Array = sim.enemies if def.global else sim.query_radius(center, radius)
+	sim.barrage(targets, def, efficiency, anchor)
 
 func _visual(sim, def: Dictionary, start: Vector2, end: Vector2, width: float = 0.0, life: float = 0.25, style: String = "") -> void:
 	var name := str(def.fx) if style.is_empty() else style

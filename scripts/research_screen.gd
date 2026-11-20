@@ -35,7 +35,6 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	front.button_at(self, "전투로 돌아가기", Rect2(1510, 32, 304, 59), front.close_modal, true)
 	board = ResearchBoard.new()
 	board.run = run
-	board.registry = registry
 	front.place(board, self, Rect2(36, 183, 1328, 746))
 	board.selected.connect(_select)
 	for i in ResearchGraph.ZONES.size():
@@ -67,6 +66,7 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	if not view.is_empty():
 		board.zoom = view.zoom
 		board.offset = view.offset
+		board.overview_mode = bool(view.get("overview", false))
 	var initial := str(view.get("focus", run.graph.ids[0]))
 	if run.graph.unlocks.has(jump_tower):
 		board.select_node(run.graph.unlocks[jump_tower], true)
@@ -80,7 +80,7 @@ func _wrap(parent: Control, y: int, font_size: int, color: Color) -> Label:
 	return label
 
 func view_state() -> Dictionary:
-	return {"zoom": board.zoom, "offset": board.offset, "focus": board.focus_id}
+	return {"zoom": board.zoom, "offset": board.offset, "focus": board.focus_id, "overview": board.overview_mode}
 
 func _jump_to_tower(index: int, picker: OptionButton) -> void:
 	if index > 0:

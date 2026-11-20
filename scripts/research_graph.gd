@@ -34,7 +34,7 @@ func _init(entries: Array, towers: TowerRegistry) -> void:
 		var item: Dictionary = nodes[id]
 		var refs: Dictionary = {}
 		var requirement: Variant = item.get("requirements")
-		if (requirement == null and int(item.stage) > 0) or not _read_requirements(requirement, id, refs, true):
+		if not item.has("requirements") or (requirement == null and int(item.stage) > 0) or not _read_requirements(requirement, id, refs, true):
 			error = "잘못된 연구 선행 조건 · " + id
 			return
 		parents[id] = refs.keys()

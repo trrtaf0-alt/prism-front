@@ -10,7 +10,7 @@ const DEFAULTS := {
 	"returning": false, "split": 0, "fragment_damage": 0, "fragment_range": 0.0,
 	"slow": 0.0, "pull": 0.0, "shock": false, "status_time": 0.0, "mark_bonus": 0.0,
 	"mark_cap": 0, "copy_efficiency": 0.0, "terminal_efficiency": 0.0,
-	"copy_cadence": 1.0, "terminal_cadence": 1.0,
+	"copy_cadence": 1.0, "terminal_cadence": 1.0, "copy_overrides": {},
 }
 const ATTACK_NAMES := {
 	"bolt": "투사체", "line": "직선 관통", "chain": "연쇄", "strike": "지연 타격",

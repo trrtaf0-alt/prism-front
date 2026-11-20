@@ -3,9 +3,9 @@ extends Node2D
 
 const FIELD := Rect2(48, 147, 1440, 864)
 const BUDGET := 400
-const LIMITS := [30, 60, 104]
+const LIMITS := [30, 55, 88]
 const HUGE_LIMIT := 18
-const RING_MASK := preload("res://assets/shockwave.png")
+const REFRESHABLE := ["vortex", "plasma", "gravity"]
 
 class Effect:
 	var style: String
@@ -13,7 +13,6 @@ class Effect:
 	var end: Vector2
 	var radius: float
 	var tint: Color
-	var stage: int
 	var elapsed: float
 	var life: float
 
@@ -32,6 +31,7 @@ var _flash := 0.0
 var _flash_tint := Color.WHITE
 var _tremor := 0.0
 var _time := 0.0
+var _style_counts: Dictionary = {}
 var _preferences
 var _sound
 
@@ -41,14 +41,43 @@ func setup(glow: Texture2D, preferences: Node, sound: Node) -> void:
 	var white := Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
 	white.fill(Color.WHITE)
 	var dot := ImageTexture.create_from_image(white)
-	_lines = SpriteBatch.new(dot, 1.0, null)
-	_rings = SpriteBatch.new(RING_MASK, 2.0, null)
+	var beam := Image.create_empty(4, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		var strength := 1.0 - smoothstep(0.25, 1.0, absf((y - 31.5) / 31.5))
+		for x in 4:
+			beam.set_pixel(x, y, Color(1.0, 1.0, 1.0, strength))
+	var beam_texture := ImageTexture.create_from_image(beam)
+	_lines = SpriteBatch.new(beam_texture, 1.0, null)
+	_rings = SpriteBatch.new(beam_texture, 2.0, null, _annulus())
 	_glows = SpriteBatch.new(glow, 2.0, null)
 	_particles = SpriteBatch.new(dot, 1.0, null)
 	for batch: SpriteBatch in [_glows, _rings, _lines, _particles]:
 		add_child(batch)
 
-func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint: Color, life: float, stage: int) -> void:
+static func _annulus() -> ArrayMesh:
+	const SEGMENTS := 96
+	var points := PackedVector3Array()
+	var uv := PackedVector2Array()
+	var indices := PackedInt32Array()
+	for i in SEGMENTS:
+		var edge := Vector2.from_angle(i * TAU / SEGMENTS)
+		points.append(Vector3(edge.x, edge.y, 0.0) * 0.968)
+		points.append(Vector3(edge.x, edge.y, 0.0))
+		uv.append(Vector2(0.5, 0.0))
+		uv.append(Vector2(0.5, 1.0))
+		var a := i * 2
+		var b := ((i + 1) % SEGMENTS) * 2
+		indices.append_array(PackedInt32Array([a, a + 1, b, b, a + 1, b + 1]))
+	var surface: Array = []
+	surface.resize(Mesh.ARRAY_MAX)
+	surface[Mesh.ARRAY_VERTEX] = points
+	surface[Mesh.ARRAY_TEX_UV] = uv
+	surface[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, surface)
+	return mesh
+
+func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint: Color, life: float, _stage: int) -> void:
 	var large := style.begins_with("charge_") or style in ["cataclysm", "nova", "singularity", "collapse_gravity", "doom", "orbit"]
 	var layer := _huge if large else _ordinary
 	var limit: int = HUGE_LIMIT if large else LIMITS[_preferences.fx_quality]
@@ -57,20 +86,31 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	var extent := Rect2(from.min(to), (to - from).abs()).grow(maxf(48.0, radius * 48.0))
 	if not FIELD.grow(95).intersects(extent):
 		return
+	if not large and style in REFRESHABLE:
+		for prior in _ordinary:
+			if prior.style == style and prior.origin.distance_squared_to(from) <= 38 * 38:
+				prior.origin = from
+				prior.end = to
+				prior.elapsed = minf(prior.elapsed * 0.3, life * 0.15)
+				prior.radius = radius
+				return
+	var style_limit := 38 if style == "spectrum" else 31
+	if not large and int(_style_counts.get(style, 0)) >= style_limit:
+		return
 	if layer.size() >= limit:
 		if not large:
 			return
-		_pool.append(layer.pop_front())
+		_recycle(layer.pop_front())
 	var rule: Effect = Effect.new() if _pool.is_empty() else _pool.pop_back()
 	rule.style = style
 	rule.origin = from
 	rule.end = to
 	rule.radius = radius
 	rule.tint = tint
-	rule.stage = stage
 	rule.elapsed = 0.0
 	rule.life = life
 	layer.append(rule)
+	_style_counts[style] = int(_style_counts.get(style, 0)) + 1
 	if style in ["cataclysm", "nova", "doom", "collapse_gravity"]:
 		_flash = maxf(_flash, 0.68 if style == "cataclysm" else 0.31)
 		_flash_tint = tint
@@ -108,11 +148,15 @@ func _step_layer(layer: Array[Effect], delta: float) -> void:
 		var fx := layer[i]
 		fx.elapsed += delta
 		if fx.elapsed >= fx.life:
-			_pool.append(fx)
+			_recycle(fx)
 			layer[i] = layer.back()
 			layer.pop_back()
 		else:
 			_render(fx)
+
+func _recycle(fx: Effect) -> void:
+	_style_counts[fx.style] -= 1
+	_pool.append(fx)
 
 func _draw() -> void:
 	if _flash > 0.0 and _preferences.fx_flash > 0.0:
@@ -130,7 +174,7 @@ func _render(fx: Effect) -> void:
 			_terminal(fx, t, fade, true)
 		"charge_cataclysm":
 			_charge(fx, t, true)
-		"charge_nova", "charge_doom", "charge_orbit", "charge_blast":
+		"charge_nova", "charge_doom", "charge_orbit", "charge_blast", "charge_rail":
 			_charge(fx, t, false)
 		"nova":
 			_terminal(fx, t, fade * 0.82, false)
@@ -160,6 +204,14 @@ func _render(fx: Effect) -> void:
 				_hoop(at, 26.0 + 8 * t, 6, _time * 4.0, tint)
 		"flame":
 			_plume(at, fx.end, tint, t)
+		"ice":
+			_blast(at, reach, tint, t)
+			for i in (6 if _preferences.fx_quality > 0 else 3):
+				var crystal := at + Vector2.from_angle(i * TAU / 6.0) * reach * (0.25 + t * 0.65)
+				_hoop(crystal, 18.0 * (1.0 - t) + 8.0, 4, i + t, tint)
+		"plasma":
+			_blast(at, reach, tint, t)
+			_hoop(at, reach * (0.82 + 0.12 * t), 6, _time * 0.5, Color(tint, fade * 0.58))
 		"muzzle":
 			_beam(at, at.lerp(fx.end, 0.42), 7.0, tint)
 			_glow(at, 37, tint)
@@ -185,6 +237,9 @@ func _charge(fx: Effect, t: float, terminal: bool) -> void:
 			_beam(anchor, lift, 3 + 7 * t, tint)
 			_ring(anchor, 12.0 + 13 * t, tint)
 		_beam(lift, center, 3 + 14 * t, Color(tint, fade * t))
+	elif fx.style == "charge_rail":
+		_ring(fx.origin, 18.0 + t * 20, tint)
+		_ring(fx.origin, 31.0 - t * 16, tint)
 	elif fx.style == "charge_blast":
 		var bullet := fx.origin.lerp(center, t) - Vector2(0, sin(t * PI) * 135.0)
 		_glow(bullet, 38, tint)
@@ -281,7 +336,7 @@ func _ring(at: Vector2, radius: float, tint: Color) -> void:
 
 func _glow(at: Vector2, radius: float, tint: Color) -> void:
 	if _glow_count < BUDGET:
-		_glows.item(_glow_count, at, Vector2.RIGHT * maxf(1, radius), tint)
+		_glows.item(_glow_count, at, Vector2.RIGHT * clampf(radius, 1.0, 480.0), tint)
 		_glow_count += 1
 
 func _spray(at: Vector2, reach: float, tint: Color, t: float, requested: int) -> void:

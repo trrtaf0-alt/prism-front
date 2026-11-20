@@ -6,15 +6,17 @@ const STRIDE := 12
 var _buffer := PackedFloat32Array()
 var _count := 0
 
-func _init(sprite: Texture2D, side: float, shader_material: ShaderMaterial) -> void:
+func _init(sprite: Texture2D, side: float, shader_material: ShaderMaterial, shape: Mesh = null) -> void:
 	texture = sprite
 	material = shader_material
-	var quad := QuadMesh.new()
-	quad.size = Vector2.ONE * side
+	if shape == null:
+		var quad := QuadMesh.new()
+		quad.size = Vector2.ONE * side
+		shape = quad
 	multimesh = MultiMesh.new()
 	multimesh.transform_format = MultiMesh.TRANSFORM_2D
 	multimesh.use_colors = true
-	multimesh.mesh = quad
+	multimesh.mesh = shape
 	multimesh.custom_aabb = AABB(Vector3.ZERO, Vector3(1920, 1080, 1))
 
 func begin(count: int) -> void:
