@@ -7,6 +7,7 @@ const RESOLUTIONS: Array[Vector2i] = [
 
 var master := 0.80
 var effects := 0.75
+var music := 0.60
 var fullscreen := false
 var resolution := 1
 var best := 0
@@ -36,6 +37,7 @@ func _ready() -> void:
 func load_profile() -> void:
 	master = 0.80
 	effects = 0.75
+	music = 0.60
 	fullscreen = false
 	resolution = 1
 	best = 0
@@ -54,6 +56,7 @@ func load_profile() -> void:
 		return
 	master = _volume(config.get_value("audio", "master", master), master)
 	effects = _volume(config.get_value("audio", "effects", effects), effects)
+	music = _volume(config.get_value("audio", "music", music), music)
 	var legacy_quality: int = int(config.get_value("visual", "quality", 2))
 	var quality: Variant = config.get_value("visual", "quality_v2", legacy_quality + 1)
 	if quality is int:
@@ -93,6 +96,7 @@ func save_profile() -> void:
 	config.load(file_path)
 	config.set_value("audio", "master", master)
 	config.set_value("audio", "effects", effects)
+	config.set_value("audio", "music", music)
 	config.set_value("display", "fullscreen", fullscreen)
 	config.set_value("display", "resolution", resolution)
 	config.set_value("record", "best", best)
@@ -139,13 +143,17 @@ func _valid_clear(record: Dictionary) -> bool:
 
 func apply_audio() -> void:
 	_set_bus(0, master)
-	var index := AudioServer.get_bus_index("Effects")
+	_set_named_bus(&"Effects", effects)
+	_set_named_bus(&"Music", music)
+
+func _set_named_bus(bus: StringName, value: float) -> void:
+	var index := AudioServer.get_bus_index(bus)
 	if index < 0:
 		AudioServer.add_bus()
 		index = AudioServer.bus_count - 1
-		AudioServer.set_bus_name(index, "Effects")
+		AudioServer.set_bus_name(index, bus)
 		AudioServer.set_bus_send(index, "Master")
-	_set_bus(index, effects)
+	_set_bus(index, value)
 
 func _set_bus(index: int, value: float) -> void:
 	AudioServer.set_bus_mute(index, value <= 0.0)

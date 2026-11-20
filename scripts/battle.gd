@@ -2,6 +2,7 @@ class_name Battle
 extends RefCounted
 
 signal effect(kind: StringName, point: Vector2, direction: Vector2)
+signal tower_installed(stage: int, support: int)
 signal wave_started(number: int)
 signal wave_finished(number: int, reward: int)
 signal defeated(number: int)
@@ -192,6 +193,7 @@ func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	support.rebuild(self)
 	_refresh_copies()
 	effect.emit(&"install", tower.position, Vector2.ZERO)
+	tower_installed.emit(int(tower.definition.stage), int(tower.definition.support))
 	return true
 
 func sell(cell: Vector2i) -> bool:
@@ -679,7 +681,9 @@ func _fire(origin: Vector2, direction: Vector2, definition: Dictionary = {}, tar
 			var style := "muzzle"
 			if def.guided:
 				style = "missile_launch"
-			elif def.returning or def.split > 0:
+			elif def.returning:
+				style = "return_launch"
+			elif def.split > 0:
 				style = "phase_launch"
 			elif def.slow > 0:
 				style = "cryogenic_launch"

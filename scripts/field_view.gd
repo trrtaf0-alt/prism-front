@@ -88,7 +88,7 @@ func _ready() -> void:
 	for batch: SpriteBatch in [_effect_glows, _rings, _sparks]:
 		add_child(batch)
 	var bounds := Rect2(ORIGIN, Vector2(battle.field.size) * CELL)
-	advanced_fx.setup(_glow, _preferences, get_tree().root.get_node("Sound"), bounds, CELL)
+	advanced_fx.setup(_glow, _preferences, bounds, CELL)
 	support_fx.setup(self, battle, _preferences)
 	add_child(support_fx)
 	add_child(advanced_fx)

@@ -1,11 +1,17 @@
 extends Node
 
 const RATE := 24000
+const TOWER_AUDIO := preload("res://scripts/tower_audio.gd")
+const TRACKS := {
+	&"patrol": "res://assets/music/neon_watch.ogg",
+	&"boss": "res://assets/music/core_eclipse.ogg",
+}
+const MUSIC_GAIN := 0.56
+const SUPPORT_STAGES := [2, 3, 3, 4, 5, 5]
 const CUES := {
 	&"click": [0.08, 520.0, 780.0, 0.03, 0.21],
 	&"install": [0.18, 200.0, 720.0, 0.12, 0.25],
 	&"sell": [0.17, 720.0, 280.0, 0.08, 0.24],
-	&"fire": [0.11, 1050.0, 160.0, 0.26, 0.13],
 	&"hit": [0.07, 330.0, 150.0, 0.57, 0.10],
 	&"kill": [0.20, 720.0, 100.0, 0.35, 0.14],
 	&"base": [0.32, 190.0, 52.0, 0.32, 0.33],
@@ -14,27 +20,125 @@ const CUES := {
 	&"collapse": [0.8, 210.0, 37.0, 0.26, 0.40],
 	&"charge": [0.45, 80.0, 480.0, 0.04, 0.21],
 	&"heavy": [0.82, 95.0, 28.0, 0.39, 0.42],
-	&"arc": [0.14, 760.0, 240.0, 0.49, 0.20],
 }
 
+var music_track: StringName = &""
+var _music: Dictionary = {}
+var _music_fade: Tween
 var _voices: Dictionary = {}
 var _last_time: Dictionary = {}
+var _retrigger := {&"hit": 85, &"kill": 96}
+var _deployment: Array[StringName] = []
+var _support_deployment: Array[StringName] = []
+var _silent := false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_silent = DisplayServer.get_name() == "headless"
+	var limiter := AudioEffectHardLimiter.new()
+	limiter.ceiling_db = -1.0
+	AudioServer.add_bus_effect(0, limiter)
 	for kind: StringName in CUES:
+		_register(kind, _synthesize(CUES[kind]), 2)
+	for kind: StringName in TOWER_AUDIO.VOICES:
+		var spec: Array = TOWER_AUDIO.VOICES[kind]
+		_register(kind, TOWER_AUDIO.render(kind, spec), 1 if float(spec[0]) > 0.35 else 2)
+		_retrigger[kind] = int(spec[7])
+	for stage in range(6):
+		_deployment.append(_register_deploy("deploy_%d" % stage, stage, 0))
+	for index in SUPPORT_STAGES.size():
+		var kind := index + 1
+		_support_deployment.append(_register_deploy("support_deploy_%d" % kind, SUPPORT_STAGES[index], kind))
+
+	for track: StringName in TRACKS:
 		var player := AudioStreamPlayer.new()
-		player.stream = _synthesize(CUES[kind])
-		player.bus = &"Effects"
-		player.max_polyphony = 3
+		player.stream = load(TRACKS[track])
+		player.bus = &"Music"
+		player.volume_linear = 0.0
 		add_child(player)
-		_voices[kind] = player
+		_music[track] = player
+
+func _register(kind: StringName, stream: AudioStreamWAV, polyphony: int) -> void:
+	var player := AudioStreamPlayer.new()
+	player.stream = stream
+	player.bus = &"Effects"
+	player.max_polyphony = polyphony
+	add_child(player)
+	_voices[kind] = player
+
+func _register_deploy(id: StringName, stage: int, support: int) -> StringName:
+	var spec := [
+		0.28 + stage * 0.10, 300.0 - stage * 28.0 + support * 36.0,
+		350.0 + stage * 28.0 + support * 48.0, 0.32, 0.38, 0.5 + stage * 0.17, 0.32 + stage * 0.046,
+	]
+	_register(id, TOWER_AUDIO.render(id, spec, stage), 2)
+	_retrigger[id] = 92
+	return id
+
+func deploy_cue(stage: int, support: int) -> void:
+	var kind := _deployment[clampi(stage, 0, _deployment.size() - 1)]
+	if support > 0 and support <= _support_deployment.size():
+		kind = _support_deployment[support - 1]
+	cue(kind)
+
+func stop_battle_cues() -> void:
+	if _silent:
+		return
+	for kind: StringName in TOWER_AUDIO.VOICES:
+		_voices[kind].stop()
+	_last_time.clear()
+
+func attack_cue(style: String, _start: Vector2, _end: Vector2, _radius: float, _tint: Color, _life: float, stage: int) -> void:
+	if _silent:
+		return
+	var kind := attack_voice(style, stage)
+	if kind != &"":
+		cue(kind)
+
+func attack_voice(style: String, stage: int) -> StringName:
+	if style == "rail" and stage < 3:
+		return &"pierce"
+	return TOWER_AUDIO.ATTACKS.get(style, &"")
+
+func mob_cue(event: StringName, _start: Vector2, _end: Vector2, _tint: Color, _life: float) -> void:
+	match event:
+		&"boss_spawn", &"phase": cue(&"charge")
+		&"boss_down": cue(&"heavy")
+		&"shield_break": cue(&"arc")
+
+func support_cue(event: StringName, _kind: int, _start: Vector2, _end: Vector2) -> void:
+	match event:
+		&"sync": cue(&"support_sync")
+		&"quantum": cue(&"support_echo")
+
+func play_music(track: StringName = &"", seconds: float = 1.0) -> void:
+	if track == music_track:
+		return
+	assert(track == &"" or _music.has(track), "Unknown music track")
+	music_track = track
+	if _silent:
+		return
+	if _music_fade != null and _music_fade.is_running():
+		_music_fade.kill()
+	_music_fade = create_tween().set_parallel()
+	for id: StringName in _music:
+		var player: AudioStreamPlayer = _music[id]
+		if id == track and not player.playing:
+			player.play()
+		if player.playing:
+			_music_fade.tween_property(player, "volume_linear", MUSIC_GAIN if id == track else 0.0, seconds)
+	_music_fade.chain().tween_callback(_stop_inactive_music)
+
+func _stop_inactive_music() -> void:
+	for id: StringName in _music:
+		if id != music_track:
+			_music[id].stop()
 
 func cue(kind: StringName) -> void:
-	if DisplayServer.get_name() == "headless" or not _voices.has(kind):
+	if _silent or not _voices.has(kind):
 		return
 	var now := Time.get_ticks_msec()
-	if now - int(_last_time.get(kind, -100)) < 42:
+	if now - int(_last_time.get(kind, -2500)) < int(_retrigger.get(kind, 42)):
 		return
 	_last_time[kind] = now
 	_voices[kind].play()

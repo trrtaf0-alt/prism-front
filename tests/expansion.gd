@@ -409,8 +409,76 @@ func _interface() -> void:
 	if "--visual" in OS.get_cmdline_user_args():
 		await _visual_preview(ui)
 	await _camera_effects(ui)
+	await _tower_audio(ui)
 	ui.queue_free()
 	await process_frame
+
+func _tower_audio(ui) -> void:
+	var sound = root.get_node("Sound")
+	check(sound.attack_voice("rail", 1) == &"pierce" and sound.attack_voice("rail", 3) == &"rail", "piercing cannon and railgun have different shot voices")
+	check(sound.attack_voice("spectrum", 5) == &"" and sound.attack_voice("spectrum_source", 5) == &"spectrum", "multi-target optics emit one sound per source")
+	var basic: AudioStreamWAV = sound._voices[&"fire"].stream
+	var heavy: AudioStreamWAV = sound._voices[&"cataclysm"].stream
+	var charge: AudioStreamWAV = sound._voices[&"charge_cataclysm"].stream
+	check(charge.get_length() == 3.5 and heavy.get_length() > basic.get_length() * 8.0, "terminal charge matches its windup and the impact has a longer tail")
+	check(_pcm_peak(heavy) > _pcm_peak(basic) * 2, "terminal attack has more headroom than a basic shot")
+	var early: AudioStreamWAV = sound._voices[&"deploy_0"].stream
+	var terminal: AudioStreamWAV = sound._voices[&"deploy_5"].stream
+	check(terminal.get_length() > early.get_length() * 2.0 and _pcm_peak(terminal) > _pcm_peak(early), "terminal deployment locks in with a heavier startup")
+	if DisplayServer.get_name() == "headless":
+		return
+	ui.start_game()
+	ui.set_physics_process(false)
+	var sim: Battle = ui.battle
+	_unlock(sim)
+	for pair in [[Vector2i(2, 4), "tower_01", &"deploy_0"], [Vector2i(4, 4), "tower_30", &"deploy_5"], [Vector2i(6, 4), "tower_36", &"support_deploy_6"]]:
+		check(sim.install(pair[0], pair[1]) and sound._voices[pair[2]].playing, "real installation plays " + str(pair[2]))
+	var profile = root.get_node("Profile")
+	var quality: int = profile.fx_quality
+	profile.fx_quality = 0
+	var armored := rules.drone.duplicate()
+	armored.health = 90_000
+	sim.spawn(1.9, armored)
+	for i in 12:
+		sim.tick(STEP)
+	check(sound._voices[&"fire"].playing and sound._voices[&"charge_cataclysm"].playing, "real basic shot and terminal windup play at low visual quality")
+	for i in 210:
+		sim.tick(STEP)
+	check(sound._voices[&"cataclysm"].playing, "actual terminal impact plays")
+	var last: int = sound._last_time[&"cataclysm"]
+	sound.cue(&"cataclysm")
+	check(sound._last_time[&"cataclysm"] == last, "repeated terminal audio is rate limited")
+	if "--audio-preview" in OS.get_cmdline_user_args():
+		await _record_tower_audio(sound)
+	profile.fx_quality = quality
+	ui.start_game()
+	check(not sound._voices[&"cataclysm"].playing and not sound._voices[&"charge_cataclysm"].playing, "restart stops the previous battle's long effects")
+	ui.set_physics_process(true)
+
+func _pcm_peak(stream: AudioStreamWAV) -> int:
+	var bytes := stream.data
+	var peak := 0
+	for i in range(0, bytes.size(), 2):
+		peak = maxi(peak, absi(bytes.decode_s16(i)))
+	return peak
+
+func _record_tower_audio(sound) -> void:
+	sound.stop_battle_cues()
+	var bus := AudioServer.get_bus_index("Effects")
+	var record := AudioEffectRecord.new()
+	record.format = AudioStreamWAV.FORMAT_16_BITS
+	AudioServer.add_bus_effect(bus, record)
+	record.set_recording_active(true)
+	await create_timer(0.12).timeout
+	for sample in [[&"deploy_0", 0.46], [&"fire", 0.24], [&"rapid", 0.22], [&"rapid", 0.25],
+			[&"scatter", 0.35], [&"arc", 0.43], [&"rail", 0.53], [&"spectrum", 0.72],
+			[&"deploy_5", 0.88], [&"charge_cataclysm", 3.5], [&"cataclysm", 2.1]]:
+		sound.cue(sample[0])
+		await create_timer(sample[1]).timeout
+	record.set_recording_active(false)
+	var clip := record.get_recording()
+	AudioServer.remove_bus_effect(bus, AudioServer.get_bus_effect_count(bus) - 1)
+	check(clip != null and clip.get_length() > 9.0 and clip.save_to_wav("res://reports/tower-audio-preview.wav") == OK, "record a real Effects bus preview")
 
 func _camera_effects(ui) -> void:
 	var profile = root.get_node("Profile")

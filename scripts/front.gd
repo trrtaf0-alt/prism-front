@@ -166,6 +166,8 @@ func _drop(node: Node) -> void:
 		node.queue_free()
 
 func _replace_screen() -> void:
+	if battle != null:
+		Sound.stop_battle_cues()
 	close_modal()
 	_drop(screen)
 	_drop(camera_fx)
@@ -180,6 +182,7 @@ func _replace_screen() -> void:
 
 func show_menu() -> void:
 	_replace_screen()
+	Sound.play_music(&"patrol")
 	game = false
 	defeat_delay = 0.0
 	var icon := TextureRect.new()
@@ -203,6 +206,7 @@ func start_game() -> void:
 	if not map_error.is_empty():
 		return
 	_replace_screen()
+	Sound.play_music(&"patrol")
 	game = true
 	selected = NONE
 	building = false
@@ -217,6 +221,10 @@ func start_game() -> void:
 	last_base_damage = 0
 	battle = Battle.new(map, data)
 	battle.effect.connect(_battle_effect)
+	battle.tower_installed.connect(Sound.deploy_cue)
+	battle.attack_visual.connect(Sound.attack_cue)
+	battle.mob_visual.connect(Sound.mob_cue)
+	battle.support_visual.connect(Sound.support_cue)
 	battle.wave_started.connect(_wave_started)
 	battle.wave_finished.connect(_wave_finished)
 	battle.defeated.connect(_defeated)
@@ -523,7 +531,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_sync_selection()
 
 func _battle_effect(kind: StringName, _point: Vector2, _direction: Vector2) -> void:
-	Sound.cue(kind)
+	if kind != &"install":
+		Sound.cue(kind)
 	if kind == &"base":
 		flash = 1.0
 
@@ -535,9 +544,11 @@ func _base_damage(amount: int) -> void:
 
 func _mob_announcement(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color, _life: float) -> void:
 	if kind == &"boss_spawn":
+		Sound.play_music(&"boss", 0.55)
 		wave_callout = "종결 보스 출현"
 		callout_time = 2.7
 	elif kind == &"boss_down":
+		Sound.play_music(&"patrol", 1.8)
 		wave_callout = "종결 보스 격파"
 		callout_time = 2.7
 
@@ -555,6 +566,7 @@ func _wave_finished(number: int, amount: int) -> void:
 	Sound.cue(&"clear")
 
 func _defeated(_number: int) -> void:
+	Sound.play_music()
 	if modal_kind == "research":
 		close_modal()
 	building = false
@@ -608,6 +620,7 @@ func show_pause() -> void:
 	button_at(panel, "메인 메뉴", Rect2(36, 338, 408, 54), show_menu)
 
 func _cleared(record: Dictionary) -> void:
+	Sound.play_music()
 	Profile.record_clear(record)
 	callout_time = 0.0
 	toast.hide()
@@ -653,36 +666,37 @@ func show_game_over() -> void:
 
 func show_settings(return_to: String) -> void:
 	settings_origin = return_to
-	var panel := _open_modal(return_to, Vector2(620, 608))
+	var panel := _open_modal(return_to, Vector2(620, 689))
 	text_at(panel, "설정", 35, 24, 42)
-	_settings_slider(panel, "마스터 볼륨", 124, Profile.master, true)
-	_settings_slider(panel, "효과음 볼륨", 205, Profile.effects, false)
-	text_at(panel, "화면 모드", 36, 290, 21, MUTED)
+	_settings_slider(panel, "마스터 볼륨", 124, &"master")
+	_settings_slider(panel, "효과음 볼륨", 205, &"effects")
+	_settings_slider(panel, "배경음악 볼륨", 286, &"music")
+	text_at(panel, "화면 모드", 36, 371, 21, MUTED)
 	var mode := OptionButton.new()
 	mode.add_item("창모드")
 	mode.add_item("전체화면")
 	mode.select(int(Profile.fullscreen))
-	place(mode, panel, Rect2(278, 287, 306, 44))
-	text_at(panel, "창 해상도", 36, 350, 21, MUTED)
+	place(mode, panel, Rect2(278, 368, 306, 44))
+	text_at(panel, "창 해상도", 36, 431, 21, MUTED)
 	var sizes := OptionButton.new()
 	for res in Profile.RESOLUTIONS:
 		sizes.add_item("%d × %d" % [res.x, res.y])
 	sizes.select(Profile.resolution)
 	sizes.disabled = Profile.fullscreen
-	place(sizes, panel, Rect2(278, 346, 306, 44))
+	place(sizes, panel, Rect2(278, 427, 306, 44))
 	mode.item_selected.connect(_set_fullscreen.bind(sizes))
 	sizes.item_selected.connect(_set_resolution)
-	text_at(panel, "캠페인 최고 웨이브", 36, 423, 21, MUTED)
-	var best_label := text_at(panel, "%d / 50" % Profile.campaign_best, 278, 418, 26, GOLD, 306)
+	text_at(panel, "캠페인 최고 웨이브", 36, 504, 21, MUTED)
+	var best_label := text_at(panel, "%d / 50" % Profile.campaign_best, 278, 499, 26, GOLD, 306)
 	best_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var record_text := "50웨이브 미클리어" if Profile.best_clear.is_empty() else "최고 기지 HP %d  ·  최단 %s" % [Profile.best_clear.health, _duration(Profile.fastest_clear)]
 	if Profile.best > Profile.campaign_best:
 		record_text += "  ·  이전 최고 %d" % Profile.best
 	if Profile.save_error:
 		record_text = "설정을 저장할 수 없습니다."
-	text_at(panel, record_text, 36, 467, 17, PINK if Profile.save_error else MUTED, 548)
-	button_at(panel, "전투 효과 설정", Rect2(36, 514, 266, 56), show_effect_settings)
-	button_at(panel, "닫기", Rect2(318, 514, 266, 56), _leave_settings, true).grab_focus()
+	text_at(panel, record_text, 36, 548, 17, PINK if Profile.save_error else MUTED, 548)
+	button_at(panel, "전투 효과 설정", Rect2(36, 595, 266, 56), show_effect_settings)
+	button_at(panel, "닫기", Rect2(318, 595, 266, 56), _leave_settings, true).grab_focus()
 
 func can_open_research() -> bool:
 	return game and not battle.lost and not battle.won and (not battle.active or bool(data.balance.research_available_during_wave))
@@ -859,7 +873,8 @@ func _set_fx_value(value: float, key: String, percent: Label) -> void:
 	percent.text = "%d%%" % roundi(value)
 	Profile.save_profile()
 
-func _settings_slider(parent: Node, name_text: String, y: float, value: float, master: bool) -> void:
+func _settings_slider(parent: Node, name_text: String, y: float, key: StringName) -> void:
+	var value: float = Profile.get(key)
 	text_at(parent, name_text, 36, y - 20, 21, MUTED)
 	var number := text_at(parent, "%d%%" % roundi(value * 100), 492, y - 22, 21, MINT, 92)
 	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -869,14 +884,12 @@ func _settings_slider(parent: Node, name_text: String, y: float, value: float, m
 	slider.step = 1
 	slider.value = roundi(value * 100)
 	place(slider, parent, Rect2(36, y + 18, 548, 28))
-	slider.value_changed.connect(_set_volume.bind(master, number))
-	slider.drag_ended.connect(_volume_preview)
+	slider.value_changed.connect(_set_volume.bind(key, number))
+	if key != &"music":
+		slider.drag_ended.connect(_volume_preview)
 
-func _set_volume(value: float, master: bool, number: Label) -> void:
-	if master:
-		Profile.master = value / 100.0
-	else:
-		Profile.effects = value / 100.0
+func _set_volume(value: float, key: StringName, number: Label) -> void:
+	Profile.set(key, value / 100.0)
 	number.text = "%d%%" % roundi(value)
 	Profile.apply_audio()
 	Profile.save_profile()

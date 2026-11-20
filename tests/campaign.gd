@@ -115,11 +115,15 @@ func _ui_and_record() -> void:
 	profile.best_clear = {}
 	profile.fastest_clear = 0.0
 	profile.master = 0.42
+	profile.apply_audio()
+	var sound = root.get_node("Sound")
 	var packed := load("res://scenes/Front.tscn") as PackedScene
 	var ui = packed.instantiate()
 	root.add_child(ui)
 	await process_frame
+	check(sound.music_track == &"patrol", "menu starts normal music")
 	ui.start_game()
+	check(sound.music_track == &"patrol", "entering a battle keeps normal music")
 	var sim: Battle = ui.battle
 	var turret := rules.towers.lookup(TowerRegistry.BASE)
 	check(ui.field.path_in_range(Vector2i(1, 2), turret) > 4.0, "entry preview clips the path into firing range")
@@ -140,10 +144,36 @@ func _ui_and_record() -> void:
 	sim.wave = 49
 	sim.elapsed = 2010.0
 	sim.start_wave()
+	check(sound.music_track == &"boss", "real wave 50 boss spawn selects the boss score")
+	if DisplayServer.get_name() != "headless":
+		var patrol: AudioStreamPlayer = sound._music[&"patrol"]
+		var boss: AudioStreamPlayer = sound._music[&"boss"]
+		var patrol_clip := patrol.stream as AudioStreamOggVorbis
+		var boss_clip := boss.stream as AudioStreamOggVorbis
+		check(patrol_clip.loop and boss_clip.loop and patrol_clip.get_length() == 60.0 and boss_clip.get_length() > 58.0, "both stereo score resources loop")
+		check(patrol.playing and boss.playing and boss.bus == &"Music", "the boss score overlaps the outgoing score during the fade")
+		ui.set_physics_process(false)
+		await create_timer(0.75).timeout
+		check(not patrol.playing and boss.playing and boss.get_playback_position() > 0.0 and boss.volume_linear > 0.5, "fade completes and boss playback advances")
+		var music_bus := AudioServer.get_bus_index("Music")
+		var capture := AudioEffectCapture.new()
+		AudioServer.add_bus_effect(music_bus, capture)
+		boss.seek(boss_clip.get_length() - 0.15)
+		await create_timer(0.55).timeout
+		check(boss.playing and boss.get_playback_position() < 1.5, "boss playback wraps without stopping")
+		var peak := 0.0
+		for frame in capture.get_buffer(capture.get_frames_available()):
+			peak = maxf(peak, maxf(absf(frame.x), absf(frame.y)))
+		check(peak > 0.02, "the music bus receives a non-silent mix")
+		AudioServer.remove_bus_effect(music_bus, AudioServer.get_bus_effect_count(music_bus) - 1)
+		ui.set_physics_process(true)
+	sim._apply_damage(sim.bosses[0], 9_000_000, Vector2.ZERO)
+	check(sound.music_track == &"patrol" and sim.active, "boss death returns to normal music while escorts remain")
 	sim.queued = 0
 	_drain(sim)
 	check(ui.modal_kind == "victory" and ui.wave_button.disabled and not ui.can_open_research(), "victory UI differs from defeat and locks play")
 	check(not ui.toast.visible and ui.callout_time == 0.0, "victory dismisses prior combat notices")
+	check(sound.music_track == &"", "victory fades out the battle music")
 	check(profile.best == 90 and profile.campaign_best == 50 and profile.fastest_clear > 0.0, "legacy and campaign records stay separate")
 	if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
 		await process_frame
@@ -160,5 +190,13 @@ func _ui_and_record() -> void:
 	check(profile.best == 90 and profile.campaign_best == 50 and profile.fastest_clear == 1500.0 and profile.best_clear.health == 100 and profile.master == 0.42, "best defense, fastest time and settings persist")
 	ui.start_game()
 	check(ui.battle.wave == 0 and ui.battle.credits == 50 and ui.battle.research.points == 0 and ui.battle.total_kills == 0 and ui.battle.total_installs == 0 and not ui.battle.won and profile.fastest_clear == 1500.0, "restart resets campaign but retains saved record")
+	var retry: Battle = ui.battle
+	retry.wave = 49
+	retry.start_wave()
+	retry.bosses[0].progress = map.length()
+	retry.tick(STEP)
+	check(retry.lost and sound.music_track == &"", "boss escape fades out boss music")
+	ui.show_menu()
+	check(sound.music_track == &"patrol", "returning from defeat restores normal music")
 	ui.queue_free()
 	await process_frame

@@ -45,15 +45,13 @@ var _time := 0.0
 var _style_counts: Dictionary = {}
 var _tracked_beams: Dictionary = {}
 var _preferences
-var _sound
 var _field: Rect2
 var _cell: float
 
-func setup(glow: Texture2D, preferences: Node, sound: Node, bounds: Rect2, cell: float) -> void:
+func setup(glow: Texture2D, preferences: Node, bounds: Rect2, cell: float) -> void:
 	_field = bounds
 	_cell = cell
 	_preferences = preferences
-	_sound = sound
 	var white := Image.create_empty(4, 4, false, Image.FORMAT_RGBA8)
 	white.fill(Color.WHITE)
 	var dot := ImageTexture.create_from_image(white)
@@ -161,21 +159,6 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	if style in ["cataclysm", "nova", "doom", "collapse_gravity"]:
 		_flash = maxf(_flash, 0.68 if style == "cataclysm" else 0.31)
 		_flash_tint = tint
-		_sound.cue(&"heavy")
-	elif style in ["mob_boss_spawn", "mob_phase"]:
-		_sound.cue(&"charge")
-	elif style == "mob_boss_down":
-		_sound.cue(&"heavy")
-	elif style == "mob_shield_break":
-		_sound.cue(&"arc")
-	elif style.begins_with("mob_"):
-		return
-	elif style.begins_with("charge_"):
-		_sound.cue(&"charge")
-	elif style in ["arc", "storm"]:
-		_sound.cue(&"arc")
-	else:
-		_sound.cue(&"fire")
 
 func update(delta: float) -> void:
 	_time += delta
@@ -321,7 +304,7 @@ func _render(fx: Effect) -> void:
 		"split":
 			_stamp(12, at, 95.0 + t * 110.0, t * 0.8, fade)
 			_blast(at, reach, tint, t)
-		"muzzle", "missile_launch", "phase_launch", "cryogenic_launch", "scatter_launch":
+		"muzzle", "missile_launch", "phase_launch", "return_launch", "cryogenic_launch", "scatter_launch":
 			_launch(fx, tint, t)
 		_:
 			_blast(at, reach, tint, t)
@@ -461,7 +444,7 @@ func _launch(fx: Effect, tint: Color, t: float) -> void:
 		"cryogenic_launch":
 			_stamp(5, at + axis * 15.0 * t, 42.0 + 34.0 * t, axis.angle(), tint.a * 0.72)
 			_beam(at, at + axis * 26.0, 5.0, tint)
-		"phase_launch":
+		"phase_launch", "return_launch":
 			_ring(at + axis * (12.0 + t * 26.0), 8.0 + t * 14.0, tint)
 			_beam(at, at + axis * 29.0, 5.0, tint)
 		_:

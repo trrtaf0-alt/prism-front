@@ -200,10 +200,16 @@ func _interface(profile: Node) -> void:
 	gui_click(ui, Vector2(960, 565))
 	check(ui.modal_kind == "pause_settings", "settings can be reached from pause")
 	await capture("settings")
-	gui_click(ui, Vector2(875, 391))
+	var sliders: Array[Node] = ui.modal.find_children("*", "HSlider", true, false)
+	_click_slider(ui, sliders[0], 0.32)
 	check(profile.master < 0.80 and profile.master > 0.0, "master slider responds to viewport input")
-	gui_click(ui, Vector2(835, 472))
+	_click_slider(ui, sliders[1], 0.24)
 	check(profile.effects < 0.75 and profile.effects > 0.0, "effects slider responds to viewport input")
+	_click_slider(ui, sliders[2], 0.0)
+	var music_bus := AudioServer.get_bus_index("Music")
+	check(profile.music == 0.0 and AudioServer.is_bus_mute(music_bus) and not AudioServer.is_bus_mute(AudioServer.get_bus_index("Effects")), "music slider mutes only music")
+	_click_slider(ui, sliders[2], 0.40)
+	check(profile.music > 0.35 and profile.music < 0.45 and not AudioServer.is_bus_mute(music_bus), "music slider restores playback")
 	var modes: Array[Node] = ui.modal.find_children("*", "OptionButton", true, false)
 	var window_mode := modes[0] as OptionButton
 	var resolutions := modes[1] as OptionButton
@@ -249,6 +255,10 @@ func _interface(profile: Node) -> void:
 	ui.queue_free()
 	await process_frame
 
+func _click_slider(ui: Control, slider: HSlider, fraction: float) -> void:
+	var canvas_point := slider.get_global_transform_with_canvas() * Vector2(slider.size.x * fraction, slider.size.y * 0.5)
+	gui_click(ui, ui.get_global_transform_with_canvas().affine_inverse() * canvas_point)
+
 func gui_click(ui: Control, logical: Vector2) -> void:
 	var point := ui.get_global_transform_with_canvas() * logical
 	var move := InputEventMouseMotion.new()
@@ -282,6 +292,7 @@ func _write_profile(profile: Node) -> void:
 	check(profile.master == 0.8 and profile.effects == 1.0 and profile.resolution == 1 and profile.best == 0, "invalid fields recover safely")
 	profile.master = 0.42
 	profile.effects = 0.64
+	profile.music = 0.38
 	profile.fullscreen = true
 	profile.resolution = 3
 	profile.record_wave(7)
@@ -291,7 +302,7 @@ func _write_profile(profile: Node) -> void:
 
 func _verify_profile(profile: Node) -> void:
 	profile.load_profile()
-	check(is_equal_approx(profile.master, 0.42) and is_equal_approx(profile.effects, 0.64), "volume settings persisted")
+	check(is_equal_approx(profile.master, 0.42) and is_equal_approx(profile.effects, 0.64) and is_equal_approx(profile.music, 0.38), "volume settings persisted")
 	check(profile.fullscreen and profile.resolution == 3, "display settings persisted")
 	check(profile.best == 7, "best wave persisted")
 
