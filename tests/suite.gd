@@ -178,6 +178,7 @@ func _interface(profile: Node) -> void:
 	var play: Button = ui.screen.get_node("StartGame")
 	check(play.has_focus(), "menu starts with keyboard focus on play")
 	await capture("menu")
+	await _codex_reference(ui)
 	gui_click(ui, play.get_global_rect().get_center())
 	check(ui.modal_kind == "difficulty" and not ui.game, "menu start opens the difficulty chooser")
 	await capture("difficulty-selection")
@@ -192,6 +193,8 @@ func _interface(profile: Node) -> void:
 			gui_click(ui, button.get_global_rect().get_center())
 			break
 	check(ui.game and ui.battle.difficulty == &"easy", "difficulty card starts the selected campaign")
+	await _zoom_and_inspect(ui)
+	ui.start_game(&"easy")
 	var sim: Battle = ui.battle
 	check(FieldView.pixel(Vector2(15, 9)) == FieldView.SCREEN.get_center(), "battlefield is centered in the viewport")
 	check(not ui.tower_heading.visible and not ui.sell_button.visible and not ui.support_button.visible, "tower details appear only on selection")
@@ -199,6 +202,7 @@ func _interface(profile: Node) -> void:
 	await capture("hud-full-field")
 	gui_click(ui, ui.build_button.get_rect().get_center())
 	check(ui.building and ui.field.building, "build button enters placement mode")
+	check(ui.tower_stats.visible and ui.tower_stats.text.contains("기본 피해 1"), "placement shows stats before spending credits")
 	var tower_tile := FieldView.pixel(Vector2(3.5, 2.5))
 	ui.set_process(false)
 	ui.field.hovered = Vector2i(3, 2)
@@ -229,6 +233,9 @@ func _interface(profile: Node) -> void:
 		check(sim.occupied.has(cell), "viewport click can install beside HUD at %s" % str(cell))
 	gui_click(ui, ui.catalog_button.get_rect().get_center())
 	check(ui.modal_kind == "catalog" and sim.towers.size() == edge_cells.size(), "a HUD button opens its menu without placing a tower through it")
+	var preview := ui.modal.find_child("TowerPreview", true, false) as RichTextLabel
+	check(preview != null and preview.text.contains("탄속  12칸/초"), "catalog shows detailed stats before choosing a tower")
+	await capture("tower-preview")
 	ui.close_modal()
 	var final_slot := Vector2i(1, 2)
 	gui_click(ui, FieldView.pixel(Vector2(final_slot) + Vector2.ONE * 0.5))
@@ -246,7 +253,7 @@ func _interface(profile: Node) -> void:
 	var distance := sim.enemies[0].progress
 	ui._physics_process(STEP)
 	check(ui.modal_kind == "pause" and sim.enemies[0].progress == distance and ui.field.frozen, "escape pauses simulation")
-	gui_click(ui, Vector2(960, 565))
+	gui_click(ui, Vector2(853, 565))
 	check(ui.modal_kind == "pause_settings", "settings can be reached from pause")
 	await capture("settings")
 	var sliders: Array[Node] = ui.modal.find_children("*", "HSlider", true, false)
@@ -307,6 +314,83 @@ func _interface(profile: Node) -> void:
 func _click_slider(ui: Control, slider: HSlider, fraction: float) -> void:
 	var canvas_point := slider.get_global_transform_with_canvas() * Vector2(slider.size.x * fraction, slider.size.y * 0.5)
 	gui_click(ui, ui.get_global_transform_with_canvas().affine_inverse() * canvas_point)
+
+func _codex_reference(ui: Control) -> void:
+	ui.show_codex()
+	var codex := ui.modal.get_child(0).get_child(0) as CombatCodex
+	check(ui.modal_kind == "codex" and codex._entries.item_count == rules.towers.ids.size(), "main menu codex includes all towers")
+	for index in codex._entries.item_count:
+		codex._show_entry(index)
+		check(codex._detail.text.contains(codex._entries.get_item_text(index)), "tower codex detail " + codex._entries.get_item_text(index))
+		if codex._entries.get_item_metadata(index) == "tower_30":
+			check(codex._detail.text.contains("100,000") and codex._detail.text.contains("3.5초"), "cataclysm details use current damage and windup")
+			codex._entries.select(index)
+			codex._entries.ensure_current_is_visible()
+			await capture("codex-towers")
+	codex._enemy_tab.pressed.emit()
+	check(codex._entries.item_count == rules.mobs.definitions.size(), "enemy codex includes all primary enemies and descendants")
+	codex._difficulty.select(2)
+	for index in codex._entries.item_count:
+		codex._show_entry(index)
+		check(codex._detail.text.contains(codex._entries.get_item_text(index)), "enemy codex detail " + codex._entries.get_item_text(index))
+		if codex._entries.get_item_metadata(index) == "boss":
+			check(codex._detail.text.contains("45,000,000") and codex._detail.text.contains("3단계"), "boss preview uses selected mode and shows its phases")
+			codex._entries.select(index)
+			codex._entries.ensure_current_is_visible()
+			await capture("codex-enemies")
+	var energy_index := rules.mobs.definitions.keys().find("energy")
+	codex._entries.select(energy_index)
+	codex._show_entry(energy_index)
+	codex._wave.value = 50
+	check(codex._detail.text.contains("36,400") and codex._detail.text.contains("25,200"), "enemy codex applies selected wave and difficulty to body and shield")
+	ui._close_codex()
+
+func _zoom_and_inspect(ui: Control) -> void:
+	var sim: Battle = ui.battle
+	var camera: BattleCameraFX = ui.camera_fx
+	var cell := Vector2i(8, 4)
+	var anchor := FieldView.pixel(Vector2(cell) + Vector2.ONE * 0.5)
+	var wheel := InputEventMouseButton.new()
+	wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+	wheel.position = ui.get_global_transform_with_canvas() * anchor
+	wheel.pressed = true
+	root.push_input(wheel, true)
+	check(camera.manual_zoom > 1.0 and camera.cell_under(anchor) == cell, "mouse wheel zoom anchors the same tile under the pointer")
+	var enemy := sim.spawn(16.0, rules.mobs.lookup("shield"))
+	enemy.health -= 7
+	var pointer: Vector2 = ui.field.transform * FieldView.pixel(enemy.position)
+	ui._inspect_enemy(pointer)
+	check(ui.enemy_inspector.visible and ui.enemy_hp.text.contains(str(enemy.health)) and ui.enemy_shield_text.visible, "zoomed hover displays current and maximum enemy body and shield HP")
+	ui.set_process(false)
+	await capture("zoom-enemy-inspection")
+	ui.set_process(true)
+	enemy.health = 0
+	ui._inspect_enemy(pointer)
+	check(not ui.enemy_inspector.visible, "hover clears when the enemy dies")
+	var old_transform: Transform2D = ui.field.transform
+	var drag := InputEventMouseButton.new()
+	drag.button_index = MOUSE_BUTTON_MIDDLE
+	drag.position = wheel.position
+	drag.pressed = true
+	root.push_input(drag, true)
+	var move := InputEventMouseMotion.new()
+	move.position = drag.position + Vector2(18, 14)
+	move.relative = Vector2(18, 14)
+	move.button_mask = MOUSE_BUTTON_MASK_MIDDLE
+	root.push_input(move, true)
+	drag.pressed = false
+	root.push_input(drag, true)
+	check(ui.field.transform != old_transform and not ui._panning, "middle drag pans the zoomed battlefield and releases cleanly")
+	var before_pause: Transform2D = ui.field.transform
+	ui.show_pause()
+	check(camera.manual_zoom > 1.0 and before_pause == ui.field.transform, "pause keeps manual camera zoom")
+	ui.close_modal()
+	var tile_point: Vector2 = ui.field.transform * anchor
+	gui_click(ui, ui.build_button.get_rect().get_center())
+	gui_click(ui, tile_point)
+	check(sim.occupied.has(cell) and sim.credits == 40, "zoomed and panned click installs on the displayed tile")
+	gui_click(ui, ui.zoom_button.get_rect().get_center())
+	check(is_equal_approx(camera.manual_zoom, 1.0) and camera.cell_under(anchor) == cell, "zoom HUD button resets the view")
 
 func gui_click(ui: Control, logical: Vector2) -> void:
 	var point := ui.get_global_transform_with_canvas() * logical

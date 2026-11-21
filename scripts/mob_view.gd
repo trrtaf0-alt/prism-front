@@ -121,13 +121,9 @@ func submit(battle: Battle, origin: Vector2, dim: bool, quality: int) -> void:
 			color = color.lerp(Color.WHITE, 0.25 if dim else 0.53)
 		if drone.status.stun_left > 0.0:
 			color = color.lerp(SHOCK_TINT, 0.58)
-		var at := origin + drone.position * _cell
+		var at := origin + visual_position(drone, battle.elapsed, _cell) * _cell
 		var segment := mini(floori(drone.progress), last)
 		var heading := path[segment + 1] - path[segment]
-		if drone.shape == 5:
-			var age := battle.elapsed - drone.mob.spawn_at
-			if age < 0.40 and int(drone.definition.get("generation", 0)) > 0:
-				at += Vector2.from_angle((drone.serial % 4) * PI * 0.5) * sin(age / 0.4 * PI) * 17.0
 		if drone.hidden:
 			color.a = 0.34
 		if halo_count < halo_budget and not drone.hidden and (drone.scale >= 1.35 or drone.shield_hp > 0):
@@ -172,3 +168,11 @@ func submit(battle: Battle, origin: Vector2, dim: bool, quality: int) -> void:
 		batch.finish()
 	for batch: SpriteBatch in [rings, shield_bar, health_back, health_front, marks]:
 		batch.finish()
+
+
+static func visual_position(drone: Battle.Drone, elapsed: float, cell: float) -> Vector2:
+	var age := elapsed - drone.mob.spawn_at
+	if drone.shape == 5 and age < 0.40 and int(drone.definition.get("generation", 0)) > 0:
+		var direction := Vector2.from_angle((drone.serial % 4) * PI * 0.5)
+		return drone.position + direction * sin(age / 0.4 * PI) * (17.0 / cell)
+	return drone.position

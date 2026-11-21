@@ -3,6 +3,7 @@ extends Node2D
 
 const LENS := preload("res://assets/battle_lens.gdshader")
 const MAX_IMPULSES := 6
+const MAX_MANUAL_ZOOM := 2.5
 const ATTACKS := {
 	"cataclysm": Vector4(24.0, -0.054, 18.0, 0.63),
 	"charge_cataclysm": Vector4(0.0, 0.030, 4.0, 0.52),
@@ -27,6 +28,8 @@ class Impulse:
 
 var bounds: Rect2
 var suspended := false
+var manual_zoom := 1.0
+var _pan := Vector2.ZERO
 var _field: FieldView
 var _prefs
 var _exit: Vector2
@@ -86,13 +89,14 @@ func suspend(enabled: bool) -> void:
 	suspended = enabled
 	if enabled:
 		_impulses.clear()
-		_field.transform = Transform2D.IDENTITY
+		_apply_view()
 		_hide_lens()
 
 func update(delta: float) -> void:
 	if suspended:
 		return
 	if _impulses.is_empty():
+		_apply_view()
 		return
 	var shake := Vector2.ZERO
 	var zoom := 0.0
@@ -115,11 +119,42 @@ func update(delta: float) -> void:
 			warp = pulse
 	var zoom_scale := 1.0 + clampf(zoom, -0.066, 0.049) * float(_prefs.fx_zoom)
 	var displacement := shake.limit_length(26.0) * float(_prefs.fx_shake)
-	_field.transform = Transform2D(0.0, Vector2.ONE * zoom_scale, 0.0, bounds.get_center() * (1.0 - zoom_scale) + displacement)
+	_apply_view(zoom_scale, displacement)
 	if warp != null and _prefs.fx_warp > 0.0 and _prefs.fx_quality > 0 and DisplayServer.get_name() != "headless":
 		_show_lens(warp, warp_strength * float(_prefs.fx_warp))
 	else:
 		_hide_lens()
+
+func _apply_view(impact_zoom: float = 1.0, shake: Vector2 = Vector2.ZERO) -> void:
+	var manual := Transform2D(0.0, Vector2.ONE * manual_zoom, 0.0, _pan)
+	var impact := Transform2D(0.0, Vector2.ONE * impact_zoom, 0.0, bounds.get_center() * (1.0 - impact_zoom) + shake)
+	var view := impact * manual
+	if _field.transform != view:
+		_field.transform = view
+
+func zoom_at(point: Vector2, factor: float) -> void:
+	var next_zoom := clampf(manual_zoom * factor, 1.0, MAX_MANUAL_ZOOM)
+	_pan = point - (point - _pan) * (next_zoom / manual_zoom)
+	manual_zoom = next_zoom
+	_clamp_pan()
+	update(0.0)
+
+func pan_by(motion: Vector2) -> void:
+	_pan += motion
+	_clamp_pan()
+	update(0.0)
+
+func reset_zoom() -> void:
+	manual_zoom = 1.0
+	_pan = Vector2.ZERO
+	update(0.0)
+
+func _clamp_pan() -> void:
+	var screen := FieldView.SCREEN
+	_pan = _pan.clamp(screen.end * (1.0 - manual_zoom), screen.position * (1.0 - manual_zoom))
+
+func world_under(point: Vector2) -> Vector2:
+	return (_field.transform.affine_inverse() * sample_point(point) - FieldView.ORIGIN) / FieldView.CELL
 
 func _show_lens(warp: Impulse, strength: float) -> void:
 	_lens_center = _field.transform * warp.point
@@ -148,7 +183,7 @@ func _hide_lens() -> void:
 
 func cell_under(point: Vector2) -> Vector2i:
 	if FieldView.SCREEN.has_point(point):
-		var cell := _field.cell_under(sample_point(point))
+		var cell := Vector2i(world_under(point).floor())
 		if _field.battle.field.contains(cell):
 			return cell
 	return Vector2i(-1, -1)

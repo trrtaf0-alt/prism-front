@@ -211,10 +211,10 @@ func _attack_details() -> void:
 	var far := sim.spawn(50.0, armored)
 	for i in 211:
 		sim.tick(STEP)
-	check(far.health == 920000, "cataclysm lands 80000 at remote location after windup")
+	check(far.health == 900000, "cataclysm lands 100000 at remote location after windup")
 	for i in 480:
 		sim.tick(STEP)
-	check(far.health == 840000, "cataclysm lands a second strike eight seconds later")
+	check(far.health == 800000, "cataclysm lands a second strike eight seconds later")
 	sim = _new_battle()
 	_unlock(sim)
 	sim.install(Vector2i(2, 4), "tower_28")

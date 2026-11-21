@@ -11,6 +11,7 @@ const GOLD := Color("#dcc197")
 const NONE := Vector2i(-1, -1)
 const BASE_BAR_WIDTH := 138.0
 const BOSS_BAR_WIDTH := 600.0
+const INSPECT_BAR_WIDTH := 274.0
 
 var data := BattleData.new()
 var map := FieldMap.new()
@@ -54,6 +55,16 @@ var boss_title: Label
 var boss_values: Label
 var boss_body: ColorRect
 var boss_shield: ColorRect
+var zoom_button: Button
+var enemy_inspector: Panel
+var enemy_name: Label
+var enemy_hp: Label
+var enemy_shield_text: Label
+var enemy_hp_fill: ColorRect
+var enemy_shield_fill: ColorRect
+var _enemy_pick_radius := 1.0
+var _panning := false
+var _codex_from_pause := false
 var last_base_damage := 0
 var flash := 0.0
 var toast: Label
@@ -79,6 +90,8 @@ func _ready() -> void:
 		map_error = data.mobs.error
 	if not map_error.is_empty():
 		push_error(map_error)
+	for def: Dictionary in data.mobs.definitions.values():
+		_enemy_pick_radius = maxf(_enemy_pick_radius, float(def.scale) * 0.5 + 0.6)
 	show_menu()
 
 func _init_theme() -> void:
@@ -194,10 +207,11 @@ func show_menu() -> void:
 	_style_menu_button(play, MENU_CYAN, true)
 	play.disabled = not map_error.is_empty()
 
-	var settings := button_at(screen, "설정", Rect2(120, 643, 155, 54), show_settings.bind("menu"))
-	var exit := button_at(screen, "종료", Rect2(293, 643, 155, 54), get_tree().quit)
-	_style_menu_button(settings, MENU_CYAN)
-	_style_menu_button(exit, MENU_CYAN)
+	var settings := button_at(screen, "설정", Rect2(120, 643, 102, 54), show_settings.bind("menu"))
+	var codex := button_at(screen, "도감", Rect2(233, 643, 102, 54), show_codex)
+	var exit := button_at(screen, "종료", Rect2(346, 643, 102, 54), get_tree().quit)
+	for button in [settings, codex, exit]:
+		_style_menu_button(button, MENU_CYAN)
 	if map_error.is_empty():
 		play.grab_focus()
 	else:
@@ -244,6 +258,7 @@ func start_game(difficulty: StringName = &"easy") -> void:
 	game = true
 	selected = NONE
 	building = false
+	_panning = false
 	build_id = TowerRegistry.BASE
 	research_view.clear()
 	_credits_shown = -1
@@ -292,6 +307,8 @@ func _make_hud() -> void:
 	_hud_text(screen, "RP", 626, 22, 17, MUTED, 146)
 	rp_label = _hud_text(screen, "0", 626, 43, 28, Color("#c3b5d0"), 146)
 	_hud_text(screen, BattleData.DIFFICULTIES[battle.difficulty], 800, 46, 19, MUTED, 110)
+	zoom_button = _hud_button("100%", Rect2(928, 38, 106, 44), _reset_zoom)
+	zoom_button.tooltip_text = "휠: 확대·축소  ·  휠 드래그: 이동  ·  클릭: 초기화"
 
 	# Center the actions on the seam between tile rows, leaving tile centers clickable.
 	_hud_button("일시정지 · Esc", Rect2(1704, 38, 158, 44), show_pause)
@@ -336,6 +353,63 @@ func _make_hud() -> void:
 	boss_shield.color = Color("#8dbdc9")
 	boss_shield.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	place(boss_shield, boss_panel, Rect2(0, 40, BOSS_BAR_WIDTH, 2))
+	_make_enemy_inspector()
+
+func _make_enemy_inspector() -> void:
+	enemy_inspector = panel_at(screen, Rect2(0, 0, 306, 88), "#111922f5", "#536675")
+	enemy_name = text_at(enemy_inspector, "", 16, 8, 22, LIGHT, INSPECT_BAR_WIDTH)
+	enemy_hp = text_at(enemy_inspector, "", 16, 38, 18, LIGHT, INSPECT_BAR_WIDTH)
+	enemy_hp_fill = _inspection_bar(67.0, Color("#e58b9c"))
+	enemy_shield_text = text_at(enemy_inspector, "", 16, 79, 17, Color("#a6e1fa"), INSPECT_BAR_WIDTH)
+	enemy_shield_fill = _inspection_bar(107.0, Color("#7ecdff"))
+	enemy_inspector.hide()
+
+func _inspection_bar(y: float, color: Color) -> ColorRect:
+	var track := panel_at(enemy_inspector, Rect2(16, y, INSPECT_BAR_WIDTH, 5), "#2b3846", "#2b3846")
+	var fill := ColorRect.new()
+	fill.color = color
+	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	place(fill, track, Rect2(0, 0, INSPECT_BAR_WIDTH, 5))
+	return fill
+
+func _inspect_enemy(point: Vector2) -> void:
+	if building or battle.lost or battle.won or not FieldView.SCREEN.has_point(point):
+		enemy_inspector.hide()
+		return
+	var cursor := camera_fx.world_under(point)
+	var closest := INF
+	var target: Battle.Drone
+	for drone in battle.query_box(cursor, cursor, _enemy_pick_radius):
+		var at := MobView.visual_position(drone, battle.elapsed, FieldView.CELL)
+		var distance := cursor.distance_squared_to(at)
+		if distance < closest and distance <= pow(maxf(0.21, drone.scale * 0.47), 2.0):
+			closest = distance
+			target = drone
+	if target == null:
+		enemy_inspector.hide()
+		return
+	enemy_name.text = target.definition.name
+	enemy_hp.text = "본체 HP  %s / %s" % [CombatReference.number(target.health), CombatReference.number(target.maximum_health)]
+	enemy_hp_fill.size.x = INSPECT_BAR_WIDTH * float(target.health) / target.maximum_health
+	var shielded := target.shield_hp > 0
+	enemy_shield_text.visible = shielded
+	(enemy_shield_fill.get_parent() as Control).visible = shielded
+	if shielded:
+		enemy_shield_text.text = "보호막  %s / %s" % [CombatReference.number(target.shield_hp), CombatReference.number(target.shield_max)]
+		enemy_shield_fill.size.x = INSPECT_BAR_WIDTH * float(target.shield_hp) / maxi(1, target.shield_max)
+	enemy_inspector.size.y = 127.0 if shielded else 88.0
+	var offset := Vector2(23.0, -enemy_inspector.size.y - 14.0)
+	if point.y + offset.y < 95.0:
+		offset.y = 21.0
+	enemy_inspector.position = (point + offset).clamp(Vector2(16, 95), FieldView.SCREEN.end - enemy_inspector.size - Vector2(16, 88))
+	enemy_inspector.show()
+
+func _reset_zoom() -> void:
+	camera_fx.reset_zoom()
+	_update_zoom_button()
+
+func _update_zoom_button() -> void:
+	zoom_button.text = "%d%%" % roundi(camera_fx.manual_zoom * 100.0)
 
 func _hud_text(parent: Control, value: String, x: float, y: float, font_size: int, color: Color, width: float) -> Label:
 	var label := text_at(parent, value, x, y, font_size, color, width)
@@ -405,6 +479,13 @@ func _update_hud() -> void:
 	var has_tower := battle.occupied.has(selected)
 	for control: Control in [tower_heading, tower_stats, sell_button, support_button]:
 		control.visible = has_tower
+	if building and not has_tower:
+		var definition := data.towers.lookup(build_id)
+		tower_heading.show()
+		tower_stats.show()
+		tower_heading.text = definition.name
+		tower_stats.text = CombatReference.tower_summary(definition)
+		tower_stats.tooltip_text = definition.description
 	if has_tower:
 		var tower: Battle.Turret = battle.occupied[selected]
 		var definition := tower.definition
@@ -543,7 +624,12 @@ func _process(delta: float) -> void:
 		camera_fx.update(delta)
 		if not battle.lost:
 			var hovered_control := get_viewport().gui_get_hovered_control()
-			field.hovered = NONE if hovered_control is Button else camera_fx.cell_under(get_local_mouse_position())
+			var cursor := get_local_mouse_position()
+			field.hovered = NONE if hovered_control is Button or _panning else camera_fx.cell_under(cursor)
+			if hovered_control is Button or _panning:
+				enemy_inspector.hide()
+			else:
+				_inspect_enemy(cursor)
 		flash = maxf(0.0, flash - delta * 1.65)
 		_credit_flash = maxf(0.0, _credit_flash - delta)
 		callout_time = maxf(0.0, callout_time - delta)
@@ -558,11 +644,24 @@ func _process(delta: float) -> void:
 				show_game_over()
 		_update_hud()
 
+func _input(event: InputEvent) -> void:
+	if not _panning:
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE and not event.pressed:
+		_panning = false
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion:
+		var motion := make_input_local(event) as InputEventMouseMotion
+		camera_fx.pan_by(motion.relative)
+		get_viewport().set_input_as_handled()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
 		match modal_kind:
 			"pause", "research", "catalog", "support", "difficulty":
 				close_modal()
+			"codex":
+				_close_codex()
 			"effects_settings":
 				show_settings(settings_origin)
 			"menu", "pause_settings":
@@ -582,12 +681,29 @@ func _unhandled_input(event: InputEvent) -> void:
 			show_research()
 		get_viewport().set_input_as_handled()
 		return
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_K:
+		if modal_kind == "codex":
+			_close_codex()
+		elif modal == null or modal_kind == "pause":
+			show_codex()
+		get_viewport().set_input_as_handled()
+		return
 	if not game or modal != null or battle.lost or battle.won:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_1:
 		toggle_build()
 		get_viewport().set_input_as_handled()
 	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			var factor := 1.16 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.16
+			camera_fx.zoom_at(make_input_local(event).position, factor)
+			_update_zoom_button()
+			get_viewport().set_input_as_handled()
+			return
+		if event.button_index == MOUSE_BUTTON_MIDDLE:
+			_panning = camera_fx.manual_zoom > 1.0
+			get_viewport().set_input_as_handled()
+			return
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			building = false
 			selected = NONE
@@ -678,6 +794,8 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 			control.focus_mode = Control.FOCUS_NONE
 	if is_instance_valid(field):
 		field.frozen = true
+		_panning = false
+		enemy_inspector.hide()
 		placement_label.hide()
 		camera_fx.suspend(true)
 	var shade := ColorRect.new()
@@ -695,9 +813,25 @@ func show_pause() -> void:
 	text_at(panel, "일시정지", 35, 29, 39)
 	text_at(panel, "웨이브 %d  /  기지 %d" % [battle.wave, battle.health], 36, 93, 20, MUTED)
 	button_at(panel, "계속하기", Rect2(36, 152, 408, 54), close_modal, true).grab_focus()
-	button_at(panel, "설정", Rect2(36, 214, 408, 54), show_settings.bind("pause_settings"))
+	button_at(panel, "설정", Rect2(36, 214, 195, 54), show_settings.bind("pause_settings"))
+	button_at(panel, "도감 · K", Rect2(249, 214, 195, 54), show_codex)
 	button_at(panel, "다시 시작", Rect2(36, 276, 408, 54), start_game.bind(battle.difficulty))
 	button_at(panel, "메인 메뉴", Rect2(36, 338, 408, 54), show_menu)
+
+func show_codex() -> void:
+	_codex_from_pause = modal_kind == "pause"
+	var panel := _open_modal("codex", Vector2(1396, 861))
+	var codex := CombatCodex.new()
+	place(codex, panel, Rect2(Vector2.ZERO, panel.size))
+	var wave := clampi(battle.wave, 1, BattleData.FINAL_WAVE) if game else 1
+	var mode := battle.difficulty if game else &"easy"
+	codex.setup(self, wave, mode, _close_codex)
+
+func _close_codex() -> void:
+	if _codex_from_pause:
+		show_pause()
+	else:
+		close_modal()
 
 func _cleared(record: Dictionary) -> void:
 	Sound.play_music()
@@ -810,8 +944,8 @@ func show_catalog(show_all: bool = false) -> void:
 	for id in data.towers.ids:
 		if show_all or battle.research.unlocked.has(id):
 			ids.append(id)
-	var columns := 6 if ids.size() > 12 else clampi(ids.size(), 2, 4)
-	var dimensions := Vector2(maxi(690, columns * 259 + 56), 205 + 110 * ceili(float(ids.size()) / columns))
+	var columns := 5 if ids.size() > 12 else clampi(ids.size(), 2, 4)
+	var dimensions := Vector2(maxi(1024, columns * 239 + 460), maxi(560, 151 + 100 * ceili(float(ids.size()) / columns)))
 	var panel := _open_modal("catalog", dimensions)
 	text_at(panel, "타워 선택", 33, 22, 34)
 	var close := button_at(panel, "닫기", Rect2(dimensions.x - 146, 25, 112, 46), close_modal)
@@ -819,20 +953,27 @@ func show_catalog(show_all: bool = false) -> void:
 	funds.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	button_at(panel, "해금됨 %d" % battle.research.unlocked.size(), Rect2(34, 82, 156, 42), show_catalog.bind(false), not show_all)
 	button_at(panel, "전체 %d" % data.towers.ids.size(), Rect2(201, 82, 130, 42), show_catalog.bind(true), show_all)
-	var detail := text_at(panel, "", 34, dimensions.y - 53, 18, MUTED, dimensions.x - 68)
+	var detail_x := dimensions.x - 416.0
+	panel_at(panel, Rect2(detail_x, 143, 382, dimensions.y - 170), "#101820", "#314451")
+	var detail := RichTextLabel.new()
+	detail.name = "TowerPreview"
+	detail.bbcode_enabled = true
+	detail.add_theme_font_size_override("normal_font_size", 18)
+	detail.add_theme_constant_override("line_separation", 5)
+	place(detail, panel, Rect2(detail_x + 18.0, 156, 346, dimensions.y - 198))
 	var initial_focus := close
 	for i in ids.size():
 		var id := ids[i]
 		var def := data.towers.lookup(id)
 		var ready := battle.research.unlocked.has(id)
 		var affordable := battle.credits >= int(def.cost)
-		var at := Vector2(34 + (i % columns) * 259, 143 + floori(float(i) / columns) * 110)
+		var at := Vector2(34 + (i % columns) * 239, 143 + floori(float(i) / columns) * 100)
 		var subtitle := "배치 %d" % int(def.cost)
 		if not ready:
 			subtitle += "  ·  연구"
 		elif not affordable:
 			subtitle += "  ·  부족"
-		var tile := button_at(panel, "", Rect2(at, Vector2(241, 91)), _choose_tower.bind(id), ready and affordable)
+		var tile := button_at(panel, "", Rect2(at, Vector2(225, 91)), _choose_tower.bind(id), ready and affordable)
 		var tint: Color = def.tint
 		var frame := TowerArt.first_frame(id)
 		for layer in [frame, frame + 1]:
@@ -840,11 +981,11 @@ func show_catalog(show_all: bool = false) -> void:
 			portrait.texture = TowerArt.icon(layer)
 			portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			place(portrait, tile, Rect2(1, 6, 79, 79))
-		text_at(tile, def.name, 76, 6, 20, LIGHT, 157)
+			place(portrait, tile, Rect2(1, 10, 70, 70))
+		text_at(tile, def.name, 66, 6, 20, LIGHT, 151)
 		var role := _tower_role(def)
-		text_at(tile, role, 76, 35, 15, tint, 157)
-		text_at(tile, subtitle, 76, 60, 15, MINT if ready and affordable else MUTED, 157)
+		text_at(tile, role, 66, 35, 15, tint, 151)
+		text_at(tile, subtitle, 66, 60, 15, MINT if ready and affordable else MUTED, 151)
 		tile.disabled = (ready and not affordable) or (not ready and not can_open_research())
 		tile.tooltip_text = def.description
 		tile.mouse_entered.connect(_catalog_detail.bind(detail, def))
@@ -855,9 +996,9 @@ func show_catalog(show_all: bool = false) -> void:
 	_catalog_detail(detail, data.towers.lookup(build_id))
 	initial_focus.grab_focus()
 
-func _catalog_detail(label: Label, definition: Dictionary) -> void:
-	label.text = "%s  ·  %s" % [definition.name, definition.description]
-	label.modulate = definition.tint
+func _catalog_detail(label: RichTextLabel, definition: Dictionary) -> void:
+	label.text = CombatReference.tower_text(definition, data)
+	label.scroll_to_line(0)
 
 func _support_timer(tower: Battle.Turret) -> String:
 	match int(tower.definition.support):
