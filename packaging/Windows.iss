@@ -1,5 +1,5 @@
 #ifndef AppVersion
-  #define AppVersion "0.6.0"
+  #define AppVersion "0.6.1"
 #endif
 #ifndef AppId
   #define AppId "PrismFront"
@@ -48,6 +48,7 @@ Name: "desktopicon"; Description: "바탕화면 바로가기 만들기"
 Source: "{#GameExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "Play.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\Godot-LICENSE.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
+Source: "..\assets\Godot-COPYRIGHT.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 Source: "..\assets\OFL.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 
 [Icons]
