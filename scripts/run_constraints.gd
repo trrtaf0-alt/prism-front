@@ -36,6 +36,13 @@ func active() -> bool:
 func count() -> int:
 	return _levels.size()
 
+func summary_text() -> String:
+	var lines := PackedStringArray()
+	for id: StringName in _levels:
+		var level := int(_levels[id])
+		lines.append("%s %d단계 · %s" % [DEFINITIONS[id][0], level, effect_text(id, level)])
+	return "\n".join(lines)
+
 func value(id: StringName) -> int:
 	return int(DEFINITIONS[id][1][_levels.get(id, 0)])
 

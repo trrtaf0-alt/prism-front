@@ -34,6 +34,8 @@ func _levels() -> void:
 		[100, 150, 200, 300, 400, 600], [100, 110, 120, 135, 150, 175], [100, 150, 200, 300, 400, 600],
 	]
 	check(RunConstraints.DEFINITIONS.size() == expected.size(), "exactly eleven constraints")
+	var selected_levels := RunConstraints.new({&"credits": 3, &"tower_limit": 2, &"enemy_hp": 0})
+	check(selected_levels.summary_text() == "재화 감소 3단계 · -30%\n설치 수 제한 2단계 · 30기", "summary lists only active levels and formats percentages and limits")
 	var ids := RunConstraints.DEFINITIONS.keys()
 	for i in ids.size():
 		for level in range(6):
@@ -189,6 +191,17 @@ func _interface() -> void:
 	panel._buttons[&"research_price"][2].pressed.emit()
 	panel._start()
 	check(ui.game and ui.battle.difficulty == &"hard" and ui.battle.constraints.count() == 2 and ui.build_button.text.contains("20"), "selected difficulty and displayed installation cost reach the new run")
+	var badge := ui.screen.get_node_or_null("ActiveConstraints") as Label
+	check(badge != null and badge.text == "제약 2종" and badge.tooltip_text == "물가 폭등 5단계 · +100%\n연구 비용 폭등 2단계 · +40%", "HUD badge reports the selected run constraints")
+	if badge != null:
+		var hover := InputEventMouseMotion.new()
+		hover.position = badge.get_global_transform_with_canvas() * (badge.size * 0.5)
+		root.push_input(hover, true)
+		check(root.gui_get_hovered_control() == badge, "mouse reaches the constraint badge")
+		if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
+			root.warp_mouse(hover.position)
+			await create_timer(0.85).timeout
+			await _capture("constraints-hud-tooltip")
 	var profile = root.get_node("Profile")
 	var entry: Dictionary = profile.campaign_record(&"hard").duplicate(true)
 	ui.battle.wave = 49
@@ -197,6 +210,7 @@ func _interface() -> void:
 	check(ui.modal_kind == "victory" and profile.campaign_record(&"hard") == entry, "constraint victory and wave do not modify ordinary records")
 	ui.start_game(&"hard")
 	check(not ui.battle.constraints.active() and ui.build_button.text.contains("10") and ui.battle.credits == 50, "ordinary restart clears previous constraints")
+	check(not ui.screen.has_node("ActiveConstraints"), "ordinary runs omit the badge and its tooltip")
 
 func _click(button: Button) -> void:
 	var point := button.get_global_transform_with_canvas() * (button.size * 0.5)

@@ -351,7 +351,11 @@ func _make_hud() -> void:
 	rp_label = _hud_text(screen, "0", 626, 43, 28, Color("#c3b5d0"), 146)
 	_hud_text(screen, BattleData.DIFFICULTIES[battle.difficulty], 800, 46, 19, MUTED, 110)
 	if battle.constraints.active():
-		_hud_text(screen, "제약 %d종" % battle.constraints.count(), 800, 74, 17, MENU_CYAN, 110)
+		var constraint_badge := _hud_text(screen, "제약 %d종" % battle.constraints.count(), 800, 74, 17, MENU_CYAN, 110)
+		constraint_badge.name = "ActiveConstraints"
+		constraint_badge.mouse_filter = Control.MOUSE_FILTER_PASS
+		constraint_badge.mouse_default_cursor_shape = Control.CURSOR_HELP
+		constraint_badge.tooltip_text = battle.constraints.summary_text()
 	zoom_button = _hud_button("100%", Rect2(924, 23, 118, 75) if mobile else Rect2(928, 38, 106, 44), _reset_zoom)
 	zoom_button.tooltip_text = "두 손가락으로 확대·축소 · 눌러서 초기화" if mobile else "휠: 확대·축소  ·  휠 드래그: 이동  ·  클릭: 초기화"
 	var reference := _hud_button("도감" if mobile else "도감 · K", Rect2(1052, 23, 124, 75) if mobile else Rect2(1048, 38, 124, 44), show_codex)
