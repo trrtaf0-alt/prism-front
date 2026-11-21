@@ -1,7 +1,6 @@
 extends Control
 
 const UI_FONT := preload("res://assets/NotoSansKR.ttf")
-const MENU_ART := preload("res://assets/menu_core.webp")
 const MENU_CYAN := Color("#a3ebf3")
 const MINT := Color("#a9c6bd")
 const LIGHT := Color("#eee9dc")
@@ -198,35 +197,39 @@ func show_menu() -> void:
 	Sound.play_music(&"patrol")
 	game = false
 	defeat_delay = 0.0
-	text_at(screen, "프리즘 방어선", 114, 332, 92, Color("#edf5f9"))
-	text_at(screen, "50웨이브 · 에너지 코어 방어", 120, 468, 25, Color("#9db2c1"))
+	text_at(screen, "프리즘 방어선", 160, 345, 84, Color("#edf5f9"))
+	text_at(screen, "50웨이브 · 에너지 코어 방어", 165, 472, 24, Color("#9db2c1"))
 
-	var play := button_at(screen, "게임 시작", Rect2(120, 553, 328, 72), show_difficulty)
+	var play := button_at(screen, "게임 시작", Rect2(165, 550, 330, 70), show_difficulty)
 	play.name = "StartGame"
 	play.add_theme_font_size_override("font_size", 27)
 	_style_menu_button(play, MENU_CYAN, true)
 	play.disabled = not map_error.is_empty()
 
-	var settings := button_at(screen, "설정", Rect2(120, 643, 102, 54), show_settings.bind("menu"))
-	var codex := button_at(screen, "도감", Rect2(233, 643, 102, 54), show_codex)
-	var exit := button_at(screen, "종료", Rect2(346, 643, 102, 54), get_tree().quit)
+	var settings := button_at(screen, "설정", Rect2(165, 636, 102, 53), show_settings.bind("menu"))
+	var codex := button_at(screen, "도감", Rect2(279, 636, 102, 53), show_codex)
+	var exit := button_at(screen, "종료", Rect2(393, 636, 102, 53), get_tree().quit)
 	for button in [settings, codex, exit]:
 		_style_menu_button(button, MENU_CYAN)
+		button.add_theme_stylebox_override("normal", box("#0b141d", "#293c48"))
 	if map_error.is_empty():
 		play.grab_focus()
 	else:
-		text_at(screen, "맵 오류 · " + map_error, 120, 731, 21, PINK, 580)
+		text_at(screen, "맵 오류 · " + map_error, 165, 716, 21, PINK, 580)
 		settings.grab_focus()
 
 func _style_menu_button(button: Button, accent: Color, primary: bool = false) -> void:
 	var border := "#" + accent.to_html(false)
-	button.add_theme_stylebox_override("normal", box("#132b36" if primary else "#0c141bd9", border if primary else "#344756"))
-	button.add_theme_stylebox_override("hover", box("#203b48", border))
-	button.add_theme_stylebox_override("pressed", box("#274954", border))
+	button.add_theme_stylebox_override("normal", box("#a4dde1" if primary else "#0c141bd9", border if primary else "#344756"))
+	button.add_theme_stylebox_override("hover", box("#c6f2f3" if primary else "#203b48", border))
+	button.add_theme_stylebox_override("pressed", box("#82bdc4" if primary else "#274954", border))
 	var focus := box("#00000000", border)
 	focus.set_expand_margin_all(4.0)
 	button.add_theme_stylebox_override("focus", focus)
-	button.add_theme_color_override("font_color", Color("#edf5f9") if primary else Color("#c4d4df"))
+	button.add_theme_color_override("font_color", Color("#0b1b24") if primary else Color("#c4d4df"))
+	if primary:
+		for state in ["font_hover_color", "font_pressed_color", "font_focus_color"]:
+			button.add_theme_color_override(state, Color("#0b1b24"))
 
 func show_difficulty() -> void:
 	var panel := _open_modal("difficulty", Vector2(932, 376))
@@ -1163,4 +1166,24 @@ func _draw() -> void:
 	if game:
 		draw_rect(viewport_rect, Color("#101316"))
 	else:
-		draw_texture_rect(MENU_ART, viewport_rect, false)
+		draw_rect(viewport_rect, Color("#0b121b"))
+		_draw_menu_prism()
+
+func _draw_menu_prism() -> void:
+	var center := Vector2(1390, 540)
+	var top := center + Vector2(0, -237)
+	var right := center + Vector2(195, -18)
+	var bottom := center + Vector2(0, 237)
+	var left := center + Vector2(-195, 18)
+	var joint := center + Vector2(33, 12)
+
+	draw_line(Vector2(165, 318), Vector2(215, 318), Color("#83bac4"), 2.0, true)
+	draw_line(center - Vector2(325, 0), center + Vector2(325, 0), Color("#1b2b39"), 1.5, true)
+	draw_line(center - Vector2(0, 310), center + Vector2(0, 310), Color("#1b2b39"), 1.5, true)
+	draw_colored_polygon(PackedVector2Array([top, joint, left]), Color("#1a343e"))
+	draw_colored_polygon(PackedVector2Array([top, right, joint]), Color("#142631"))
+	draw_colored_polygon(PackedVector2Array([right, bottom, joint]), Color("#192437"))
+	draw_colored_polygon(PackedVector2Array([bottom, left, joint]), Color("#111e2b"))
+	draw_polyline(PackedVector2Array([top, right, bottom, left, top]), Color("#7eaeb9"), 2.0, true)
+	draw_polyline(PackedVector2Array([left, joint, right]), Color("#628692"), 1.5, true)
+	draw_polyline(PackedVector2Array([top, joint, bottom]), Color("#628692"), 1.5, true)
