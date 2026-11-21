@@ -10,9 +10,10 @@ const DEFAULTS := {
 	"returning": false, "split": 0, "fragment_damage": 0, "fragment_range": 0.0,
 	"slow": 0.0, "gravity_slow": 0.0, "shock": false, "status_time": 0.0, "mark_bonus": 0.0,
 	"mark_cap": 0,
+	"economy": "", "production": 0,
 }
 const ATTACK_NAMES := {
-	"support": "지원", "bolt": "투사체", "line": "직선 관통", "chain": "연쇄", "strike": "지연 타격",
+	"support": "지원", "economy": "경제", "bolt": "투사체", "line": "직선 관통", "chain": "연쇄", "strike": "지연 타격",
 	"cone": "부채꼴", "beam": "광선", "mark": "피해 증폭 표식", "field": "지속 광역",
 	"multi": "동시 조준", "pulse": "확산 충격파", "singularity": "전역 지속장",
 }
@@ -53,6 +54,13 @@ func _add(raw: Dictionary) -> void:
 	if kind < TowerSupport.Kind.NONE or kind > TowerSupport.Kind.COMMAND or (raw.attack == "support") != (kind != TowerSupport.Kind.NONE):
 		error = "유효하지 않은 지원 타워 종류 · " + id
 		return
+	if raw.attack == "economy":
+		var role: String = raw.get("economy", "")
+		var producer := role in ["credits", "rp"]
+		if float(raw.damage) != 0.0 or not role in ["credits", "rp", "credit_amp", "rp_amp", "core"] \
+				or (int(raw.get("production", 0)) > 0) != producer or (float(raw.range) > 0.0) == producer:
+			error = "유효하지 않은 경제 타워 정의 · " + id
+			return
 	var def := DEFAULTS.duplicate()
 	def.merge(raw, true)
 	def.refund = int(raw.get("refund", floori(float(raw.cost) * float(raw.get("refund_ratio", 1.0)))))
@@ -65,3 +73,11 @@ func lookup(id: String) -> Dictionary:
 
 static func reach_text(def: Dictionary) -> String:
 	return "전장 전체" if def.global else "%s칸" % str(float(def.range)).trim_suffix(".0")
+
+static func category(def: Dictionary) -> String:
+	if not str(def.economy).is_empty():
+		return "경제 타워"
+	return "버프 타워" if def.support != TowerSupport.Kind.NONE else "공격 타워"
+
+static func attacks(def: Dictionary) -> bool:
+	return def.support == TowerSupport.Kind.NONE and str(def.economy).is_empty()

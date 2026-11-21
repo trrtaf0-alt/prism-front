@@ -49,11 +49,20 @@ func setup(host: Control, show_all: bool, initial: String) -> void:
 
 	var first: Button
 	var initial_button: Button
+	var category := ""
 	for id in battle.data.towers.ids:
 		var unlocked := battle.research.unlocked.has(id)
 		if not show_all and not unlocked:
 			continue
 		var def := battle.tower_definition(id)
+		var next_category := TowerRegistry.category(def)
+		if category != next_category:
+			var header := Label.new()
+			header.text = next_category
+			header.add_theme_font_size_override("font_size", 30)
+			header.add_theme_color_override("font_color", Color("#a9c6bd"))
+			_list.add_child(header)
+			category = next_category
 		var button := _add_tower(id, def, unlocked)
 		if first == null:
 			first = button
@@ -64,6 +73,7 @@ func setup(host: Control, show_all: bool, initial: String) -> void:
 	if initial_button != null:
 		_select(str(initial_button.get_meta("tower")))
 		initial_button.set_pressed_no_signal(true)
+		_scroll.ensure_control_visible.call_deferred(initial_button)
 
 func _add_tower(id: String, def: Dictionary, unlocked: bool) -> Button:
 	var button := Button.new()
@@ -83,8 +93,8 @@ func _tap_tower(point: Vector2) -> void:
 	if not Rect2(Vector2.ZERO, _scroll.size).has_point(point):
 		return
 	var list_point := point - _list.position
-	for row: Button in _list.get_children():
-		if row.get_rect().has_point(list_point):
+	for row: Control in _list.get_children():
+		if row is Button and row.get_rect().has_point(list_point):
 			row.set_pressed_no_signal(true)
 			_select(str(row.get_meta("tower")))
 			return

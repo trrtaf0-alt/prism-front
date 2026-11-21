@@ -36,7 +36,7 @@ func _new_battle() -> Battle:
 
 func _unlock(sim: Battle) -> void:
 	sim.credits = 5_000_000
-	sim.research.earn(60_000)
+	sim.research.earn(100_000)
 	for id in rules.research.ordered:
 		sim.research.purchase(id)
 

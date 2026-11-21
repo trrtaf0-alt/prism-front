@@ -17,6 +17,8 @@ BASES = [
     (5, 41, 18), (8, 40, 22), (4, 41, 45), (6, 43, 0), (6, 43, 30),
     (4, 43, 45), (3, 44, 30), (8, 47, 22), (6, 47, 0), (4, 47, 45),
     (6, 37, 30), (8, 39, 22), (6, 40, 30), (4, 42, 45), (3, 43, 30), (8, 47, 22),
+    (4, 30, 45), (6, 35, 30), (8, 43, 22), (6, 32, 30), (4, 38, 45),
+    (8, 43, 22), (6, 36, 0), (6, 38, 30), (8, 47, 22),
 ]
 
 
@@ -311,6 +313,48 @@ class Sprite:
                     self.arc(25, a + 5, a + 54, self.tint, 3)
                 self.gem(0, 0, 18, 6)
                 self.circle(0, 0, 6, "#fff9e5")
+            case 37:  # Four collector scoops around an ingot.
+                for a in range(0, 360, 90):
+                    self.arc(27, a + 9, a + 68, self.tint, 5)
+                self.gem(0, 0, 11, 4)
+            case 38:  # Three synthesis gates.
+                self.nodes(3, 30, 5, -90)
+                for a in range(0, 360, 120):
+                    self.arc(24, a + 13, a + 102, self.tint, 4)
+                self.gem(0, 0, 13, 6)
+            case 39:  # Gold reactor with an octagonal containment crown.
+                self.nodes(8, 36, 4)
+                self.circle(0, 0, 26, "#27251d", self.tint, 5)
+                self.gem(0, 0, 20, 8)
+            case 40:  # Transparent analyzer chip with four data terminals.
+                self.regular(4, 21, 45, "#18373a", self.tint, 3)
+                self.gem(0, 0, 8, 4)
+                self.nodes(4, 28, 4)
+            case 41:  # Two squared computer buses in rotation.
+                self.regular(4, 26, 45, "#162639", self.tint, 3)
+                self.regular(4, 16, 0, self.steel, self.lit, 3)
+                self.nodes(4, 32, 4)
+            case 42:  # Opposing quantum rings around a white crystal.
+                for a in range(0, 360, 120):
+                    self.arc(35, a + 5, a + 97, self.tint, 4)
+                    self.arc(25, a + 40, a + 128, "#f7efff", 3)
+                self.gem(0, 0, 12, 6)
+            case 43:  # Material amplifier with three radial gold emitters.
+                self.nodes(3, 34, 7, -90)
+                self.regular(3, 25, -90, "#3a2e23", self.tint, 3)
+                self.gem(0, 0, 10, 3)
+            case 44:  # Research amplifier with six holographic emitters.
+                for a in range(0, 360, 60):
+                    self.arc(30, a + 8, a + 44, "#b39cff", 4)
+                self.nodes(6, 33, 4)
+                self.gem(0, 0, 12, 6)
+            case 45:  # Industrial core, two crowns and a white-gold center.
+                self.nodes(8, 40, 5, 22)
+                for a in range(0, 360, 45):
+                    self.arc(44, a + 4, a + 33, self.tint, 3)
+                    self.arc(28, a + 12, a + 40, self.lit, 3)
+                self.gem(0, 0, 20, 8)
+                self.circle(0, 0, 7, "#fff9e5")
 
     def render(self):
         return self.image.resize((self.pixels, self.pixels), Image.Resampling.LANCZOS)

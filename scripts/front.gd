@@ -557,7 +557,10 @@ func _update_hud() -> void:
 		var tower: Battle.Turret = battle.occupied[selected]
 		var definition := tower.definition
 		tower_heading.text = definition.name
-		if definition.support != TowerSupport.Kind.NONE:
+		if not str(definition.economy).is_empty():
+			support_button.hide()
+			tower_stats.text = _economy_stats(tower)
+		elif definition.support != TowerSupport.Kind.NONE:
 			tower_stats.text = "지원 범위  %s   ·   대상  %d기\n%s" % [
 				TowerRegistry.reach_text(definition), battle.support.followers(tower).size(), _support_timer(tower),
 			]
@@ -572,6 +575,21 @@ func _update_hud() -> void:
 		tower_stats.tooltip_text = definition.description
 		sell_button.text = "타워 판매  +%d" % int(definition.refund)
 	sell_button.disabled = not has_tower or battle.lost
+
+func _economy_stats(tower: Battle.Turret) -> String:
+	var def := tower.definition
+	var summary := CombatReference.tower_summary(def)
+	if battle.active and tower.economy_wave != battle.wave:
+		return summary + "\n다음 웨이브부터 적용"
+	match str(def.economy):
+		"core":
+			var count := battle.economy.connected(tower).size()
+			return "반경 %s · 연결 %d기 · 생산량 +%d%%" % [TowerRegistry.reach_text(def), count, TowerEconomy.core_bonus(count)]
+		"credit_amp", "rp_amp":
+			return "%s\n연결 %d기" % [summary, battle.economy.connected(tower).size()]
+		_:
+			var bonus := int(battle.economy.bonuses.get(tower, 0))
+			return "%s\n생산 증폭 +%d%%" % [summary, bonus] if bonus > 0 else summary
 
 func _update_placement() -> void:
 	var blueprint := battle.tower_definition(build_id)
@@ -606,7 +624,14 @@ func _update_placement() -> void:
 	var message := ""
 	match status_at_tile:
 		Battle.Placement.READY:
-			if blueprint.support != TowerSupport.Kind.NONE:
+			if int(blueprint.production) > 0:
+				message = "설치 가능 · 웨이브 완료 시 생산"
+			elif blueprint.economy == "core":
+				var links := battle.economy.preview_core(Vector2(cell) + Vector2.ONE * 0.5, float(blueprint.range))
+				message = "연결 %d기 · 생산량 +%d%%" % [links, TowerEconomy.core_bonus(links)]
+				if battle.active:
+					message += " · 다음 웨이브"
+			elif not TowerRegistry.attacks(blueprint):
 				message = "지원 범위 %s" % TowerRegistry.reach_text(blueprint)
 			else:
 				var reach := field.path_in_range(cell, blueprint)
@@ -901,6 +926,13 @@ func _wave_started(number: int) -> void:
 func _wave_finished(number: int, amount: int) -> void:
 	result.text = "웨이브 %d 완료  +%d" % [number, amount]
 	wave_callout = "웨이브 %d 완료" % number
+	var output := PackedStringArray()
+	if battle.economy.last_credits > 0:
+		output.append("재화 +%s" % CombatReference.number(battle.economy.last_credits))
+	if battle.economy.last_rp > 0:
+		output.append("RP +%s" % CombatReference.number(battle.economy.last_rp))
+	if not output.is_empty():
+		wave_callout = "생산 완료 · " + "  ·  ".join(output)
 	callout_time = 2.0
 	Sound.cue(&"clear")
 
@@ -1003,7 +1035,7 @@ func _cleared(record: Dictionary) -> void:
 	var stats := [
 		["총 플레이 시간", _duration(record.seconds)], ["보스전 시간", _duration(record.finale)],
 		["남은 기지 HP", str(record.health)], ["총 처치", str(record.kills)],
-		["획득 재화", str(record.credits)], ["완료 연구", "%d / 100" % int(record.research)],
+		["획득 재화", str(record.credits)], ["완료 연구", "%d / %d" % [int(record.research), data.research.ids.size()]],
 		["타워 설치", "%d회" % int(record.installed)],
 	]
 	stats.append(["커스텀 규칙", battle.constraints.badge_text()] if constrained else ["최단 기록", _duration(entry.fastest_clear)])
@@ -1127,7 +1159,7 @@ func show_catalog(show_all: bool = false) -> void:
 		if show_all or battle.research.unlocked.has(id):
 			ids.append(id)
 	var columns := 5 if ids.size() > 12 else clampi(ids.size(), 2, 4)
-	var dimensions := Vector2(maxi(1024, columns * 239 + 460), maxi(560, 151 + 100 * ceili(float(ids.size()) / columns)))
+	var dimensions := Vector2(maxi(1024, columns * 239 + 460), clampf(250 + 100 * ceili(float(ids.size()) / columns), 560, 960))
 	var panel := _open_modal("catalog", dimensions)
 	text_at(panel, "타워 선택", 33, 22, 34)
 	var close := button_at(panel, "닫기", Rect2(dimensions.x - 146, 25, 112, 46), close_modal)
@@ -1143,19 +1175,35 @@ func show_catalog(show_all: bool = false) -> void:
 	detail.add_theme_font_size_override("normal_font_size", 18)
 	detail.add_theme_constant_override("line_separation", 5)
 	place(detail, panel, Rect2(detail_x + 18.0, 156, 346, dimensions.y - 198))
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	place(scroll, panel, Rect2(34, 143, detail_x - 49, dimensions.y - 170))
+	var grid := Control.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(grid)
 	var initial_focus := close
-	for i in ids.size():
-		var id := ids[i]
+	var category := ""
+	var start_y := 0.0
+	var in_section := 0
+	for id in ids:
 		var def := battle.tower_definition(id)
+		var next_category := TowerRegistry.category(def)
+		if category != next_category:
+			start_y += ceilf(float(in_section) / columns) * 100.0
+			text_at(grid, next_category, 0, start_y, 23, MINT)
+			start_y += 39
+			category = next_category
+			in_section = 0
 		var ready := battle.research.unlocked.has(id)
 		var affordable := battle.credits >= int(def.cost)
-		var at := Vector2(34 + (i % columns) * 239, 143 + floori(float(i) / columns) * 100)
+		var at := Vector2((in_section % columns) * 239, start_y + floori(float(in_section) / columns) * 100)
+		in_section += 1
 		var subtitle := "배치 %d" % int(def.cost)
 		if not ready:
 			subtitle += "  ·  연구"
 		elif not affordable:
 			subtitle += "  ·  부족"
-		var tile := button_at(panel, "", Rect2(at, Vector2(225, 91)), _choose_tower.bind(id), ready and affordable)
+		var tile := button_at(grid, "", Rect2(at, Vector2(225, 91)), _choose_tower.bind(id), ready and affordable)
 		var tint: Color = def.tint
 		var frame := TowerArt.first_frame(id)
 		for layer in [frame, frame + 1]:
@@ -1175,6 +1223,8 @@ func show_catalog(show_all: bool = false) -> void:
 		tile.accessibility_name = "%s, %s, %s" % [def.name, role, subtitle]
 		if id == build_id and not tile.disabled:
 			initial_focus = tile
+	grid.custom_minimum_size.y = start_y + ceilf(float(in_section) / columns) * 100.0
+	scroll.follow_focus = true
 	_catalog_detail(detail, battle.tower_definition(build_id))
 	initial_focus.grab_focus()
 
@@ -1227,6 +1277,8 @@ func show_support_details() -> void:
 		text_at(panel, "현재 적용 중인 지원 효과가 없습니다.", 38, 150, 20, MUTED)
 
 func _tower_role(def: Dictionary) -> String:
+	if not str(def.economy).is_empty():
+		return CombatReference.tower_summary(def)
 	if def.support != TowerSupport.Kind.NONE:
 		return "지원  ·  " + TowerRegistry.reach_text(def)
 	match def.id:

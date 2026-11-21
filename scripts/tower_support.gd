@@ -25,6 +25,8 @@ func rebuild(sim) -> void:
 	var attacks: Array = []
 	var supports: Array = []
 	for tower in sim.towers:
+		if not str(tower.definition.economy).is_empty():
+			continue
 		if tower.definition.support == Kind.NONE:
 			attacks.append(tower)
 		else:

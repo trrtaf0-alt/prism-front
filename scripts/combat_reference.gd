@@ -13,6 +13,14 @@ static func percent(value: float) -> String:
 
 static func tower_summary(def: Dictionary) -> String:
 	var reach := TowerRegistry.reach_text(def)
+	if not str(def.economy).is_empty():
+		match str(def.economy):
+			"credits", "rp":
+				return "웨이브 완료 시 %s %s 생산" % ["재화" if def.economy == "credits" else "RP", number(def.production)]
+			"credit_amp", "rp_amp":
+				return "반경 %s · %s 생산량 +%d%%" % [reach, "재화" if def.economy == "credit_amp" else "RP", TowerEconomy.AMPLIFIER_BONUS]
+			"core":
+				return "반경 %s · 연결 수에 따라 생산량 +12~30%%" % reach
 	if def.support != TowerSupport.Kind.NONE:
 		return "%s\n지원 범위 %s" % [def.description, reach]
 	var hit := "기본 피해 %s  ·  주기 %s초" % [number(def.damage), number(def.interval)]
@@ -27,6 +35,10 @@ static func tower_text(def: Dictionary, data: BattleData, title_size: int = 30) 
 	if not def.research_id.is_empty():
 		rows.append("해금 연구  %s" % data.research.nodes[def.research_id].name)
 	rows.append("")
+	if not str(def.economy).is_empty():
+		rows.append(def.description)
+		rows.append("웨이브 시작부터 완료까지 설치 상태를 유지해야 적용됩니다.")
+		return "\n".join(rows)
 	if def.support == TowerSupport.Kind.NONE:
 		rows.append(def.description)
 	if def.support != TowerSupport.Kind.NONE:

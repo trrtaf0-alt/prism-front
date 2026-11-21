@@ -27,6 +27,7 @@ var building := false
 var build_id := TowerRegistry.BASE
 var advanced_fx := AttackEffects.new()
 var support_fx := SupportView.new()
+var economy_fx := EconomyView.new()
 var _preferences
 var frozen := false
 var elapsed := 0.0
@@ -92,6 +93,8 @@ func _ready() -> void:
 	advanced_fx.setup(_glow, _preferences, bounds, CELL)
 	support_fx.setup(self, battle, _preferences)
 	add_child(support_fx)
+	economy_fx.setup(self, _preferences, _glow)
+	add_child(economy_fx)
 	add_child(advanced_fx)
 	battle.support_visual.connect(_support_effect)
 	battle.attack_visual.connect(advanced_fx.capture)
@@ -191,6 +194,7 @@ func _process(delta: float) -> void:
 	_update_batches()
 	_update_flares()
 	advanced_fx.update(delta)
+	economy_fx.update_effects(delta)
 	queue_redraw()
 	_overlay.queue_redraw()
 	support_fx.queue_redraw()
@@ -297,13 +301,13 @@ func _draw() -> void:
 			var area := Rect2(ORIGIN, Vector2(battle.field.size) * CELL).grow(-2.0)
 			draw_rect(area, Color(tint, 0.075))
 			draw_rect(area, Color(tint, 0.78), false, 2.3)
-		else:
+		elif float(def.range) > 0.0:
 			var radius := float(def.range) * CELL
 			draw_circle(at, radius, Color(tint, 0.075), true, -1.0, true)
 			draw_arc(at, radius, 0, TAU, 96, Color(tint, 0.6), 1.6, true)
-		if def.support == TowerSupport.Kind.NONE:
+		if TowerRegistry.attacks(def):
 			path_in_range(focus, def)
-		if def.support == TowerSupport.Kind.NONE and not _aim_lines.is_empty():
+		if TowerRegistry.attacks(def) and not _aim_lines.is_empty():
 			draw_multiline(_aim_lines, Color(tint, 0.34), 15.0, true)
 			draw_multiline(_aim_lines, Color(tint, 0.95), 4.0, true)
 	if map.contains(hovered) and not battle.lost and (building or battle.occupied.has(hovered)):

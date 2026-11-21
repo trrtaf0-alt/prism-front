@@ -63,15 +63,29 @@ func _run() -> void:
 	check(picker._details.size.x > 1_000 and picker._details.get_theme_font_size("normal_font_size") >= 34, "mobile tower stats use the wide reading column")
 	await _tap_button(ui.modal, "전체")
 	picker = ui.modal.get_child(0).get_child(0) as MobileTowerPicker
-	check(picker._list.get_child_count() == sim.data.towers.ids.size(), "all existing towers are in the mobile catalog")
+	var rows := picker._list.find_children("*", "Button", false, false)
+	check(rows.size() == sim.data.towers.ids.size(), "all existing towers are in the mobile catalog")
+	var categories: Array[String] = []
+	for header: Label in picker._list.find_children("*", "Label", false, false):
+		categories.append(header.text)
+	check(categories == ["공격 타워", "버프 타워", "경제 타워"] and rows.back().get_meta("tower") == "tower_45", "mobile catalog groups economy last")
 	await _capture("android-towers")
 	var list_scroll := picker._list.get_parent() as ScrollContainer
-	var next_tower := picker._list.get_child(1) as Button
+	var next_tower := rows[1] as Button
 	await _tap_control(next_tower)
 	check(picker._selected == next_tower.get_meta("tower"), "tower row tap opens its details")
-	await _tap_control(picker._list.get_child(0))
+	await _tap_control(rows[0])
 	await _swipe(_logical_to_input(list_scroll, Vector2(240, 550)), _logical_to_input(list_scroll, Vector2(240, 190)))
 	check(list_scroll.scroll_vertical > 0 and picker._selected == TowerRegistry.BASE, "tower list scrolls on a swipe without choosing a tower (scroll %d, selected %s)" % [list_scroll.scroll_vertical, picker._selected])
+	var collector := rows[sim.data.towers.ids.find("tower_37")] as Button
+	list_scroll.ensure_control_visible(collector)
+	await process_frame
+	await _tap_control(collector)
+	check(picker._details.text.contains("재화 15 생산"), "mobile economic tower card shows production")
+	await _tap_button(ui.modal, "연구 보기")
+	check(ui.modal_kind == "research" and ui.research_screen.board.focus_id == "eco_gather", "mobile locked economy card opens the matching research")
+	ui.close_modal()
+	await _tap_control(ui.catalog_button)
 	await _tap_button(ui.modal, "배치 준비")
 	check(ui.building, "touch enters placement")
 	check(_lines_fit(ui.build_hint), "placement instructions fit above the mobile buttons")

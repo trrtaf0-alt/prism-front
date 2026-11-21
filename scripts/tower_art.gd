@@ -15,7 +15,7 @@ static func first_frame(id: String) -> int:
 	if suffix == id or not suffix.is_valid_int():
 		return 0
 	var number := suffix.to_int()
-	return (number - 1) * 2 if number >= 1 and number <= 36 else 0
+	return (number - 1) * 2 if number >= 1 and number <= 45 else 0
 
 static func batch_color(frame: int) -> Color:
 	return Color(float(frame) / FRAME_ENCODING, 1.0, 1.0)
@@ -44,4 +44,6 @@ static func rotation_offset(id: String, elapsed: float) -> float:
 			return elapsed * 2.0
 		"tower_22", "tower_24", "tower_29", "tower_30", "tower_31", "tower_33", "tower_36":
 			return elapsed * 0.38
+		"tower_38", "tower_39", "tower_41", "tower_42", "tower_43", "tower_44", "tower_45":
+			return elapsed * (0.57 if id != "tower_42" else -0.75)
 	return 0.0

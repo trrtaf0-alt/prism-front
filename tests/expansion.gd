@@ -48,14 +48,14 @@ func _tower_art() -> void:
 
 func _research() -> void:
 	var graph := rules.research
-	check(graph.ids.size() == 100 and graph.ordered.size() == 100, "100 unique reachable nodes")
-	check(graph.unlocks.size() == 34 and graph.ids.size() - graph.unlocks.size() == 66 and rules.towers.ids.size() == 35, "34 unlocks, 66 junctions and 35 towers")
+	check(graph.ids.size() == 109 and graph.ordered.size() == 109, "109 unique reachable nodes")
+	check(graph.unlocks.size() == 43 and graph.ids.size() - graph.unlocks.size() == 66 and rules.towers.ids.size() == 44, "43 unlocks, 66 junctions and 44 towers")
 	var distribution := [Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO, Vector2i.ZERO]
 	for id in graph.ids:
 		var node: Dictionary = graph.nodes[id]
 		distribution[int(node.stage)] += Vector2i(1, int(node.has("unlock")))
 		check(node.has("unlock") or not graph.children[id].is_empty(), "junction opens a detectable route: " + id)
-	check(distribution == [Vector2i(6, 0), Vector2i(14, 4), Vector2i(24, 8), Vector2i(26, 10), Vector2i(19, 7), Vector2i(11, 5)], "tier distribution")
+	check(distribution == [Vector2i(6, 0), Vector2i(15, 5), Vector2i(26, 10), Vector2i(28, 12), Vector2i(22, 10), Vector2i(12, 6)], "tier distribution")
 	var bridge: Dictionary = graph.nodes["phase_bridge"]
 	check(not graph.nodes.has("replica") and rules.towers.lookup("tower_27").is_empty(), "replica research and tower were removed")
 	check(not bridge.has("unlock") and graph.children[bridge.id].has("white_web") and graph.children[bridge.id].has("interlock"), "phase bridge connects both terminal branches")
@@ -76,12 +76,12 @@ func _research() -> void:
 		full_cost += int(graph.nodes[id].cost_rp)
 		if id != "survey":
 			check(run.purchase(id), "can purchase " + id)
-	check(run.completed.size() == 100 and run.unlocked.size() == 35 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
+	check(run.completed.size() == 109 and run.unlocked.size() == 44 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
 	for pair: Array in [["singularity", 17247], ["spectrum", 25058], ["cataclysm", 36073]]:
 		var cost := graph.minimum_cost(pair[0])
 		check(cost == pair[1], "minimum unique RP cost for %s = %d" % [pair[0], cost])
 	check(graph.minimum_cost("cataclysm", run.completed) == 0, "completed shared prerequisites not billed")
-	check(full_cost == 55874, "full web campaign cost")
+	check(full_cost == 71729, "full web campaign cost")
 	var cataclysm_plans := graph._plans("cataclysm", {}, {})
 	var optics_route := false
 	var control_route := false
@@ -171,7 +171,7 @@ func _all_towers() -> void:
 		var def := rules.towers.lookup(id)
 		var before := sim.credits
 		check(sim.install(cell, id) and sim.credits == before - int(def.cost), "install and exact price " + id)
-		if def.support != TowerSupport.Kind.NONE:
+		if not TowerRegistry.attacks(def):
 			continue
 		var fixture: Array[Battle.Drone] = []
 		for i in 11:
@@ -366,7 +366,7 @@ func _interface() -> void:
 		return
 	ui._physics_process(STEP)
 	check(first.progress == progress and ui.field.frozen, "opening research pauses combat by default")
-	check(ui.research_screen.board._states.size() == 100, "board contains all nodes")
+	check(ui.research_screen.board._states.size() == 109, "board contains all nodes")
 	check(ui.research_screen._zone_buttons[0].text == "허브" and ui.research_screen._zone_buttons[5].text == "5단계", "research navigation uses concise stage labels")
 	var board: ResearchBoard = ui.research_screen.board
 	board.overview()
@@ -421,7 +421,7 @@ func _interface() -> void:
 			_click(ui, button.get_global_rect().get_center())
 			break
 	var all_cards := _catalog_cards(ui)
-	check(all_cards.size() == 35, "catalog can show every tower on demand")
+	check(all_cards.size() == 44, "catalog can show every tower on demand")
 	_click(ui, all_cards[2].get_global_rect().get_center())
 	check(ui.modal_kind == "research" and ui.research_screen.board.focus_id == "pierce", "locked tower links to its research")
 	ui.close_modal()
@@ -691,7 +691,7 @@ func _visual_preview(ui) -> void:
 	sim = ui.battle
 	_unlock(sim)
 	var sample_cells: Array[Vector2i] = []
-	for y in [2, 5, 8, 11, 15]:
+	for y in [2, 5, 8, 11, 15, 17]:
 		for x in [1, 4, 7, 10, 13, 16, 19, 22, 26]:
 			var cell := Vector2i(x, y)
 			if sim.field.tile_at(cell) != ".":
@@ -701,7 +701,7 @@ func _visual_preview(ui) -> void:
 	check(sample_cells.size() >= rules.towers.ids.size(), "all tower art fits on the sample field")
 	for i in mini(sample_cells.size(), rules.towers.ids.size()):
 		sim.install(sample_cells[i], rules.towers.ids[i])
-	check(sim.towers.size() == 35, "all 35 tower silhouettes are installed for visual QA")
+	check(sim.towers.size() == 44, "all 44 tower silhouettes are installed for visual QA")
 	ui.callout_time = 0.0
 	await _capture("tower-lineup")
 	await _attack_showcase(ui)

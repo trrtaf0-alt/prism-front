@@ -5,6 +5,7 @@ signal effect(kind: StringName, point: Vector2, direction: Vector2)
 signal tower_installed(stage: int, support: int)
 signal wave_started(number: int)
 signal wave_finished(number: int, reward: int)
+signal economy_produced(towers: Array)
 signal defeated(number: int)
 signal cleared(result: Dictionary)
 signal base_damaged(amount: int)
@@ -75,6 +76,7 @@ class Turret:
 	var range_multiplier := 1.0
 	var damage_remainder := 0.0
 	var field_age := 0.0
+	var economy_wave := 0
 
 class Bolt:
 	var position: Vector2
@@ -92,6 +94,7 @@ class Bolt:
 	var owner: Turret
 
 var support := TowerSupport.new()
+var economy := TowerEconomy.new()
 var arsenal := TowerArsenal.new()
 var field_diagonal: float
 var research: ResearchRun
@@ -102,6 +105,9 @@ var _credit_percent: int
 var _rp_percent: int
 var _credit_remainder := 0
 var _rp_remainder := 0
+# Production and custom multipliers together can leave fractions smaller than 1/100.
+var _production_credit_remainder := 0
+var _production_rp_remainder := 0
 var data: BattleData
 var field: FieldMap
 var health: int
@@ -230,14 +236,19 @@ func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	tower.position = Vector2(cell) + Vector2(0.5, 0.5)
 	tower.definition = tower_definition(id)
 	tower.effective = tower.definition
-	_cache_range(tower, float(tower.definition.range))
+	var attacks := TowerRegistry.attacks(tower.definition)
+	if attacks:
+		_cache_range(tower, float(tower.definition.range))
 	towers.append(tower)
 	occupied[cell] = tower
 	credits -= int(tower.definition.cost)
 	total_installs += 1
-	if int(tower.definition.stage) == 5 and tower.definition.support == TowerSupport.Kind.NONE:
+	if int(tower.definition.stage) == 5 and attacks:
 		terminal_used[id] = tower.definition.name
-	support.rebuild(self)
+	if tower.definition.economy.is_empty():
+		support.rebuild(self)
+	else:
+		economy.rebuild(towers, wave if active else 0)
 	effect.emit(&"install", tower.position, Vector2.ZERO)
 	tower_installed.emit(int(tower.definition.stage), int(tower.definition.support))
 	return true
@@ -251,7 +262,10 @@ func sell(cell: Vector2i) -> bool:
 	if tower.definition.support == TowerSupport.Kind.NONE:
 		tower.buffs.clear()
 		tower.damage_multiplier = 1.0
-	support.rebuild(self)
+	if tower.definition.economy.is_empty():
+		support.rebuild(self)
+	else:
+		economy.rebuild(towers, wave if active else 0)
 	_credit(int(tower.definition.refund))
 	effect.emit(&"sell", tower.position, Vector2.ZERO)
 	return true
@@ -275,6 +289,9 @@ func start_wave() -> bool:
 		return false
 	wave += 1
 	active = true
+	for tower in economy.installed:
+		tower.economy_wave = wave
+	economy.rebuild(towers, wave)
 	primary_spawned = 0
 	_wave_enemies.clear()
 	queued = data.wave_count(wave)
@@ -387,6 +404,8 @@ func tick(delta: float) -> void:
 		_finish_wave()
 
 func _finish_wave() -> void:
+	if not active:
+		return
 	active = false
 	var final := wave == BattleData.FINAL_WAVE
 	if final and (not boss_killed or health <= 0):
@@ -394,6 +413,8 @@ func _finish_wave() -> void:
 		defeated.emit(wave)
 		return
 	var reward := _award_credits(data.wave_reward(wave))
+	economy.produce(self)
+	economy.rebuild(towers)
 	won = final
 	wave_finished.emit(wave, reward)
 	if won:
@@ -513,7 +534,7 @@ func _recycle_drone(index: int) -> void:
 
 func _update_towers(delta: float) -> void:
 	for tower in towers:
-		if tower.definition.support != TowerSupport.Kind.NONE:
+		if not TowerRegistry.attacks(tower.definition):
 			continue
 		tower.recoil = maxf(0.0, tower.recoil - delta)
 		var due := tower.cooldown - delta * tower.speed_multiplier
@@ -1022,9 +1043,13 @@ func nearest_in_radius(center: Vector2, radius: float, seen: Dictionary, detect_
 
 # Carry fractional awards within the current run so small rewards keep the same reduction.
 @warning_ignore("integer_division")
-func _award_credits(amount: int) -> int:
-	if _credit_percent != 100:
+func _award_credits(amount: int, production_hundredths: int = 0) -> int:
+	if _credit_percent != 100 or production_hundredths > 0:
 		var total := amount * _credit_percent + _credit_remainder
+		if production_hundredths > 0:
+			var production := production_hundredths * _credit_percent + _production_credit_remainder
+			total += production / 100
+			_production_credit_remainder = production % 100
 		amount = total / 100
 		_credit_remainder = total % 100
 	total_credits += amount
@@ -1032,12 +1057,17 @@ func _award_credits(amount: int) -> int:
 	return amount
 
 @warning_ignore("integer_division")
-func _award_rp(amount: int) -> void:
-	if _rp_percent != 100:
+func _award_rp(amount: int, production_hundredths: int = 0) -> int:
+	if _rp_percent != 100 or production_hundredths > 0:
 		var total := amount * _rp_percent + _rp_remainder
+		if production_hundredths > 0:
+			var production := production_hundredths * _rp_percent + _production_rp_remainder
+			total += production / 100
+			_production_rp_remainder = production % 100
 		amount = total / 100
 		_rp_remainder = total % 100
 	research.earn(amount)
+	return amount
 
 func _credit(amount: int) -> void:
 	credits = mini(BattleData.NUMBER_LIMIT, credits + amount)
