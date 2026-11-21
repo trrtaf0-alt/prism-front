@@ -177,6 +177,8 @@ func _interface(profile: Node) -> void:
 	check(ui.battle == null and not ui.game and ui.screen.get_child_count() > 4, "main menu loads")
 	var play: Button = ui.screen.get_node("StartGame")
 	check(play.has_focus(), "menu starts with keyboard focus on play")
+	var menu_labels: Array[Node] = ui.screen.find_children("*", "Label", false, false)
+	check(menu_labels.size() == 1 and menu_labels[0].text == "PRISM FRONT", "main menu shows the English title without a subtitle")
 	await capture("menu")
 	await _codex_reference(ui)
 	gui_click(ui, play.get_global_rect().get_center())
@@ -249,6 +251,14 @@ func _interface(profile: Node) -> void:
 		sim.sell(cell)
 	gui_click(ui, ui.wave_button.get_rect().get_center())
 	check(sim.wave == 1 and ui.wave_callout.contains("1"), "HUD wave control")
+	var reference: Button = ui.screen.get_node("BattleCodex")
+	var before_codex := sim.elapsed
+	gui_click(ui, reference.get_rect().get_center())
+	ui._physics_process(STEP)
+	check(ui.modal_kind == "codex" and sim.elapsed == before_codex, "battle HUD opens codex and pauses the wave")
+	ui._unhandled_input(escape)
+	ui._physics_process(STEP)
+	check(ui.modal == null and sim.elapsed > before_codex, "closing the codex returns directly to live battle")
 	ui._unhandled_input(escape)
 	var distance := sim.enemies[0].progress
 	ui._physics_process(STEP)

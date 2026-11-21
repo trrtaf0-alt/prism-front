@@ -197,8 +197,7 @@ func show_menu() -> void:
 	Sound.play_music(&"patrol")
 	game = false
 	defeat_delay = 0.0
-	text_at(screen, "프리즘 방어선", 160, 345, 84, Color("#edf5f9"))
-	text_at(screen, "50웨이브 · 에너지 코어 방어", 165, 472, 24, Color("#9db2c1"))
+	text_at(screen, "PRISM FRONT", 160, 385, 84, Color("#edf5f9"))
 
 	var play := button_at(screen, "게임 시작", Rect2(165, 550, 330, 70), show_difficulty)
 	play.name = "StartGame"
@@ -321,6 +320,9 @@ func _make_hud() -> void:
 		_hud_text(screen, "제약 %d종" % battle.constraints.count(), 800, 74, 17, MENU_CYAN, 110)
 	zoom_button = _hud_button("100%", Rect2(928, 38, 106, 44), _reset_zoom)
 	zoom_button.tooltip_text = "휠: 확대·축소  ·  휠 드래그: 이동  ·  클릭: 초기화"
+	var reference := _hud_button("도감 · K", Rect2(1048, 38, 124, 44), show_codex)
+	reference.name = "BattleCodex"
+	reference.tooltip_text = "타워와 적의 능력치 · 열람 중 전투 일시정지"
 
 	# Center the actions on the seam between tile rows, leaving tile centers clickable.
 	_hud_button("일시정지 · Esc", Rect2(1704, 38, 158, 44), show_pause)
@@ -1206,7 +1208,7 @@ func _draw_menu_prism() -> void:
 	var left := center + Vector2(-195, 18)
 	var joint := center + Vector2(33, 12)
 
-	draw_line(Vector2(165, 318), Vector2(215, 318), Color("#83bac4"), 2.0, true)
+	draw_line(Vector2(165, 359), Vector2(215, 359), Color("#83bac4"), 2.0, true)
 	draw_line(center - Vector2(325, 0), center + Vector2(325, 0), Color("#1b2b39"), 1.5, true)
 	draw_line(center - Vector2(0, 310), center + Vector2(0, 310), Color("#1b2b39"), 1.5, true)
 	draw_colored_polygon(PackedVector2Array([top, joint, left]), Color("#1a343e"))
