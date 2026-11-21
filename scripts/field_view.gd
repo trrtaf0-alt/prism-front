@@ -238,7 +238,7 @@ func _update_batches() -> void:
 		if detail and traces < 80 and not bolt.fragment and (bolt.definition.guided or bolt.definition.returning):
 			var stretch := 1.58 if bolt.definition.guided else 1.30
 			var back := pixel(bolt.position) - bolt.direction * (34.0 if bolt.definition.guided else 22.0)
-			_bolts.item(battle.bolts.size() + traces, back, bolt.direction * stretch, Color(bolt.definition.tint, 0.54), 0.62)
+			_bolts.item(battle.bolts.size() + traces, back, bolt.direction * stretch, Color(bolt.definition.tint, 0.47), 0.42)
 			traces += 1
 	_bolts.finish(battle.bolts.size() + traces)
 

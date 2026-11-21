@@ -345,6 +345,7 @@ func _interface() -> void:
 	await process_frame
 	ui.start_game()
 	var sim: Battle = ui.battle
+	_sustained_preview(ui.field.advanced_fx)
 	var original_best: int = root.get_node("Profile").best
 	check(ui.rp_label.text == "0" and ui.catalog_button.tooltip_text == "해금된 타워 1종", "HUD fresh research economy")
 	sim.start_wave()
@@ -697,27 +698,42 @@ func _visual_preview(ui) -> void:
 	await _capture("tower-lineup")
 	await _attack_showcase(ui)
 
+func _sustained_preview(fx: AttackEffects) -> void:
+	fx.capture("laser", Vector2(4, 2), Vector2(4, 3), 0.0, Color.CYAN, 0.25, 2)
+	fx.capture("laser", Vector2(4, 2), Vector2(4, 3), 0.0, Color.CYAN, 0.25, 2)
+	check(fx._style_counts.get("laser", 0) == 1, "laser pulses reuse the same visible beam")
+	fx.capture("flame", Vector2(4, 2), Vector2(4, 3), 62.0, Color.ORANGE, 0.2, 2)
+	fx.capture("flame", Vector2(4, 2), Vector2(5, 3), 62.0, Color.ORANGE, 0.2, 2)
+	check(fx._style_counts.get("flame", 0) == 1 and fx._ordinary.back().end == FieldView.ORIGIN + Vector2(5, 3) * FieldView.CELL, "flame reuses one plume and follows its current aim")
+	fx.update(0.19)
+	check(fx._style_counts.get("laser", 0) == 0 and fx._style_counts.get("flame", 0) == 1, "laser leaves a short trail while flame is still visible")
+	fx.update(0.2)
+
 func _attack_showcase(ui) -> void:
 	var test_groups := {
-		"fx-electrical-optics": ["tower_23", "tower_25"],
-		"fx-vortex-pulse": ["tower_21", "tower_22"],
-		"fx-nova-burst": ["tower_24"],
+		"fx-mid-beams": {"ids": ["tower_08", "tower_06", "tower_11"], "cells": [Vector2i(5, 2), Vector2i(8, 5), Vector2i(11, 8)], "ticks": 10},
+		"fx-mid-fields": {"ids": ["tower_14", "tower_15", "tower_19"], "cells": [Vector2i(5, 5), Vector2i(11, 8), Vector2i(17, 5)], "ticks": 12},
+		"fx-mid-projectiles": {"ids": ["tower_16", "tower_17", "tower_12"], "cells": [Vector2i(5, 2), Vector2i(11, 8), Vector2i(19, 6)], "ticks": 28},
+		"fx-upper-charge": {"ids": ["tower_07", "tower_18", "tower_26"], "cells": [Vector2i(5, 2), Vector2i(11, 8), Vector2i(18, 6)], "ticks": 12},
+		"fx-upper-strike": {"ids": ["tower_13", "tower_18", "tower_26"], "cells": [Vector2i(5, 2), Vector2i(11, 8), Vector2i(18, 6)], "ticks": 53},
+		"fx-electrical-optics": {"ids": ["tower_23", "tower_25"], "cells": [Vector2i(12, 8), Vector2i(20, 7)], "ticks": 12},
+		"fx-vortex-pulse": {"ids": ["tower_21", "tower_22"], "cells": [Vector2i(12, 8), Vector2i(20, 7)], "ticks": 23},
+		"fx-nova-burst": {"ids": ["tower_24"], "cells": [Vector2i(12, 8)], "ticks": 158},
 	}
-	var times := {"fx-electrical-optics": 12, "fx-vortex-pulse": 23, "fx-nova-burst": 158}
 	for name in test_groups:
 		ui.start_game()
 		ui.callout_time = 0.0
 		var sim: Battle = ui.battle
 		_unlock(sim)
 		ui.callout_time = 0.0
-		var ids: Array = test_groups[name]
-		for i in ids.size():
-			check(sim.install(Vector2i(13 + i * 7, 7), ids[i]) if i > 0 else sim.install(Vector2i(12, 8), ids[i]), "showcase tower placed " + ids[i])
+		var scene: Dictionary = test_groups[name]
+		for i in scene.ids.size():
+			check(sim.install(scene.cells[i], scene.ids[i]), "showcase tower placed " + scene.ids[i])
 		var tough := rules.mobs.lookup("normal").duplicate()
 		tough.health = 200_000
 		for i in 42:
 			sim.spawn(2.0 + i * 1.79, tough)
-		for i in int(times[name]):
+		for i in int(scene.ticks):
 			sim.tick(STEP)
 		await _capture(name)
 

@@ -4,8 +4,8 @@ extends Node2D
 const BUDGET := 400
 const LIMITS := [13, 30, 55, 88]
 const HUGE_LIMIT := 18
-const REFRESHABLE := ["vortex", "plasma", "gravity", "spectrum_source", "prism_source", "photon_source", "storm_source"]
-const FOLLOWING_BEAMS := ["spectrum", "prism", "photon", "storm", "storm_column"]
+const REFRESHABLE := ["flame", "vortex", "plasma", "gravity", "spectrum_source", "prism_source", "photon_source", "storm_source"]
+const FOLLOWING_BEAMS := ["laser", "spectrum", "prism", "photon", "storm", "storm_column"]
 const TRACK_CELL := 24.0
 const PLATES := preload("res://assets/attack_atlas.png")
 const PLATE_FRAME := 512.0
@@ -121,6 +121,7 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 				prior.radius = radius
 				return
 	var tracked := style in FOLLOWING_BEAMS
+	var lifetime := minf(life, 0.18) if style == "laser" else life
 	var key := Vector4i()
 	if tracked:
 		var a := Vector2i((from / TRACK_CELL).round())
@@ -147,7 +148,7 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	rule.radius = radius
 	rule.tint = tint
 	rule.elapsed = 0.0
-	rule.life = life
+	rule.life = lifetime
 	rule.tracked = tracked
 	rule.track_cell = key
 	if tracked:
@@ -255,8 +256,12 @@ func _render(fx: Effect) -> void:
 			_terminal(fx, t, fade, true)
 		"charge_cataclysm":
 			_charge(fx, t, true)
-		"charge_nova", "charge_doom", "charge_orbit", "charge_blast", "charge_rail":
+		"charge_nova":
 			_charge(fx, t, false)
+		"charge_doom", "charge_rail":
+			_charge_line(fx, t)
+		"charge_orbit", "charge_blast":
+			_charge_target(fx, reach, t)
 		"nova":
 			_terminal(fx, t, fade * 0.82, false)
 		"singularity", "vortex", "gravity", "collapse_gravity":
@@ -268,8 +273,10 @@ func _render(fx: Effect) -> void:
 		"storm_column":
 			_storm_column(fx, tint, t)
 		"storm", "arc":
-			_zap(at, fx.end, tint, 3.2 if fx.style == "storm" else 2.5)
-			_ring(fx.end, 13.0 + t * 21.0, tint)
+			_zap(at, fx.end, tint, 2.05 if fx.style == "storm" else 1.8)
+			_ring(fx.end, 9.0 + t * 15.0, Color(tint, fade * 0.74))
+			if fx.style == "arc":
+				_glow(fx.end, 17.0 + t * 12.0, Color(tint, fade * 0.54))
 		"singularity_feed":
 			_inflow(at, fx.end, tint, t)
 		"pulse":
@@ -280,28 +287,19 @@ func _render(fx: Effect) -> void:
 			if t < 0.63:
 				var fall := Color(tint, fade * (1.0 - t))
 				_filaments(at - Vector2(0, 540), at, 8.0 + 13.0 * t, fall)
-			_stamp(3, at, minf(reach * 0.78, 205.0), -t * 0.6, fade * 0.56)
-			_blast(at, reach, tint, t)
+			_ordnance(at, reach, tint, t, true)
 		"rail", "sniper", "laser", "mark":
 			_precision(fx, tint, t)
 		"flame":
-			_plume(at, fx.end, tint, t)
+			_plume(fx, tint)
 		"ice":
-			_blast(at, reach, tint, t)
-			_stamp(5, at, minf(410.0, reach * 1.5), 0.15, fade)
-			for i in (6 if _preferences.fx_quality > 0 else 3):
-				var crystal := at + Vector2.from_angle(i * TAU / 6.0) * reach * (0.25 + t * 0.65)
-				_hoop(crystal, 18.0 * (1.0 - t) + 8.0, 4, i + t, tint)
+			_cryo_field(at, reach, tint, t)
 		"blast":
-			_stamp(12, at, minf(reach * (0.6 + t * 0.9), 320.0), t * 0.38, fade * 0.67)
-			_blast(at, reach, tint, t)
+			_ordnance(at, reach, tint, t, false)
 		"plasma":
-			_blast(at, reach, tint, t)
-			_stamp(4, at, minf(630.0, reach * 1.4), 0.0, fade * 0.80)
-			_hoop(at, reach * (0.82 + 0.12 * t), 6, _time * 0.5, Color(tint, fade * 0.58))
+			_plasma_field(at, reach, tint)
 		"split":
-			_stamp(12, at, 95.0 + t * 110.0, t * 0.8, fade)
-			_blast(at, reach, tint, t)
+			_split_burst(at, reach, tint, t)
 		"muzzle", "missile_launch", "phase_launch", "return_launch", "cryogenic_launch", "scatter_launch":
 			_launch(fx, tint, t)
 		_:
@@ -320,8 +318,9 @@ func _emitter(fx: Effect, tint: Color, t: float) -> void:
 		"photon_source": frame = 11
 		"storm_source": frame = 8
 	var angle := _time * (-1.35 if frame == 8 else 0.92)
-	_stamp(frame, fx.origin, 110.0 + 50.0 * t, angle, tint.a)
-	_glow(fx.origin, 48.0 + t * 34.0, Color(tint, tint.a * 0.75))
+	var spectral := fx.style == "spectrum_source"
+	_stamp(frame, fx.origin, (110.0 + 50.0 * t) if spectral else (80.0 + 30.0 * t), angle, tint.a if spectral else tint.a * 0.80)
+	_glow(fx.origin, (48.0 + t * 34.0) if spectral else (34.0 + t * 23.0), Color(tint, tint.a * 0.75))
 	_ring(fx.origin, 25.0 + 18.0 * t, Color(tint, tint.a * 0.75))
 
 func _optics(fx: Effect, tint: Color, t: float) -> void:
@@ -335,21 +334,23 @@ func _optics(fx: Effect, tint: Color, t: float) -> void:
 			var front := at.lerp(end, minf(1.0, t * 1.8))
 			var side := axis.orthogonal() * 7.0
 			_line(front - axis * 24.0 + side, front + side, 2.0, Color(tint, tint.a * 0.68))
-		_glow(end, 35.0 + 22.0 * t, Color(tint, tint.a * 0.56))
+		_glow(end, 25.0 + 15.0 * t, Color(tint, tint.a * 0.48))
 		return
 	var spectral := fx.style == "spectrum"
 	var hue := fposmod(end.x * 0.00092 + end.y * 0.0013, 1.0)
 	var color := Color.from_hsv(hue, 0.52, 1.0, tint.a) if spectral else tint
 	var mid := at.lerp(end, 0.44) + axis.orthogonal() * (sin(end.x * 0.04 + end.y) * 0.38 + 0.5) * (61.0 if spectral else 34.0)
-	_beam(at, mid, 3.0 if spectral else 3.4, Color(color, tint.a * 0.83))
-	_beam(mid, end, 2.5 if spectral else 3.4, Color(fx.tint.lerp(color, 0.84), tint.a))
+	_beam(at, mid, 3.0 if spectral else 2.0, Color(color, tint.a * 0.83))
+	_beam(mid, end, 2.5 if spectral else 2.4, Color(fx.tint.lerp(color, 0.84), tint.a))
 	if spectral and _preferences.fx_quality >= 2:
 		var facet := mid + axis.orthogonal() * (18.0 + t * 37.0)
 		var complement := Color.from_hsv(fposmod(hue + 0.27, 1.0), 0.55, 1.0, tint.a * 0.45)
 		_line(at, facet, 1.45, complement)
 		_line(facet, end, 1.35, complement)
-	_ring(end, 7.0 + t * 22.0, color)
-	_glow(mid.lerp(end, t), 18.0, Color(color, tint.a * 0.58))
+	if not spectral:
+		_hoop(mid, 8.5 + t * 4.0, 3, axis.angle(), Color("#fbc4ff", tint.a * 0.72), 1.35)
+	_ring(end, 7.0 + t * 19.0, color)
+	_glow(mid.lerp(end, t), 18.0 if spectral else 13.0, Color(color, tint.a * 0.58))
 
 func _storm_column(fx: Effect, tint: Color, t: float) -> void:
 	var end := fx.end
@@ -358,8 +359,8 @@ func _storm_column(fx: Effect, tint: Color, t: float) -> void:
 		_zap(fx.origin, end, primary, 3.6 - 2.3 * t)
 		var split := fx.origin.lerp(end, 0.58) + Vector2(28.0, 8.0)
 		_line(split, end + Vector2(15.0, -17.0), 1.55, Color("#d0f2ff", tint.a * 0.50))
-	_glow(end, 52.0 + t * 36.0, Color(tint, tint.a * 0.67))
-	_stamp(8, end, 67.0 + t * 108.0, 0.72, tint.a * 0.78)
+	_glow(end, 32.0 + t * 23.0, Color(tint, tint.a * 0.56))
+	_stamp(8, end, 50.0 + t * 65.0, 0.72, tint.a * 0.64)
 	_ring(end, 17.0 + 44.0 * t, tint)
 	_spray(end, 52.0, tint, t, 7)
 
@@ -416,12 +417,20 @@ func _precision(fx: Effect, tint: Color, t: float) -> void:
 			_beam(at, end, 3.1, tint)
 			_glow(end, 28, tint)
 		"laser":
-			_beam(at, end, 5.5, tint)
-			_glow(at.lerp(end, t), 30.0, Color(tint, tint.a * 0.72))
+			_beam(at, end, 2.25, Color(tint, tint.a * 0.82))
+			var crest := fposmod(_time * 5.2 + at.x * 0.002, 1.0)
+			var pulse_at := at.lerp(end, crest)
+			_line(at.lerp(end, maxf(0.0, crest - 0.11)), pulse_at, 1.6, Color("#ddf9ff", tint.a * 0.85))
+			_glow(end, 16.0, Color(tint, tint.a * 0.66))
 		"mark":
-			_hoop(end, 16.0 + 11.0 * t, 4, _time * 1.6, tint)
-			_line(at, end, 1.7, Color(tint, tint.a * 0.65))
-	_ring(end, 6.5 + t * 16.0, tint)
+			_hoop(end, 16.0 + 9.0 * t, 4, _time * 1.6, tint, 1.35)
+			var side := axis.orthogonal()
+			for sign: int in [-1, 1]:
+				var tip := end + side * sign * (20.0 + t * 6.0)
+				_line(tip - axis * 5.0, tip + axis * 5.0, 1.25, tint)
+			_line(at, end, 1.25, Color(tint, tint.a * 0.54))
+	if fx.style != "laser":
+		_ring(end, 6.5 + t * 16.0, Color(tint, tint.a * 0.77))
 
 func _launch(fx: Effect, tint: Color, t: float) -> void:
 	var at := fx.origin
@@ -435,13 +444,18 @@ func _launch(fx: Effect, tint: Color, t: float) -> void:
 		"missile_launch":
 			for i: int in [-1, 1]:
 				var offset := side * (7.0 + t * 9.0) * i
-				_beam(at + offset - axis * 19.0, at + offset + axis * (16.0 + t * 24.0), 4.0, tint)
+				_beam(at + offset - axis * 17.0, at + offset + axis * (10.0 + t * 23.0), 2.05, tint)
 		"cryogenic_launch":
 			_stamp(5, at + axis * 15.0 * t, 42.0 + 34.0 * t, axis.angle(), tint.a * 0.72)
 			_beam(at, at + axis * 26.0, 5.0, tint)
-		"phase_launch", "return_launch":
-			_ring(at + axis * (12.0 + t * 26.0), 8.0 + t * 14.0, tint)
-			_beam(at, at + axis * 29.0, 5.0, tint)
+		"phase_launch":
+			var front := at + axis * (10.0 + 24.0 * t)
+			_hoop(front, 7.5 + t * 8.0, 4, axis.angle(), tint, 1.45)
+			_beam(at, front, 2.6, tint)
+		"return_launch":
+			var front := at + axis * (16.0 + t * 20.0)
+			for sign: int in [-1, 1]:
+				_line(at + side * sign * 10.0, front, 1.55, tint)
 		_:
 			_beam(at, at.lerp(fx.end, 0.42), 7.0, tint)
 	_glow(at, 38.0 + 12.0 * t, tint)
@@ -472,12 +486,43 @@ func _charge(fx: Effect, t: float, terminal: bool) -> void:
 		_stamp(2, center, 82.0 + 118.0 * t, _time * 0.31, fade * 0.64)
 		_sectors(center, 36.0 + 105.0 * t, -_time * 0.53, tint)
 		_glow(center, 39.0 + 44.0 * t, Color("#fff6c6", fade * 0.58))
-	elif fx.style == "charge_rail":
-		_ring(fx.origin, 18.0 + t * 20, tint)
-		_ring(fx.origin, 31.0 - t * 16, tint)
-	elif fx.style == "charge_blast":
-		var bullet := fx.origin.lerp(center, t) - Vector2(0, sin(t * PI) * 135.0)
-		_glow(bullet, 38, tint)
+
+func _charge_line(fx: Effect, t: float) -> void:
+	var tint := Color(fx.tint, (0.28 + 0.42 * t) * (0.64 if _preferences.fx_dim else 1.0))
+	var at := fx.origin
+	var axis := at.direction_to(fx.end)
+	var side := axis.orthogonal()
+	var doom := fx.style == "charge_doom"
+	var length := lerpf(42.0, 96.0 if doom else 67.0, t)
+	var gap := lerpf(18.0 if doom else 12.0, 4.0, t)
+	for sign: int in [-1, 1]:
+		var rail := at + side * gap * sign
+		_line(rail - axis * 13.0, rail + axis * length, 1.55, tint)
+		_line(rail + axis * length, at + axis * (length + 15.0), 1.3, tint)
+	_ring(at, 15.0 + 17.0 * t, tint)
+	_ring(at, (38.0 if doom else 27.0) - t * 10.0, Color(tint, tint.a * 0.62))
+	if doom:
+		_line(at + axis * (length + 15.0), _clip_end(at, fx.end), 1.2, Color(tint, tint.a * 0.54))
+	_glow(at + axis * (9.0 + 8.0 * t), 28.0 + t * 14.0, Color(tint, tint.a * 0.62))
+
+func _charge_target(fx: Effect, reach: float, t: float) -> void:
+	var tint := Color(fx.tint, (0.37 + 0.46 * t) * (0.64 if _preferences.fx_dim else 1.0))
+	var at := fx.end
+	var orbit := fx.style == "charge_orbit"
+	_ring(at, clampf(reach * 0.34, 25.0, 82.0) * (1.24 - t * 0.24), tint)
+	for i in 4:
+		var direction := Vector2.from_angle(i * TAU * 0.25 + (PI * 0.25 if orbit else 0.0))
+		var tick := at + direction * (18.0 + reach * 0.16 * (1.0 - t))
+		_line(tick, tick + direction * 11.0, 1.5, tint)
+	if orbit:
+		var upper := at - Vector2(0.0, 140.0 + 103.0 * (1.0 - t))
+		for sign: int in [-1, 1]:
+			var offset := Vector2(23.0 * sign, 0.0)
+			_line(upper + offset, at + offset * 0.42 - Vector2(0.0, 17.0), 1.65, Color(tint, tint.a * 0.82))
+	else:
+		var bullet := fx.origin.lerp(at, t) - Vector2(0, sin(t * PI) * 135.0)
+		_ring(bullet, 6.0 + 5.0 * sin(t * PI), tint)
+		_glow(bullet, 23.0, Color(tint, tint.a * 0.69))
 
 func _sky_anchor(center: Vector2) -> Vector2:
 	return Vector2(clampf(center.x, _field.position.x + 235.0, _field.end.x - 235.0), _field.position.y + 212.0)
@@ -577,15 +622,68 @@ func _blast(at: Vector2, reach: float, tint: Color, t: float) -> void:
 	_glow(at, reach * (0.25 + t * 0.65), Color(tint, tint.a * 0.64))
 	_spray(at, minf(165, reach), tint, t, 12)
 
-func _plume(at: Vector2, finish: Vector2, tint: Color, t: float) -> void:
-	var axis := finish - at
-	for i in range(1, 6):
-		var r := i / 6.0
-		var center := at + axis * r + axis.normalized().orthogonal() * sin(_time * 22.0 + i) * r * 28
-		_glow(center, 27.0 + r * 88.0, Color(tint, tint.a * (1.0 - r * 0.62)))
-		if r < 0.7:
-			_line(center - axis * 0.065, center + axis * 0.078, 7.0 + r * 14.0, Color("#ffb773", tint.a * (0.55 - r * 0.25)))
-		_spray(center, 42.0 + r * 40, tint, t, 5)
+func _ordnance(at: Vector2, reach: float, tint: Color, t: float, orbital: bool) -> void:
+	var front := reach * (0.12 + t * 0.88)
+	_ring(at, front, tint)
+	_ring(at, front * 0.73, Color(tint, tint.a * 0.54))
+	_stamp(3 if orbital else 12, at, minf(front * 1.55, 183.0 if orbital else 125.0), -t * 0.44, tint.a * 0.56)
+	_glow(at, minf(reach * (0.33 + t * 0.35), 146.0), Color(tint, tint.a * 0.55))
+	_spray(at, minf(reach * 0.82, 172.0), tint, t, 18 if orbital else 12)
+
+func _cryo_field(at: Vector2, reach: float, tint: Color, t: float) -> void:
+	var rim := reach * (0.34 + 0.66 * t)
+	_ring(at, rim, Color(tint, tint.a * 0.81))
+	_stamp(5, at, minf(164.0, reach * 0.79), 0.15, tint.a * 0.55)
+	_glow(at, minf(reach * 0.48, 104.0), Color(tint, tint.a * 0.38))
+	var clusters := 6 if _preferences.fx_quality > 0 else 3
+	for i in clusters:
+		var ray := Vector2.from_angle(i * TAU / clusters + 0.24)
+		var tip := at + ray * rim
+		var fork := tip - ray * (15.0 + 5.0 * t)
+		var side := ray.orthogonal() * 6.0
+		_line(fork - side, tip, 1.45, tint)
+		_line(fork + side, tip, 1.45, tint)
+
+func _plasma_field(at: Vector2, reach: float, tint: Color) -> void:
+	var radius := reach * (0.94 + sin(_time * 6.5) * 0.045)
+	_ring(at, radius, Color(tint, tint.a * 0.62))
+	_stamp(4, at, minf(237.0, reach * 0.73), 0.0, tint.a * 0.49)
+	_glow(at, minf(128.0, reach * 0.45), Color(tint, tint.a * 0.56))
+	var ticks := 8 if _preferences.fx_quality > 0 else 4
+	for i in ticks:
+		var ray := Vector2.from_angle(i * TAU / ticks + _time * 0.36)
+		var edge := at + ray * radius * 0.93
+		var side := ray.orthogonal() * 9.0
+		_line(edge - side, edge + side, 1.55, Color(tint, tint.a * 0.76))
+
+func _split_burst(at: Vector2, reach: float, tint: Color, t: float) -> void:
+	_ring(at, 10.0 + t * reach * 0.77, Color(tint, tint.a * 0.85))
+	_glow(at, minf(70.0, reach * 0.6), Color(tint, tint.a * 0.43))
+	var strokes := 8 if _preferences.fx_quality > 0 else 4
+	for i in strokes:
+		var ray := Vector2.from_angle(i * TAU / strokes + 0.2)
+		var front := at + ray * (8.0 + reach * t * 0.81)
+		_line(front - ray * (7.0 + t * 12.0), front, 1.65, tint)
+
+func _plume(fx: Effect, tint: Color) -> void:
+	var at := fx.origin
+	var axis := at.direction_to(fx.end)
+	var reach := at.distance_to(fx.end)
+	var half_angle := deg_to_rad(fx.radius * 0.5)
+	var strands := 5 if _preferences.fx_quality > 0 else 3
+	_glow(at + axis * 27.0, 52.0, Color(tint, tint.a * 0.57))
+	for i in strands:
+		var phase := fposmod(_time * 3.35 + i * 0.27 + at.y * 0.001, 1.0)
+		var lane := lerpf(-0.82, 0.82, float(i) / (strands - 1))
+		var ray := axis.rotated(half_angle * (lane + 0.1 * sin(TAU * phase)))
+		var front := at + ray * reach * (0.29 + phase * 0.67)
+		var turn := front - ray * (15.0 + 13.0 * phase) + ray.orthogonal() * sin(TAU * phase) * 11.0
+		var ember := Color(tint.lerp(Color("#ffd17d"), 0.64 - phase * 0.46), tint.a * sin(phase * PI))
+		_beam(front.lerp(at, 0.24) - axis * (15.0 + 14.0 * phase), turn, 2.55, ember)
+		_line(turn, front, 1.9, ember)
+		_glow(turn, 26.0 + phase * 10.0, Color(ember, ember.a * 0.43))
+		if _preferences.fx_quality >= 2:
+			_spray(front, 31.0, Color(ember, ember.a * 0.58), phase, 3)
 
 func _zap(at: Vector2, end: Vector2, tint: Color, width: float) -> void:
 	var prior := at
