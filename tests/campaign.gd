@@ -20,6 +20,7 @@ func _run() -> void:
 	check(rules.mobs.error.is_empty() and rules.research.error.is_empty(), "campaign definitions validate")
 	_count_and_timing()
 	_difficulty_and_escorts()
+	_escort_formations()
 	_victory_conditions()
 	_preview_matches_spawn()
 	await _ui_and_record()
@@ -77,6 +78,62 @@ func _difficulty_and_escorts() -> void:
 		check(int(child.health) == [10, 24, 40][index] and int(child.reward_rp) == 0, "generated enemies scale without introducing RP")
 		index += 1
 	check(rules.mobs.lookup("boss").health == 2_400_000 and rules.mobs.lookup("normal").health == 5, "difficulty does not mutate shared enemy definitions")
+
+func _escort_formations() -> void:
+	var seed := 7043
+	for wave in [41, 42, 46, 49, 50]:
+		var amount := rules.wave_count(wave)
+		var config: Dictionary = rules.balance.escorts
+		var roster := WaveRoster.new(rules.mobs, wave, amount, seed ^ wave, config)
+		var original := WaveRoster.new(rules.mobs, wave, amount, seed ^ wave)
+		var counts := {}
+		var baseline := {}
+		var weak := 0
+		var protected := 0
+		var inside := false
+		var valid_groups := true
+		for i in amount:
+			var weight := 1.0
+			if wave == 50:
+				var band := int(i >= 181) + int(i >= 496)
+				weight = float(rules.balance.finale_elite[band])
+			var id: String = roster.next(weight).id
+			var old_id: String = original.next(weight).id
+			counts[id] = int(counts.get(id, 0)) + 1
+			baseline[old_id] = int(baseline.get(old_id, 0)) + 1
+			var light := id in WaveRoster.LIGHT_ESCORTS
+			weak += int(light)
+			if roster.in_escort:
+				valid_groups = valid_groups and (light if inside else id in WaveRoster.ESCORT_LEADERS)
+				protected += int(light)
+			inside = roster.in_escort
+		check(counts == baseline and valid_groups, "W%d preserves roster counts and places armored leaders before their wing" % wave)
+		var share := float(protected) / weak
+		check(protected == 0 if wave < 42 else share >= 0.20 and share <= 0.25, "W%d weak escort share %.1f%%" % [wave, share * 100.0])
+	var sim := Battle.new(map, rules, &"hard")
+	sim.roster_seed = seed
+	sim.wave = 48
+	var expected := sim.preview_wave()
+	sim.start_wave()
+	sim._dispatch(60.0)
+	var actual := {}
+	var guarded: Battle.Drone
+	for unit in sim.enemies:
+		var id: String = unit.definition.id
+		actual[id] = int(actual.get(id, 0)) + 1
+		if guarded == null and id in WaveRoster.LIGHT_ESCORTS and unit.shield_source == Battle.ESCORT_SHIELD_SOURCE:
+			guarded = unit
+	check(expected == actual and guarded != null, "actual W49 matches preview and includes shielded light escorts")
+	if guarded == null:
+		return
+	check(guarded.shield_hp == rules.escort_shield(49, &"hard") and guarded.health == int(guarded.definition.health), "escort shield is separate from body HP")
+	var shield := guarded.shield_hp
+	var cash := sim.credits
+	var rp := sim.research.points
+	sim._apply_damage(guarded, shield, Vector2.ZERO)
+	check(guarded.shield_hp == 0 and guarded.shield_source == 0 and guarded.health > 0 and sim.credits == cash and sim.research.points == rp, "breaking escort shields gives no reward and clears their source")
+	sim._apply_damage(guarded, guarded.health, Vector2.ZERO)
+	check(sim.credits == cash + int(guarded.definition.reward) and sim.research.points == rp + roundi(float(guarded.definition.reward_rp) * rules.slot_rp_multiplier(49)), "escorts pay normal primary kill rewards")
 
 func _preview_matches_spawn() -> void:
 	var sim := Battle.new(map, rules)
@@ -143,6 +200,7 @@ func _ui_and_record() -> void:
 	old.set_value("campaign_09_easy", "fastest_clear", 300.0)
 	old.set_value("campaign_10_easy", "fastest_clear", 250.0)
 	old.set_value("campaign_11_easy", "fastest_clear", 200.0)
+	old.set_value("campaign_12_easy", "fastest_clear", 180.0)
 	old.set_value("visual", "quality", 1)
 	old.save(profile.file_path)
 	profile.load_profile()
@@ -175,9 +233,12 @@ func _ui_and_record() -> void:
 		check(root.get_texture().get_image().save_png(file) == OK, "opening HUD captured")
 		ui.set_process(true)
 	ui.toggle_build()
+	sim.wave = 41
+	ui._update_hud()
+	check(ui.forecast.text.contains("호위 분대 · 보라색 보호막"), "wave 42 preview warns about the new formation")
 	sim.wave = 49
 	ui._update_hud()
-	check(ui.forecast.text.begins_with("보스 1 · 지원군 851"), "wave 50 forecast identifies the boss and escorts concisely")
+	check(ui.forecast.text.begins_with("보스 1 · 지원군 851") and ui.forecast.text.contains("호위 분대"), "wave 50 forecast identifies the boss and escorts concisely")
 	ui.wave_callout = "이전 알림"
 	ui.callout_time = 1.0
 	ui.toast.show()
@@ -239,7 +300,7 @@ func _ui_and_record() -> void:
 	profile.load_profile()
 	check(profile.campaign_record(&"normal").wave == 17 and profile.campaign_record(&"normal").best_clear.is_empty() and profile.campaign_record(&"hard").fastest_clear == 1900.0, "difficulty records are saved separately")
 	old.load(profile.file_path)
-	check(old.get_value("campaign_04", "fastest_clear") == 900.0 and old.get_value("campaign_05", "fastest_clear") == 700.0 and old.get_value("campaign_06_easy", "fastest_clear") == 600.0 and old.get_value("campaign_07_easy", "fastest_clear") == 500.0 and old.get_value("campaign_08_easy", "fastest_clear") == 400.0 and old.get_value("campaign_09_easy", "fastest_clear") == 300.0 and old.get_value("campaign_10_easy", "fastest_clear") == 250.0 and old.get_value("campaign_11_easy", "fastest_clear") == 200.0, "previous campaign record stays on disk")
+	check(old.get_value("campaign_04", "fastest_clear") == 900.0 and old.get_value("campaign_05", "fastest_clear") == 700.0 and old.get_value("campaign_06_easy", "fastest_clear") == 600.0 and old.get_value("campaign_07_easy", "fastest_clear") == 500.0 and old.get_value("campaign_08_easy", "fastest_clear") == 400.0 and old.get_value("campaign_09_easy", "fastest_clear") == 300.0 and old.get_value("campaign_10_easy", "fastest_clear") == 250.0 and old.get_value("campaign_11_easy", "fastest_clear") == 200.0 and old.get_value("campaign_12_easy", "fastest_clear") == 180.0, "previous campaign record stays on disk")
 	check(profile.best == 90 and profile.campaign_record().wave == 50 and profile.campaign_record().fastest_clear == 1500.0 and profile.campaign_record().best_clear.health == 100 and profile.master == 0.42, "best defense, fastest time and settings persist")
 	ui.start_game()
 	check(ui.battle.wave == 0 and ui.battle.credits == 50 and ui.battle.research.points == 0 and ui.battle.total_kills == 0 and ui.battle.total_installs == 0 and not ui.battle.won and profile.campaign_record().fastest_clear == 1500.0, "restart resets campaign but retains saved record")
@@ -263,5 +324,17 @@ func _ui_and_record() -> void:
 			button.pressed.emit()
 			break
 	check(ui.battle.difficulty == &"hard" and ui.battle.wave == 0, "retry preserves the chosen difficulty")
+	if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
+		var sample: Battle = ui.battle
+		sample.wave = 48
+		sample.roster_seed = 7043
+		ui.set_physics_process(false)
+		sample.start_wave()
+		for i in 330:
+			sample.tick(STEP)
+		await process_frame
+		await RenderingServer.frame_post_draw
+		var path := ProjectSettings.globalize_path("res://reports/late-escort-squads.png")
+		check(root.get_texture().get_image().save_png(path) == OK, "live wave 49 shielded formation captured")
 	ui.queue_free()
 	await process_frame

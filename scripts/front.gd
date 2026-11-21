@@ -479,8 +479,11 @@ func _update_forecast() -> void:
 	_forecast_wave = upcoming
 	_forecast_seed = battle.roster_seed
 	var forecast_text := ""
+	var escort := data.escort_shield(upcoming, battle.difficulty) > 0
 	if upcoming == BattleData.FINAL_WAVE:
 		forecast_text = "보스 1 · 지원군 %d\n단계 전환 시 보호막 갱신" % (data.wave_count(upcoming) - 1)
+		if escort:
+			forecast_text += " · 호위 분대"
 	else:
 		var counts := battle.preview_wave()
 		var threats: Array = counts.keys()
@@ -499,6 +502,8 @@ func _update_forecast() -> void:
 				forecast_text += "\n신속형 대응 · 속사포 / 냉각포"
 			elif counts.has("armored") and upcoming <= 9:
 				forecast_text += "\n중장갑 대응 · 관통포"
+			elif escort:
+				forecast_text += "\n호위 분대 · 보라색 보호막"
 	forecast.text = forecast_text
 
 func toggle_build() -> void:

@@ -17,6 +17,7 @@ enum Placement { READY, OUTSIDE, OCCUPIED, TERRAIN, LOCKED, FUNDS, ENDED }
 # All distances are measured in tiles. The display converts them to pixels.
 const HIT_RADIUS := 0.21
 const BARREL_LENGTH := 0.31
+const ESCORT_SHIELD_SOURCE := -1
 
 class Drone:
 	var progress := 0.0
@@ -123,6 +124,7 @@ var bosses: Array[Drone] = []
 var roster_seed := randi()
 
 var _roster: WaveRoster
+var _escort_shield := 0
 var _wave_enemies: Dictionary = {}
 var _rp_multiplier := 1.0
 var _interval := 0.5
@@ -248,7 +250,9 @@ func start_wave() -> bool:
 	_rp_multiplier = data.slot_rp_multiplier(wave)
 	_interval = data.spawn_interval(wave)
 	_spawn_clock = _interval
-	_roster = WaveRoster.new(data.mobs, wave, queued, roster_seed ^ wave)
+	_escort_shield = data.escort_shield(wave, difficulty)
+	var escort: Dictionary = data.balance.escorts if _escort_shield > 0 else {}
+	_roster = WaveRoster.new(data.mobs, wave, queued, roster_seed ^ wave, escort)
 	if wave == BattleData.FINAL_WAVE:
 		finale_started = elapsed
 	wave_started.emit(wave)
@@ -258,6 +262,8 @@ func start_wave() -> bool:
 func _spawn_primary(elite_weight: float) -> void:
 	var drone := spawn(0.0, _wave_enemy(_roster.next(elite_weight)))
 	drone.primary = true
+	if _roster.in_escort and drone.shield_hp < _escort_shield:
+		drone.give_shield(_escort_shield, ESCORT_SHIELD_SOURCE, 0.0)
 	primary_spawned += 1
 	queued -= 1
 

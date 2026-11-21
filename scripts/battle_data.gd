@@ -3,7 +3,7 @@ extends RefCounted
 
 const NUMBER_LIMIT: int = 9_000_000_000_000_000
 const FINAL_WAVE := 50
-const CAMPAIGN_RECORD := "campaign_12"
+const CAMPAIGN_RECORD := "campaign_13"
 const DIFFICULTIES := {&"easy": "쉬움", &"normal": "보통", &"hard": "어려움"}
 
 static func read_json(path: String) -> Dictionary:
@@ -69,6 +69,13 @@ func wave_reward(wave: int) -> int:
 
 func slot_rp_multiplier(wave: int) -> float:
 	return curve(balance.rp_scale, wave)
+
+func escort_shield(wave: int, difficulty: StringName) -> int:
+	var config: Dictionary = balance.get("escorts", {})
+	var anchors: Array = difficulty_rules.get(str(difficulty), {}).get("escort_shield", [])
+	if wave < int(config.get("first_wave", FINAL_WAVE + 1)) or anchors.is_empty():
+		return 0
+	return maxi(0, roundi(curve(anchors, wave)))
 
 func spawn_interval(wave: int) -> float:
 	return maxf(0.04, 0.5 * pow(0.95, maxi(0, wave - 1)))

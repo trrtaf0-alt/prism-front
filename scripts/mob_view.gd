@@ -20,6 +20,7 @@ const BOSS_COLORS := [Color("#ffd29a"), Color("#ffa079"), Color("#ff71ad")]
 const HALO_LIMIT := 80
 const MANTLE_LIMIT := 24
 const SHIELD_TINT := Color("#66d9ff")
+const ESCORT_TINT := Color("#b7a6ff")
 const HP_TRACK := Color("#321a28")
 const HP_FILL := Color("#ff9ab5")
 const MARK_TINT := Color("#ddb3ff")
@@ -149,7 +150,8 @@ func submit(battle: Battle, origin: Vector2, dim: bool, quality: int) -> void:
 			half_width = 11.0 * drone.scale
 		if drone.shield_hp > 0:
 			var ratio := float(drone.shield_hp) / float(drone.shield_max)
-			var shield_color := Color(SHIELD_TINT, 0.16 if drone.hidden else 0.55 + ratio * 0.4)
+			var hue := ESCORT_TINT if drone.shield_source == Battle.ESCORT_SHIELD_SOURCE else SHIELD_TINT
+			var shield_color := Color(hue, 0.16 if drone.hidden else 0.55 + ratio * 0.4)
 			var bar := maxf(1.0, half_width * 2.0 * ratio)
 			rings.item(shielded, at, Vector2.from_angle(battle.elapsed * 0.32 + drone.serial * 0.49) * (26.0 * drone.scale), shield_color)
 			shield_bar.item(shielded, at + Vector2(-half_width + bar * 0.5, y - 4.0), Vector2(bar, 0), shield_color, 2.0 / bar)
