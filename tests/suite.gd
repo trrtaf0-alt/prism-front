@@ -175,10 +175,18 @@ func _interface(profile: Node) -> void:
 	root.add_child(ui)
 	await process_frame
 	check(ui.battle == null and not ui.game and ui.screen.get_child_count() > 4, "main menu loads")
+	var play: Button = ui.screen.get_node("StartGame")
+	check(play.has_focus(), "menu starts with keyboard focus on play")
 	await capture("menu")
-	gui_click(ui, Vector2(335, 643))
+	gui_click(ui, play.get_global_rect().get_center())
 	check(ui.modal_kind == "difficulty" and not ui.game, "menu start opens the difficulty chooser")
 	await capture("difficulty-selection")
+	var cancel := InputEventAction.new()
+	cancel.action = "ui_cancel"
+	cancel.pressed = true
+	ui._unhandled_input(cancel)
+	check(ui.modal == null and play.has_focus(), "closing difficulty restores focus to play")
+	gui_click(ui, play.get_global_rect().get_center())
 	for button: Button in ui.modal.find_children("*", "Button", true, false):
 		if button.accessibility_name == "쉬움":
 			gui_click(ui, button.get_global_rect().get_center())

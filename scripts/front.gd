@@ -1,11 +1,11 @@
 extends Control
 
 const UI_FONT := preload("res://assets/NotoSansKR.ttf")
-const MARK := preload("res://assets/prism.svg")
+const MENU_ART := preload("res://assets/menu_core.webp")
+const MENU_CYAN := Color("#a3ebf3")
 const MINT := Color("#a9c6bd")
 const LIGHT := Color("#eee9dc")
 const MUTED := Color("#a5a8a5")
-const LINE := Color("#3b3e3f")
 const PINK := Color("#df8a86")
 const GOLD := Color("#dcc197")
 const NONE := Vector2i(-1, -1)
@@ -61,16 +61,13 @@ var warning_edge: Panel
 var wave_callout := ""
 var callout_time := 0.0
 var defeat_delay := 0.0
-var clock := 0.0
 var _credits_shown := -1
 var _credit_flash := 0.0
-var _glow: ImageTexture
 var _ui_theme := Theme.new()
 var _heading_font := FontVariation.new()
 
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_glow = FieldView.make_glow()
 	_init_theme()
 	var map_path := "res://data/map.json"
 	if not FileAccess.file_exists(map_path):
@@ -181,38 +178,52 @@ func _replace_screen() -> void:
 	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(screen)
 	move_child(screen, get_child_count() - 1)
+	queue_redraw()
 
 func show_menu() -> void:
 	_replace_screen()
 	Sound.play_music(&"patrol")
 	game = false
 	defeat_delay = 0.0
-	var icon := TextureRect.new()
-	icon.texture = MARK
-	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(icon, screen, Rect2(128, 108, 58, 58))
-	text_at(screen, "PRISM FRONT", 208, 116, 31, MINT)
-	text_at(screen, "프리즘\n방어선", 125, 209, 102)
-	text_at(screen, "50웨이브 동안 에너지 코어를 지키세요.", 131, 520, 26, MUTED)
-	var play := button_at(screen, "게임 시작", Rect2(132, 615, 418, 68), show_difficulty, true)
+	text_at(screen, "프리즘 방어선", 114, 332, 92, Color("#edf5f9"))
+	text_at(screen, "50웨이브 · 에너지 코어 방어", 120, 468, 25, Color("#9db2c1"))
+
+	var play := button_at(screen, "게임 시작", Rect2(120, 553, 328, 72), show_difficulty)
+	play.name = "StartGame"
+	play.add_theme_font_size_override("font_size", 27)
+	_style_menu_button(play, MENU_CYAN, true)
 	play.disabled = not map_error.is_empty()
-	button_at(screen, "설정", Rect2(132, 698, 418, 62), show_settings.bind("menu"))
-	button_at(screen, "종료", Rect2(132, 775, 418, 62), get_tree().quit)
-	if not map_error.is_empty():
-		text_at(screen, "맵 오류 · " + map_error, 132, 859, 21, PINK)
-	text_at(screen, "v0.5", 132, 977, 19, MUTED)
-	play.grab_focus()
+
+	var settings := button_at(screen, "설정", Rect2(120, 643, 155, 54), show_settings.bind("menu"))
+	var exit := button_at(screen, "종료", Rect2(293, 643, 155, 54), get_tree().quit)
+	_style_menu_button(settings, MENU_CYAN)
+	_style_menu_button(exit, MENU_CYAN)
+	if map_error.is_empty():
+		play.grab_focus()
+	else:
+		text_at(screen, "맵 오류 · " + map_error, 120, 731, 21, PINK, 580)
+		settings.grab_focus()
+
+func _style_menu_button(button: Button, accent: Color, primary: bool = false) -> void:
+	var border := "#" + accent.to_html(false)
+	button.add_theme_stylebox_override("normal", box("#132b36" if primary else "#0c141bd9", border if primary else "#344756"))
+	button.add_theme_stylebox_override("hover", box("#203b48", border))
+	button.add_theme_stylebox_override("pressed", box("#274954", border))
+	var focus := box("#00000000", border)
+	focus.set_expand_margin_all(4.0)
+	button.add_theme_stylebox_override("focus", focus)
+	button.add_theme_color_override("font_color", Color("#edf5f9") if primary else Color("#c4d4df"))
 
 func show_difficulty() -> void:
 	var panel := _open_modal("difficulty", Vector2(932, 376))
 	text_at(panel, "난이도 선택", 34, 21, 40)
-	button_at(panel, "돌아가기", Rect2(768, 28, 130, 46), close_modal)
-	var colors := [MINT, GOLD, PINK]
+	_style_menu_button(button_at(panel, "돌아가기", Rect2(768, 28, 130, 46), close_modal), MENU_CYAN)
+	var colors := [MENU_CYAN, GOLD, PINK]
 	var index := 0
 	for mode: StringName in BattleData.DIFFICULTIES:
 		var x := 34.0 + index * 292.0
-		var option := button_at(panel, "", Rect2(x, 95, 280, 238), start_game.bind(mode), mode == &"normal")
+		var option := button_at(panel, "", Rect2(x, 95, 280, 238), start_game.bind(mode))
+		_style_menu_button(option, colors[index])
 		var name_text: String = BattleData.DIFFICULTIES[mode]
 		option.accessibility_name = name_text
 		text_at(option, name_text, 20, 20, 35, colors[index], 240)
@@ -533,8 +544,6 @@ func _physics_process(delta: float) -> void:
 		battle.tick(delta)
 
 func _process(delta: float) -> void:
-	if not game or modal == null:
-		clock += delta
 	if game and modal == null:
 		camera_fx.update(delta)
 		if not battle.lost:
@@ -553,7 +562,6 @@ func _process(delta: float) -> void:
 			if defeat_delay == 0:
 				show_game_over()
 		_update_hud()
-	queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
@@ -648,6 +656,7 @@ func _defeated(_number: int) -> void:
 	defeat_delay = 0.95
 
 func close_modal() -> void:
+	var was_open := modal != null
 	if is_instance_valid(research_screen):
 		research_view = research_screen.view_state()
 		research_screen = null
@@ -658,6 +667,10 @@ func close_modal() -> void:
 		for control in screen.get_children():
 			if control is Button:
 				control.focus_mode = Control.FOCUS_ALL
+		if was_open and not game:
+			var play := screen.get_node_or_null("StartGame") as Button
+			if play != null and not play.disabled:
+				play.grab_focus()
 	if is_instance_valid(field):
 		field.frozen = false
 		camera_fx.suspend(false)
@@ -673,11 +686,12 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 		placement_label.hide()
 		camera_fx.suspend(true)
 	var shade := ColorRect.new()
-	shade.color = Color(0.018, 0.020, 0.025, 0.86)
+	shade.color = Color(0.018, 0.020, 0.025, 0.86) if game else Color(0.015, 0.025, 0.04, 0.73)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
 	place(shade, self, Rect2(Vector2.ZERO, Vector2(1920, 1080)))
 	modal = shade
-	return panel_at(modal, Rect2((Vector2(1920, 1080) - dimensions) * 0.5, dimensions), "#1a2026", "#6e7778")
+	var panel_rect := Rect2((Vector2(1920, 1080) - dimensions) * 0.5, dimensions)
+	return panel_at(modal, panel_rect, "#1a2026", "#6e7778") if game else panel_at(modal, panel_rect, "#0e1822", "#415765")
 
 func show_pause() -> void:
 	if battle.lost:
@@ -1009,22 +1023,8 @@ func _leave_settings() -> void:
 		close_modal()
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, 1920, 1080), Color("#101316"))
-	if not game:
-		_draw_menu_art()
-
-func _draw_menu_art() -> void:
-	var center := Vector2(1315, 526)
-	draw_rect(Rect2(688, 58, 1174, 964), Color("#10151a"))
-	draw_texture_rect(_glow, Rect2(698, 30, 1100, 1020), false, Color("#78604a"))
-	draw_texture_rect(_glow, Rect2(995, 246, 832, 712), false, Color("#435c60"))
-	for i in 3:
-		var radius := 185.0 + 78.0 * i
-		draw_arc(center, radius, 0.0, TAU, 128, Color("#4c4b45"), 1.0, true)
-	var angle := -0.48 + sin(clock * 0.2) * 0.09
-	draw_line(center - Vector2.from_angle(angle) * 470.0, center + Vector2.from_angle(angle) * 470.0, Color("#675c4d"), 1.0, true)
-	draw_texture_rect(MARK, Rect2(center - Vector2(111, 111), Vector2(222, 222)), false, Color("#b0babc"))
-	draw_rect(Rect2(688, 58, 1174, 964), LINE, false, 1.0)
-	draw_rect(Rect2(688, 58, 1174, 41), Color("#0b0e11"))
-	draw_rect(Rect2(688, 981, 1174, 41), Color("#0b0e11"))
-	draw_line(Vector2(132, 927), Vector2(550, 927), LINE, 1.0)
+	var viewport_rect := Rect2(0, 0, 1920, 1080)
+	if game:
+		draw_rect(viewport_rect, Color("#101316"))
+	else:
+		draw_texture_rect(MENU_ART, viewport_rect, false)
