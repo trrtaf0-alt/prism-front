@@ -120,7 +120,11 @@ func _run() -> void:
 	quit()
 
 func _restore() -> Battle:
-	var sim := Battle.new(map, rules, StringName(snapshot.difficulty), snapshot.get("constraints", {}))
+	var rule_levels: Dictionary = {}
+	var penalties: Dictionary = snapshot.get("constraints", {})
+	for id in penalties:
+		rule_levels[id] = -int(penalties[id])
+	var sim := Battle.new(map, rules, StringName(snapshot.difficulty), rule_levels)
 	sim.wave = 49
 	sim.health = int(snapshot.health)
 	sim.roster_seed = int(snapshot.seed)

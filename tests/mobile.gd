@@ -32,17 +32,21 @@ func _run() -> void:
 	if not _expect_modal("difficulty"):
 		_finish()
 		return
-	await _tap_button(ui.modal, "제약 모드")
+	await _tap_button(ui.modal, "커스텀 규칙")
 	if not _expect_modal("constraints"):
 		_finish()
 		return
 	var constraints := ui.modal.get_child(0).get_child(0) as ConstraintsScreen
 	constraints._difficulty.select(0)
-	await _tap_control(constraints._steppers[&"boss_hp"][1])
-	check(constraints._effects[&"boss_hp"].text.contains("+50%"), "touch stepper changes the challenge level")
-	await _capture("android-constraints")
+	await _tap_control(constraints._steppers[&"boss_hp"][0])
+	await _tap_control(constraints._steppers[&"rp"][1])
+	await _tap_control(constraints._funds)
+	check(constraints._funds.has_focus(), "touch focuses the numeric starting funds field")
+	await _tap_control(constraints._presets[250])
+	check(constraints._effects[&"boss_hp"].text == "제약 -1단계 · +50%" and constraints._effects[&"rp"].text == "특전 +1단계 · +25%", "touch steppers choose penalties and perks")
+	await _capture("android-custom-rules")
 	await _tap_button(ui.modal, "이 설정으로 시작")
-	check(ui.game and ui.battle.difficulty == &"easy" and ui.battle.constraints.count() == 1, "touch starts the selected constrained game")
+	check(ui.game and ui.battle.difficulty == &"easy" and ui.battle.constraints.count() == 2 and ui.battle.credits == 250, "touch starts the selected custom game with the chosen funds")
 	if not ui.game:
 		_finish()
 		return
@@ -76,12 +80,12 @@ func _run() -> void:
 	await _tap(at)
 	check(ui.field.hovered == cell and sim.towers.is_empty(), "first field tap previews the intended tile")
 	await _tap(at)
-	check(sim.occupied.has(cell) and sim.credits == 40, "second field tap installs the tower exactly once")
+	check(sim.occupied.has(cell) and sim.credits == 240, "second field tap installs the tower exactly once")
 	await _tap_control(ui.build_button)
 	await _tap(at)
 	check(ui.selected == cell and ui.tower_stats.visible, "tap selects existing tower and shows stats")
 	await _tap_control(ui.sell_button)
-	check(sim.towers.is_empty() and sim.credits == 50, "touch sells the selected tower and returns funds")
+	check(sim.towers.is_empty() and sim.credits == 250, "touch sells the selected tower and returns funds")
 	await _field_gestures()
 	await _tap_control(ui.wave_button)
 	check(sim.wave == 1 and sim.active, "touch starts the wave")

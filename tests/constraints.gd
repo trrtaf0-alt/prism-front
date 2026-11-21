@@ -34,18 +34,25 @@ func _levels() -> void:
 		[100, 150, 200, 300, 400, 600], [100, 110, 120, 135, 150, 175], [100, 150, 200, 300, 400, 600],
 	]
 	check(RunConstraints.DEFINITIONS.size() == expected.size(), "exactly eleven constraints")
-	var selected_levels := RunConstraints.new({&"credits": 3, &"tower_limit": 2, &"enemy_hp": 0})
-	check(selected_levels.summary_text() == "재화 감소 3단계 · -30%\n설치 수 제한 2단계 · 30기", "summary lists only active levels and formats percentages and limits")
+	var bonuses := [100, 125, 150, 175, 200, 250]
+	var discounts := [100, 90, 80, 70, 60, 50]
+	var selected_levels := RunConstraints.new({&"credits": 3, &"tower_limit": -2, &"enemy_hp": 0}, 250)
+	check(selected_levels.summary_text() == "재화 획득 · 특전 +3단계 · +75%\n타워 설치 수 · 제약 -2단계 · 최대 30기\n시작자금 · 250", "summary lists active rules and starting funds")
+	check(RunConstraints.new({&"tower_limit": 5}).value(&"tower_limit") == 0, "installation cap has no positive stages")
 	var ids := RunConstraints.DEFINITIONS.keys()
 	for i in ids.size():
 		for level in range(6):
-			var selected := RunConstraints.new({ids[i]: level})
+			var selected := RunConstraints.new({ids[i]: -level})
 			check(selected.value(ids[i]) == expected[i][level] and selected.active() == (level > 0),
 				"%s level %d uses the expected amount" % [ids[i], level])
+			var perk := RunConstraints.new({ids[i]: level})
+			var expected_perk: int = bonuses[level] if i < 2 else (0 if i == 4 else discounts[level])
+			check(perk.value(ids[i]) == expected_perk and perk.active() == (level > 0 and i != 4),
+				"%s positive level %d uses the expected amount" % [ids[i], level])
 
 func _economy() -> void:
 	for level: int in [1, 5]:
-		var sim := Battle.new(map, rules, &"easy", {&"credits": level, &"rp": level})
+		var sim := Battle.new(map, rules, &"easy", {&"credits": -level, &"rp": -level})
 		check(sim.credits == 50 and sim.start_wave(), "income reductions preserve 50 starting credits and permit play")
 		var awards: Array[int] = []
 		sim.wave_finished.connect(func(_wave: int, amount: int): awards.append(amount))
@@ -57,9 +64,15 @@ func _economy() -> void:
 		sim.install(Vector2i(1, 2))
 		sim.sell(Vector2i(1, 2))
 		check(sim.credits == wallet, "income penalty does not apply to sale proceeds")
+	var mixed := Battle.new(map, rules, &"easy", {&"credits": 5, &"rp": -2}, 250)
+	check(mixed.credits == 250 and mixed.total_credits == 0 and mixed.start_wave(), "starting funds are granted independently of income")
+	_drain(mixed)
+	check(mixed.credits == 350 and mixed.total_credits == 100 and mixed.research.total_earned == 8, "kill and clearance credit perks coexist with an RP penalty")
+	var zero_funds := Battle.new(map, rules, &"normal", {}, 0)
+	check(zero_funds.credits == 0 and zero_funds.constraints.active() and zero_funds.constraints.count() == 0, "zero funds alone makes a custom run")
 
 func _prices_and_limit() -> void:
-	var sim := Battle.new(map, rules, &"easy", {&"tower_price": 4, &"research_price": 3, &"tower_limit": 5})
+	var sim := Battle.new(map, rules, &"easy", {&"tower_price": -4, &"research_price": -3, &"tower_limit": -5})
 	var core := sim.tower_definition(TowerRegistry.BASE)
 	var rapid := sim.tower_definition("tower_02")
 	check(core.cost == 18 and core.refund == 18 and rapid.cost == 99 and rapid.refund == 74, "price inflation preserves base refund ratios")
@@ -91,9 +104,12 @@ func _prices_and_limit() -> void:
 	check(sim.sell(Vector2i(1, 2)) and sim.install(extra), "selling frees an installation slot")
 	var normal := Battle.new(map, rules)
 	check(normal.tower_limit() == 0 and normal.tower_definition(TowerRegistry.BASE).cost == 10, "new run sees original values")
+	var discounted := Battle.new(map, rules, &"easy", {&"tower_price": 5, &"research_price": 5, &"tower_limit": -1}, 20)
+	check(discounted.research.cost(root_node) == 1 and discounted.research.minimum_cost(root_node) == 1, "research quotes and plans use the same perk")
+	check(discounted.install(Vector2i(1, 2)) and discounted.credits == 15 and discounted.sell(Vector2i(1, 2)) and discounted.credits == 20, "discounted installation and refund preserve the existing rates")
 
 func _enemies() -> void:
-	var levels := {&"enemy_hp": 5, &"enemy_speed": 5, &"enemy_shield": 5, &"boss_hp": 5, &"boss_speed": 5, &"boss_shield": 5}
+	var levels := {&"enemy_hp": -5, &"enemy_speed": -5, &"enemy_shield": -5, &"boss_hp": -5, &"boss_speed": -5, &"boss_shield": -5}
 	var sim := Battle.new(map, rules, &"easy", levels)
 	sim.wave = 49
 	check(sim.start_wave(), "all combat constraints permit the finale to spawn")
@@ -123,15 +139,26 @@ func _enemies() -> void:
 	var ally := unit_sim.spawn(8.5, unit_sim._wave_enemy(rules.mobs.lookup("normal")))
 	unit_sim.apply_support(guard, guard.mob.guardian, true)
 	check(ally.shield_hp == 4_250, "existing guardian shield grants scale once")
+	var perks := RunConstraints.new({&"enemy_hp": 5, &"enemy_speed": 4, &"enemy_shield": 5, &"boss_hp": 5, &"boss_speed": 5, &"boss_shield": 5})
+	var base_boss := rules.enemy_for_wave(rules.mobs.lookup("boss"), 50, &"easy")
+	var reduced_boss := rules.enemy_for_wave(rules.mobs.lookup("boss"), 50, &"easy", perks)
+	check(reduced_boss.health == roundi(base_boss.health * 0.5) and is_equal_approx(reduced_boss.speed, base_boss.speed * 0.5)
+		and reduced_boss.shield == roundi(base_boss.shield * 0.5) and reduced_boss.phases[0].shield == roundi(base_boss.phases[0].shield * 0.5), "boss perks independently reduce final boss stats and phase shields")
+	var base_normal := rules.enemy_for_wave(rules.mobs.lookup("normal"), 50, &"easy")
+	var reduced_normal := rules.enemy_for_wave(rules.mobs.lookup("normal"), 50, &"easy", perks)
+	check(reduced_normal.health == roundi(base_normal.health * 0.5) and is_equal_approx(reduced_normal.speed, base_normal.speed * 0.6)
+		and reduced_normal.shield == 0, "ordinary enemy perks are independent and preserve zero shields")
+	check(rules.enemy_for_wave(rules.mobs.lookup("energy"), 50, &"easy", perks).shield == roundi(energy.shield * 0.1), "enemy shield perk reduces existing native shields")
+	check(rules.escort_shield(50, &"easy", perks) == roundi(rules.escort_shield(50, &"easy") * 0.5), "enemy shield perk also reduces existing escort shields")
 
 func _zero_and_finale() -> void:
 	var zeros: Dictionary = {}
 	var maximum: Dictionary = {}
 	for id: StringName in RunConstraints.DEFINITIONS:
 		zeros[id] = 0
-		maximum[id] = 5
+		maximum[id] = -5 if id == &"tower_limit" or id == &"boss_hp" else 5
 	var baseline := Battle.new(map, rules, &"normal")
-	var zero := Battle.new(map, rules, &"normal", zeros)
+	var zero := Battle.new(map, rules, &"normal", zeros, 50)
 	baseline.roster_seed = 7043
 	zero.roster_seed = 7043
 	check(not zero.constraints.active(), "all zeros use ordinary run mode")
@@ -174,25 +201,36 @@ func _interface() -> void:
 	ui.show_difficulty()
 	await process_frame
 	for button: Button in ui.modal.find_children("*", "Button", true, false):
-		if button.text == "제약 모드":
+		if button.text == "커스텀 규칙":
 			button.pressed.emit()
 			break
 	check(ui.modal_kind == "constraints", "difficulty menu leads to constraints")
 	var panel := ui.modal.get_child(0).get_child(0) as ConstraintsScreen
-	check(panel._buttons.size() == 11 and not panel._levels.size(), "picker starts at 0 for all eleven constraints")
+	check(panel._steppers.size() == 11 and panel._levels.is_empty() and panel._funds.text == "50", "picker starts at 0 for all eleven rules and 50 funds")
 	panel._difficulty.select(2)
-	_click(panel._buttons[&"credits"][5])
-	_click(panel._buttons[&"tower_limit"][5])
-	check(panel._effects[&"credits"].text == "-50%" and panel._effects[&"tower_limit"].text == "12기", "picker shows applied values")
-	await _capture("constraints-settings")
+	_click(panel._steppers[&"credits"][1])
+	_click(panel._steppers[&"tower_limit"][0])
+	_click(panel._presets[5000])
+	check(panel._effects[&"credits"].text == "특전 +1단계 · +25%" and panel._effects[&"tower_limit"].text == "제약 -1단계 · 최대 40기", "picker displays signed levels, categories and values")
+	check(panel._funds.text == "5000" and panel._presets[5000].button_pressed, "recommended funds can be selected by mouse")
+	await _capture("custom-rules-settings")
 	panel._reset()
-	check(panel._levels.is_empty() and panel._buttons[&"credits"][0].button_pressed and not panel._buttons[&"credits"][5].button_pressed, "reset restores all settings visibly")
-	panel._buttons[&"tower_price"][5].pressed.emit()
-	panel._buttons[&"research_price"][2].pressed.emit()
+	check(panel._levels.is_empty() and panel._presets[50].button_pressed and panel._steppers[&"tower_limit"][1].disabled, "reset restores neutral stages, unbounded installation and default funds")
+	for invalid in ["", "-1", "1.5", "abc", "9000000000000001", "99999999999999999999999"]:
+		_set_funds_text(panel, invalid)
+		check(panel._start_button.disabled and panel._funds_amount() == -1, "invalid direct input cannot start a game")
+	panel._start()
+	check(not ui.game, "invalid input is rejected at game start")
+	_set_funds_text(panel, "9000000000000000")
+	check(not panel._start_button.disabled and panel._funds_amount() == BattleData.NUMBER_LIMIT, "the existing economy cap is a valid direct input")
+	_set_funds_text(panel, "1234")
+	panel._select(&"tower_price", -5)
+	panel._select(&"research_price", 2)
 	panel._start()
 	check(ui.game and ui.battle.difficulty == &"hard" and ui.battle.constraints.count() == 2 and ui.build_button.text.contains("20"), "selected difficulty and displayed installation cost reach the new run")
+	check(ui.battle.credits == 1234 and ui.battle.research.cost(rules.research.ids[0]) == 2, "typed funds and research discount reach the new run")
 	var badge := ui.screen.get_node_or_null("ActiveConstraints") as Label
-	check(badge != null and badge.text == "제약 2종" and badge.tooltip_text == "물가 폭등 5단계 · +100%\n연구 비용 폭등 2단계 · +40%", "HUD badge reports the selected run constraints")
+	check(badge != null and badge.text == "규칙 2종" and badge.tooltip_text == "타워 설치 가격 · 제약 -5단계 · +100%\n연구 비용 · 특전 +2단계 · -20%\n시작자금 · 1234", "HUD badge reports restrictions, perks and starting funds")
 	if badge != null:
 		var hover := InputEventMouseMotion.new()
 		hover.position = badge.get_global_transform_with_canvas() * (badge.size * 0.5)
@@ -201,16 +239,24 @@ func _interface() -> void:
 		if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
 			root.warp_mouse(hover.position)
 			await create_timer(0.85).timeout
-			await _capture("constraints-hud-tooltip")
+			await _capture("custom-rules-hud")
 	var profile = root.get_node("Profile")
 	var entry: Dictionary = profile.campaign_record(&"hard").duplicate(true)
 	ui.battle.wave = 49
 	ui.start_wave()
 	_drain(ui.battle)
 	check(ui.modal_kind == "victory" and profile.campaign_record(&"hard") == entry, "constraint victory and wave do not modify ordinary records")
+	ui.start_game(&"hard", {}, 0)
+	ui.start_wave()
+	badge = ui.screen.get_node_or_null("ActiveConstraints") as Label
+	check(badge != null and badge.text == "시작자금" and badge.tooltip_text == "시작자금 · 0" and profile.campaign_record(&"hard") == entry, "funds-only run has a badge and does not modify the ordinary record")
 	ui.start_game(&"hard")
 	check(not ui.battle.constraints.active() and ui.build_button.text.contains("10") and ui.battle.credits == 50, "ordinary restart clears previous constraints")
 	check(not ui.screen.has_node("ActiveConstraints"), "ordinary runs omit the badge and its tooltip")
+
+func _set_funds_text(panel: ConstraintsScreen, value: String) -> void:
+	panel._funds.text = value
+	panel._funds.text_changed.emit(value)
 
 func _click(button: Button) -> void:
 	var point := button.get_global_transform_with_canvas() * (button.size * 0.5)

@@ -265,7 +265,7 @@ func show_difficulty() -> void:
 	var panel := _open_modal("difficulty", Vector2(932, 470) if mobile else Vector2(932, 438))
 	text_at(panel, "난이도 선택", 34, 21, 40)
 	_style_menu_button(button_at(panel, "돌아가기", Rect2(737, 20, 161, 64) if mobile else Rect2(768, 28, 130, 46), close_modal), MENU_CYAN)
-	_style_menu_button(button_at(panel, "제약 모드", Rect2(34, 355, 264, 78) if mobile else Rect2(34, 355, 196, 48), show_constraints), MENU_CYAN)
+	_style_menu_button(button_at(panel, "커스텀 규칙", Rect2(34, 355, 264, 78) if mobile else Rect2(34, 355, 196, 48), show_constraints), MENU_CYAN)
 	var colors := [MENU_CYAN, GOLD, PINK]
 	var index := 0
 	for mode: StringName in BattleData.DIFFICULTIES:
@@ -285,12 +285,12 @@ func show_difficulty() -> void:
 		index += 1
 
 func show_constraints() -> void:
-	var panel := _open_modal("constraints", Vector2(1342, 950) if Profile.mobile_mode else Vector2(1342, 860))
+	var panel := _open_modal("constraints", Vector2(1744, 1016))
 	var picker := ConstraintsScreen.new()
 	place(picker, panel, Rect2(Vector2.ZERO, panel.size))
 	picker.setup(self)
 
-func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}) -> void:
+func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}, starting_funds: int = -1) -> void:
 	if not map_error.is_empty():
 		return
 	_replace_screen()
@@ -309,7 +309,7 @@ func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}) -> vo
 	callout_time = 0.0
 	defeat_delay = 0.0
 	last_base_damage = 0
-	battle = Battle.new(map, data, difficulty, levels)
+	battle = Battle.new(map, data, difficulty, levels, starting_funds)
 	battle.effect.connect(_battle_effect)
 	battle.tower_installed.connect(Sound.deploy_cue)
 	battle.attack_visual.connect(Sound.attack_cue)
@@ -351,7 +351,7 @@ func _make_hud() -> void:
 	rp_label = _hud_text(screen, "0", 626, 43, 28, Color("#c3b5d0"), 146)
 	_hud_text(screen, BattleData.DIFFICULTIES[battle.difficulty], 800, 46, 19, MUTED, 110)
 	if battle.constraints.active():
-		var constraint_badge := _hud_text(screen, "제약 %d종" % battle.constraints.count(), 800, 74, 17, MENU_CYAN, 110)
+		var constraint_badge := _hud_text(screen, battle.constraints.badge_text(), 800, 74, 17, MENU_CYAN, 110)
 		constraint_badge.name = "ActiveConstraints"
 		constraint_badge.mouse_filter = Control.MOUSE_FILTER_PASS
 		constraint_badge.mouse_default_cursor_shape = Control.CURSOR_HELP
@@ -1006,7 +1006,7 @@ func _cleared(record: Dictionary) -> void:
 		["획득 재화", str(record.credits)], ["완료 연구", "%d / 100" % int(record.research)],
 		["타워 설치", "%d회" % int(record.installed)],
 	]
-	stats.append(["제약", "%d종" % battle.constraints.count()] if constrained else ["최단 기록", _duration(entry.fastest_clear)])
+	stats.append(["커스텀 규칙", battle.constraints.badge_text()] if constrained else ["최단 기록", _duration(entry.fastest_clear)])
 	for i in stats.size():
 		var x := 44 + int(i % 4) * 205
 		var y := 112 + floori(i / 4.0) * 110
@@ -1016,7 +1016,7 @@ func _cleared(record: Dictionary) -> void:
 	var terminal := " · ".join(PackedStringArray(record.terminal))
 	text_at(panel, terminal if not terminal.is_empty() else "없음", 44, 380, 23, GOLD, 812)
 	if constrained:
-		text_at(panel, "제약 모드 클리어", 44, 445, 18, MENU_CYAN)
+		text_at(panel, "커스텀 규칙 클리어", 44, 445, 18, MENU_CYAN)
 	elif Profile.save_error:
 		text_at(panel, "클리어 기록을 저장하지 못했습니다.", 44, 445, 18, PINK)
 	else:
@@ -1036,9 +1036,9 @@ func show_game_over() -> void:
 	text_at(panel, "보스 탈출" if battle.boss_escaped and battle.health > 0 else "게임 오버", 36, 27, 47, PINK)
 	text_at(panel, "도달 웨이브", 39, 116, 19, MUTED)
 	var constrained := battle.constraints.active()
-	text_at(panel, "적용 제약" if constrained else "최고 기록", 280, 116, 19, MUTED)
+	text_at(panel, "커스텀 규칙" if constrained else "최고 기록", 280, 116, 19, MUTED)
 	text_at(panel, str(battle.wave), 39, 148, 31, LIGHT, 222)
-	var detail := "%d종" % battle.constraints.count() if constrained else str(Profile.campaign_record(battle.difficulty).wave)
+	var detail := battle.constraints.badge_text() if constrained else str(Profile.campaign_record(battle.difficulty).wave)
 	text_at(panel, detail, 280, 148, 31, GOLD, 206)
 	button_at(panel, _restart_label(), Rect2(36, 229, 450, 59), start_game.bind(battle.difficulty), true).grab_focus()
 	button_at(panel, "메인 메뉴", Rect2(36, 301, 450, 59), show_menu)

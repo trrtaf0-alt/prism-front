@@ -104,14 +104,18 @@ func _run() -> void:
 			var tile := Vector2i(x, y)
 			if map.tile_at(tile) == "." and not seats.has(tile):
 				seats.append(tile)
-	var sim := Battle.new(map, rules, difficulty, constraint_levels)
+	# Preserve the existing benchmark CLI and snapshot convention, where positive levels are penalties.
+	var rule_levels: Dictionary = {}
+	for id: StringName in constraint_levels:
+		rule_levels[id] = -int(constraint_levels[id])
+	var sim := Battle.new(map, rules, difficulty, rule_levels)
 	var ui
 	if "--visual" in args and DisplayServer.get_name() != "headless":
 		var packed := load("res://scenes/Front.tscn") as PackedScene
 		ui = packed.instantiate()
 		root.add_child(ui)
 		await process_frame
-		ui.start_game(difficulty, constraint_levels)
+		ui.start_game(difficulty, rule_levels)
 		ui.set_physics_process(false)
 		ui.set_process_unhandled_input(false)
 		root.gui_disable_input = true
