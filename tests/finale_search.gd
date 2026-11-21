@@ -13,13 +13,16 @@ var map := FieldMap.new()
 var snapshot: Dictionary
 var formation := "baseline"
 var time_limit := 800
+var campaign_boss := false
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
 	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--snapshot="):
+		if arg == "--campaign-boss":
+			campaign_boss = true
+		elif arg.begins_with("--snapshot="):
 			snapshot = BattleData.read_json(arg.trim_prefix("--snapshot="))
 		elif arg.begins_with("--formation="):
 			formation = arg.trim_prefix("--formation=")
@@ -79,9 +82,10 @@ func _run() -> void:
 	print(JSON.stringify({"layout": formation, "difficulty": snapshot.difficulty, "route": snapshot.strategy, "bank": sim.credits, "counts": counts, "covered_photons": covered, "key_tiles": key_tiles}))
 	sim.start_wave()
 	var boss := sim.bosses[0]
-	boss.health = int(HP[snapshot.difficulty])
-	boss.maximum_health = boss.health
-	boss.armor = 0.10
+	if not campaign_boss:
+		boss.health = int(HP[snapshot.difficulty])
+		boss.maximum_health = boss.health
+		boss.armor = 0.10
 	var exit_position := map.position_at(map.length())
 	var furthest_progress := boss.progress
 	var nearest_direct := boss.position.distance_to(exit_position)

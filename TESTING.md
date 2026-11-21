@@ -2,6 +2,26 @@
 
 Windows x64 설치판과 ZIP을 만들었습니다. 설치판은 임시 경로에 설치한 뒤 바탕화면 및 시작 메뉴 바로가기의 대상, 설치된 EXE의 해시, 게임 시작 및 종료를 확인했습니다. 제거 프로그램이 게임 파일과 두 바로가기 및 설치 등록을 지우는 것도 확인했습니다. ZIP은 새 폴더에 압축을 풀고 실행을 확인했습니다. 설치판은 코드 서명 없이 빌드했습니다.
 
+## 보통·어려움 난이도 상향
+
+Godot 전투를 60Hz로 실행해 웨이브 1~49를 진행한 뒤, 당시의 기지 HP·재화·연구·타워 배치를 복원해 50웨이브를 재생했습니다. 모든 경로에 지원 타워 6종을 사용했습니다. 남은 거리는 보스의 위치부터 출구까지의 81칸 경로를 기준으로 측정했습니다.
+
+| 난이도·빌드 | 시드 | 50웨이브 결과 | 보스의 남은 경로 | 기지 HP |
+| --- | ---: | --- | ---: | ---: |
+| 보통 표준 | 7043 | 268.80초 클리어 | 37.50칸 | 100 |
+| 보통 광역 중심 | 7043 | 352.00초 클리어 | 18.26칸 | 100 |
+| 어려움 표식·광자포 중심 | 7043 | 363.00초에 보스 통과, 보스 HP 1,479,084 | 0칸 | 0 |
+| 어려움 표식·광자포 중심, 광자포 2기 추가 | 7043 | 350.00초 클리어 | 2.81칸 | 100 |
+| 어려움 표식·광자포 중심, 광자포 2기 추가 | 8671 | 348.00초 클리어 | 3.01칸 | 10 |
+
+시드 7043의 동일한 보통 표준 배치를 이전 난이도 수치로 재생하면 80.00초에 클리어합니다. 이전 어려움 수치에서는 같은 표식·광자포 배치가 증설 없이 89.17초에 클리어합니다. 어려움 최적화 빌드는 보스전 직전에 95,000을 써서 광자포를 7기에서 9기로 늘렸고, 9기 모두 과부하 증폭기와 양자 연결망의 지원을 받았습니다. 보스가 쓰러지기 전 851개 기본 지원군 슬롯이 모두 소진됐고, 파생 몹까지 포함해 두 시드에서 각각 35.25초와 38.17초에 지원군을 처리했습니다.
+
+```powershell
+& $Godot --headless --path . --script tests/campaign_run.gd -- --qa --difficulty=hard --strategy=focus --seed=7043 --support=all --save-finale=res://reports/hard-focus.json
+& $Godot --headless --path . --script tests/finale_search.gd -- --qa --campaign-boss --snapshot=res://reports/hard-focus.json --formation=baseline
+& $Godot --headless --path . --script tests/finale_search.gd -- --qa --campaign-boss --snapshot=res://reports/hard-focus.json --formation=reserve_photon
+```
+
 # v0.5 지원 타워 검증
 
 Windows 11, Godot 4.7.2와 GeForce RTX 2060에서 실행했습니다. [지원 타워 수치·연구·밸런스 결과](SUPPORT.md)
