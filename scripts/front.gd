@@ -101,14 +101,21 @@ func _ready() -> void:
 	show_menu()
 
 func _init_theme() -> void:
+	var mobile: bool = Profile.mobile_mode
+	var base_font: FontFile = UI_FONT
+	if mobile:
+		base_font = UI_FONT.duplicate() as FontFile
+		base_font.hinting = TextServer.HINTING_NORMAL
+		base_font.force_autohinter = true
+		base_font.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
 	var regular := FontVariation.new()
 	var weight := TextServerManager.get_primary_interface().name_to_tag("wght")
-	regular.base_font = UI_FONT
-	regular.variation_opentype = {weight: 460}
-	regular.variation_embolden = 0.23
-	_heading_font.base_font = UI_FONT
+	regular.base_font = base_font
+	regular.variation_opentype = {weight: 500 if mobile else 460}
+	regular.variation_embolden = 0.0 if mobile else 0.23
+	_heading_font.base_font = base_font
 	_heading_font.variation_opentype = {weight: 650}
-	_heading_font.variation_embolden = 0.55
+	_heading_font.variation_embolden = 0.0 if mobile else 0.55
 	_ui_theme.default_font = regular
 	_ui_theme.default_font_size = 22
 	_ui_theme.set_color("font_color", "Label", LIGHT)
@@ -133,11 +140,13 @@ func _init_theme() -> void:
 	theme = _ui_theme
 
 func box(fill: String, border: String) -> StyleBoxFlat:
+	var mobile: bool = Profile.mobile_mode
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(fill)
 	style.border_color = Color(border)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(3)
+	style.set_border_width_all(3 if mobile else 1)
+	style.set_corner_radius_all(0 if mobile else 3)
+	style.anti_aliasing = not mobile
 	style.content_margin_left = 16.0
 	style.content_margin_right = 16.0
 	return style
@@ -197,6 +206,8 @@ func _replace_screen() -> void:
 	battle = null
 	screen = Control.new()
 	screen.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if Profile.mobile_mode:
+		screen.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	add_child(screen)
 	move_child(screen, get_child_count() - 1)
 	queue_redraw()
@@ -447,7 +458,7 @@ func _hud_text(parent: Control, value: String, x: float, y: float, font_size: in
 	var tint := color.lerp(LIGHT, 0.50) if mobile and color == MUTED else color
 	var label := text_at(parent, value, x, y, maxi(font_size, 24) if mobile else font_size, tint, width)
 	label.add_theme_color_override("font_outline_color", Color("#080d12e6"))
-	label.add_theme_constant_override("outline_size", 2 if mobile else 4)
+	label.add_theme_constant_override("outline_size", 0 if mobile else 4)
 	return label
 
 func _right_hud_text(value: String, x: float, y: float, font_size: int, color: Color, width: float) -> Label:
@@ -457,9 +468,14 @@ func _right_hud_text(value: String, x: float, y: float, font_size: int, color: C
 
 func _hud_button(value: String, rect: Rect2, action: Callable, primary: bool = false) -> Button:
 	var button := button_at(screen, value, rect, action)
-	button.add_theme_font_size_override("font_size", 25 if Profile.mobile_mode else 19)
-	button.add_theme_stylebox_override("normal", box("#192b2bcf" if primary else "#121a22c7", "#829d958f" if primary else "#58687378"))
-	button.add_theme_stylebox_override("disabled", box("#101820a3", "#34414a68"))
+	if Profile.mobile_mode:
+		button.add_theme_font_size_override("font_size", 25)
+		button.add_theme_stylebox_override("normal", box("#192b2b" if primary else "#121a22", "#829d95" if primary else "#586873"))
+		button.add_theme_stylebox_override("disabled", box("#101820", "#34414a"))
+	else:
+		button.add_theme_font_size_override("font_size", 19)
+		button.add_theme_stylebox_override("normal", box("#192b2bcf" if primary else "#121a22c7", "#829d958f" if primary else "#58687378"))
+		button.add_theme_stylebox_override("disabled", box("#101820a3", "#34414a68"))
 	return button
 
 func _update_boss_hud() -> void:
@@ -923,6 +939,8 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 	var shade := ColorRect.new()
 	shade.color = Color(0.018, 0.020, 0.025, 0.86) if game else Color(0.015, 0.025, 0.04, 0.73)
 	shade.mouse_filter = Control.MOUSE_FILTER_STOP
+	if Profile.mobile_mode:
+		shade.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	place(shade, self, Rect2(Vector2.ZERO, Vector2(1920, 1080)))
 	modal = shade
 	var panel_rect := Rect2((Vector2(1920, 1080) - dimensions) * 0.5, dimensions)

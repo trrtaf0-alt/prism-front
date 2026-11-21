@@ -203,7 +203,10 @@ func _draw() -> void:
 		if overview_mode:
 			fill = fill.lerp(color, 0.30)
 		draw_rect(card, fill)
-		draw_rect(card, border, false, 2.0 if id == focus_id else 1.35)
+		var edge_width := 2.6 if id == focus_id else 1.8
+		if not mobile:
+			edge_width = 2.0 if id == focus_id else 1.35
+		draw_rect(card, border, false, edge_width)
 		draw_rect(Rect2(at, Vector2(5.0, CARD.y)), color)
 		var badge := "해금" if node.has("unlock") else "경유"
 		draw_circle(at + Vector2(15, 23), 3.2, border)

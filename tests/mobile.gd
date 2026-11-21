@@ -25,6 +25,9 @@ func _run() -> void:
 	root.add_child(ui)
 	for frame in range(5):
 		await process_frame
+	var menu_font := ui.screen.get_node("StartGame").get_theme_font("font") as FontVariation
+	var base_font := menu_font.base_font as FontFile
+	check(base_font.hinting == TextServer.HINTING_NORMAL and base_font.subpixel_positioning == TextServer.SUBPIXEL_POSITIONING_DISABLED, "mobile UI snaps font glyphs to device pixels")
 	await _tap_control(ui.screen.get_node("StartGame"))
 	if not _expect_modal("difficulty"):
 		_finish()
@@ -44,11 +47,13 @@ func _run() -> void:
 		_finish()
 		return
 	var sim: Battle = ui.battle
+	check(ui.screen.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST and ui.field.texture_filter != CanvasItem.TEXTURE_FILTER_NEAREST, "mobile HUD uses unfiltered glyph sampling independently of battlefield textures")
 	check(_lines_fit(ui.forecast), "wave forecast fits at the larger mobile font size")
 	await _tap_control(ui.catalog_button)
 	if not _expect_modal("catalog"):
 		_finish()
 		return
+	check(ui.modal.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "mobile panels share the HUD glyph sampling")
 	var picker := ui.modal.get_child(0).get_child(0) as MobileTowerPicker
 	check(picker != null and picker._details.text.contains("기본 피해 1"), "mobile catalog presents base tower stats")
 	await _tap_button(ui.modal, "전체")
