@@ -279,10 +279,8 @@ func _render(fx: Effect) -> void:
 		"orbit":
 			if t < 0.63:
 				var fall := Color(tint, fade * (1.0 - t))
-				_beam(at - Vector2(0, 540), at, 27 + fade * 39, fall)
-				_line(at - Vector2(17, 440), at - Vector2(3, 6), 4.0, fall)
-				_line(at + Vector2(17, -440), at + Vector2(3, -6), 4.0, fall)
-			_stamp(3, at, minf(reach * 1.24, 365.0), -t * 0.6, fade * 0.86)
+				_filaments(at - Vector2(0, 540), at, 8.0 + 13.0 * t, fall)
+			_stamp(3, at, minf(reach * 0.78, 205.0), -t * 0.6, fade * 0.56)
 			_blast(at, reach, tint, t)
 		"rail", "sniper", "laser", "mark":
 			_precision(fx, tint, t)
@@ -332,7 +330,7 @@ func _optics(fx: Effect, tint: Color, t: float) -> void:
 	var axis := at.direction_to(end)
 	if fx.style == "photon":
 		var trail := at.lerp(end, maxf(0.0, t * 1.7 - 0.6))
-		_beam(trail, end, 5.5 * (1.0 - t * 0.5), tint)
+		_beam(trail, end, 3.2 * (1.0 - t * 0.35), tint)
 		if _preferences.fx_quality >= 2:
 			var front := at.lerp(end, minf(1.0, t * 1.8))
 			var side := axis.orthogonal() * 7.0
@@ -343,13 +341,13 @@ func _optics(fx: Effect, tint: Color, t: float) -> void:
 	var hue := fposmod(end.x * 0.00092 + end.y * 0.0013, 1.0)
 	var color := Color.from_hsv(hue, 0.52, 1.0, tint.a) if spectral else tint
 	var mid := at.lerp(end, 0.44) + axis.orthogonal() * (sin(end.x * 0.04 + end.y) * 0.38 + 0.5) * (61.0 if spectral else 34.0)
-	_beam(at, mid, 6.3 if spectral else 3.4, Color(color, tint.a * 0.83))
-	_beam(mid, end, 4.6 if spectral else 3.4, Color(fx.tint.lerp(color, 0.84), tint.a))
+	_beam(at, mid, 3.0 if spectral else 3.4, Color(color, tint.a * 0.83))
+	_beam(mid, end, 2.5 if spectral else 3.4, Color(fx.tint.lerp(color, 0.84), tint.a))
 	if spectral and _preferences.fx_quality >= 2:
 		var facet := mid + axis.orthogonal() * (18.0 + t * 37.0)
 		var complement := Color.from_hsv(fposmod(hue + 0.27, 1.0), 0.55, 1.0, tint.a * 0.45)
-		_line(at, facet, 2.3, complement)
-		_line(facet, end, 2.0, complement)
+		_line(at, facet, 1.45, complement)
+		_line(facet, end, 1.35, complement)
 	_ring(end, 7.0 + t * 22.0, color)
 	_glow(mid.lerp(end, t), 18.0, Color(color, tint.a * 0.58))
 
@@ -357,9 +355,9 @@ func _storm_column(fx: Effect, tint: Color, t: float) -> void:
 	var end := fx.end
 	if t < 0.59:
 		var primary := Color(tint, tint.a * (1.0 - t * 0.98))
-		_zap(fx.origin, end, primary, 6.5 - 4.0 * t)
+		_zap(fx.origin, end, primary, 3.6 - 2.3 * t)
 		var split := fx.origin.lerp(end, 0.58) + Vector2(28.0, 8.0)
-		_line(split, end + Vector2(15.0, -17.0), 2.6, Color("#d0f2ff", tint.a * 0.50))
+		_line(split, end + Vector2(15.0, -17.0), 1.55, Color("#d0f2ff", tint.a * 0.50))
 	_glow(end, 52.0 + t * 36.0, Color(tint, tint.a * 0.67))
 	_stamp(8, end, 67.0 + t * 108.0, 0.72, tint.a * 0.78)
 	_ring(end, 17.0 + 44.0 * t, tint)
@@ -369,8 +367,8 @@ func _inflow(at: Vector2, end: Vector2, tint: Color, t: float) -> void:
 	var side := at.direction_to(end).orthogonal()
 	for i in (3 if _preferences.fx_quality >= 2 else 1):
 		var bend := at.lerp(end, 0.55) + side * (float(i) - 1.0) * 93.0
-		_line(at, bend, 4.0 - t * 2.5, Color(tint, tint.a * 0.71))
-		_line(bend, end, 4.0 - t * 3.0, tint)
+		_line(at, bend, 2.2 - t * 0.9, Color(tint, tint.a * 0.71))
+		_line(bend, end, 2.0 - t * 0.8, tint)
 	_glow(end, 70.0 + t * 38.0, tint)
 
 func _pulse(at: Vector2, reach: float, tint: Color, t: float) -> void:
@@ -378,7 +376,7 @@ func _pulse(at: Vector2, reach: float, tint: Color, t: float) -> void:
 	_ring(at, front, tint)
 	_ring(at, front * 0.78, Color(tint, tint.a * 0.51))
 	_glow(at, minf(reach * 0.28, 220.0) * (0.45 + t), Color(tint, tint.a * 0.45))
-	_stamp(7, at, minf(reach * 2.0, 830.0) * t, _time * 0.32, tint.a)
+	_stamp(7, at, minf(reach * 0.90, 360.0) * t, _time * 0.32, tint.a * 0.50)
 	if _preferences.fx_quality >= 2:
 		for i in 10:
 			var ray := Vector2.from_angle(i * TAU / 10.0 + _time * 0.34)
@@ -392,11 +390,11 @@ func _doom(fx: Effect, tint: Color, t: float) -> void:
 	var axis := at.direction_to(stop)
 	var side := axis.orthogonal()
 	var collapse := 1.0 - smoothstep(0.16, 0.96, t)
-	_beam(at, stop, 12.0 + 64.0 * collapse, tint)
+	_filaments(at, stop, 9.0 + 14.0 * collapse, tint)
 	for i: int in [-1, 1]:
-		var offset := side * i * (17.0 + 26.0 * collapse)
-		_line(at + offset, stop + offset, 3.4, Color("#ffc3d0", tint.a * 0.58))
-	_stamp(13, at, 143.0 + t * 44.0, axis.angle(), tint.a)
+		var offset := side * i * (24.0 + 21.0 * collapse)
+		_line(at.lerp(stop, 0.06) + offset, stop + offset, 1.25, Color("#ffc3d0", tint.a * 0.42))
+	_stamp(13, at, 107.0 + t * 37.0, axis.angle(), tint.a * 0.65)
 	for i in range(1, 6):
 		var point := at.lerp(stop, i / 6.0)
 		var local := maxf(0.0, t * 1.6 - i * 0.06)
@@ -409,7 +407,7 @@ func _precision(fx: Effect, tint: Color, t: float) -> void:
 	var axis := at.direction_to(end)
 	match fx.style:
 		"rail":
-			_beam(at, end, 8.5, tint)
+			_beam(at, end, 4.6, tint)
 			for i: int in [-1, 1]:
 				var delta := axis.orthogonal() * i * (6.0 + 11.0 * t)
 				_line(at + delta, end + delta, 2.1, Color(tint, tint.a * 0.64))
@@ -452,26 +450,28 @@ func _charge(fx: Effect, t: float, terminal: bool) -> void:
 	var fade := (0.5 + 0.5 * t) * (0.64 if _preferences.fx_dim else 1.0)
 	var tint := Color(fx.tint, fade)
 	var center := fx.end
-	var size := lerpf(32, 154 if terminal else 83, t)
-	_glow(center, size * 2.4, Color(tint, fade * 0.62))
+	var size := lerpf(32, 128 if terminal else 76, t)
+	_glow(center, size * 1.75, Color(tint, fade * 0.43))
 	_ring(center, size * (1.27 - t * 0.30), tint)
-	_hoop(center, size, 8 if terminal else 5, _time * 1.4, tint)
-	_hoop(center, size * 0.67, 6, -_time * 2.1, Color(tint, fade * 0.68))
+	_hoop(center, size, 8 if terminal else 5, _time * 1.4, tint, 1.45)
+	_hoop(center, size * 0.67, 6, -_time * 2.1, Color(tint, fade * 0.68), 1.25)
 	if terminal:
-		var pivot := _sky_anchor(center)
-		var lift := pivot + Vector2(0, 38.0 * (1.0 - t))
-		_stamp(3, lift, 182.0 + t * 380.0, _time * 0.23, fade)
-		_stamp(3, center, 125.0 + t * 166.0, -_time * 0.65, fade * 0.78)
-		_hoop(lift, 220.0 * t + 32.0, 6, _time * 0.52, tint)
-		_hoop(lift, 104.0 * t + 20.0, 4, -_time, Color("#fff2bd", fade))
+		var lift := _sky_anchor(center) + Vector2(0, 38.0 * (1.0 - t))
+		_stamp(3, lift, 115.0 + t * 130.0, _time * 0.23, fade * 0.56)
+		_stamp(3, center, 90.0 + t * 84.0, -_time * 0.65, fade * 0.49)
+		_sectors(lift, 38.0 + 149.0 * t, _time * 0.56, tint)
+		_hoop(lift, 18.0 + 74.0 * t, 4, -_time, Color("#fff2bd", fade), 1.55)
 		for i in 5:
-			var anchor := lift + Vector2((i - 2) * 112, -76 + absf(i - 2) * 25)
-			_beam(anchor, lift, 3 + 7 * t, tint)
-			_ring(anchor, 12.0 + 13 * t, tint)
-		_beam(lift, center, 3 + 14 * t, Color(tint, fade * t))
+			var anchor := lift + Vector2((i - 2) * 102, -72 + absf(i - 2) * 25)
+			var link := lift.lerp(anchor, 0.14 + 0.32 * (1.0 - t))
+			_line(anchor, link, 1.6, Color(tint, fade * 0.64))
+			_beam(link, lift, 1.5 + 0.8 * t, tint)
+			_ring(anchor, 9.0 + 9.0 * t, tint)
+		_filaments(lift, center, 5.5 + 8.0 * t, Color(tint, fade * t * 0.72))
 	elif fx.style == "charge_nova":
-		_stamp(2, center, 96.0 + 220.0 * t, _time * 0.31, fade)
-		_glow(center, 42.0 + 73.0 * t, Color("#fff6c6", fade * 0.7))
+		_stamp(2, center, 82.0 + 118.0 * t, _time * 0.31, fade * 0.64)
+		_sectors(center, 36.0 + 105.0 * t, -_time * 0.53, tint)
+		_glow(center, 39.0 + 44.0 * t, Color("#fff6c6", fade * 0.58))
 	elif fx.style == "charge_rail":
 		_ring(fx.origin, 18.0 + t * 20, tint)
 		_ring(fx.origin, 31.0 - t * 16, tint)
@@ -486,11 +486,12 @@ func _terminal(fx: Effect, t: float, fade: float, great: bool) -> void:
 	var tint := Color(fx.tint, fade)
 	var at := fx.origin
 	var field_size := fx.radius * _cell
-	_glow(at, field_size * (0.47 + t * 0.68), Color(tint, fade * 0.63))
+	_glow(at, field_size * (0.29 + t * 0.48), Color(tint, fade * 0.35))
 	var spread := ease(t, 0.38)
-	_stamp(3 if great else 2, at, (270.0 if great else 207.0) + spread * (566.0 if great else 410.0), _time * 0.16, fade)
+	_stamp(3 if great else 2, at, (130.0 if great else 105.0) + spread * (162.0 if great else 128.0), _time * 0.16, fade * 0.69)
+	_sectors(at, 39.0 + spread * field_size * 0.34, _time * 0.31, Color(tint, fade * 0.83))
 	if t < 0.42:
-		_glow(at, (180.0 if great else 95.0) + t * 110.0, Color("#fff0bf", fade * 0.97))
+		_glow(at, (112.0 if great else 73.0) + t * 70.0, Color("#fff0bf", fade * 0.75))
 	for i in (5 if great else 3):
 		var wave := maxf(0.0, t * 1.28 - i * 0.12)
 		if wave > 0.0:
@@ -498,14 +499,17 @@ func _terminal(fx: Effect, t: float, fade: float, great: bool) -> void:
 	if great:
 		var above := _sky_anchor(at)
 		var burn := 1.0 - smoothstep(0.08, 0.54, t)
-		_stamp(3, above, 420.0 + t * 196.0, -_time * 0.38, fade * 0.84)
+		_stamp(3, above, 220.0 + t * 68.0, -_time * 0.38, fade * 0.58)
+		_sectors(above, 125.0 + t * 45.0, -_time * 0.47, Color(tint, fade * 0.65))
 		if burn > 0.0:
 			for i: int in [-1, 1]:
-				var wing := above + Vector2(175.0 * i, -57.0 + t * 50.0)
-				_beam(wing, at, 22.0 * burn, Color(tint, fade * burn * 0.64))
-			_beam(above, at + Vector2(0, 102.0), 110.0 * burn + 12.0, Color(tint, fade * burn))
-		_beam(Vector2(_field.position.x, at.y), Vector2(_field.end.x, at.y), fade * 39.0 + 3.0, Color("#ffb180", fade * 0.63))
-		_hoop(above + Vector2(0, 100), 100 + t * 75, 6, _time * 1.5, tint)
+				var wing := above + Vector2(157.0 * i, -51.0 + t * 46.0)
+				var elbow := wing.lerp(at, 0.42) + Vector2(i * 25.0, -8.0)
+				_line(wing, elbow, 1.55, Color(tint, fade * burn * 0.66))
+				_beam(elbow, at, 2.7, Color(tint, fade * burn * 0.82))
+			_filaments(above, at + Vector2(0, 78.0), 10.0 + 19.0 * burn, Color(tint, fade * burn))
+		_filaments(Vector2(_field.position.x, at.y), Vector2(_field.end.x, at.y), 6.0 + 28.0 * t, Color("#ffb180", fade * 0.58))
+		_hoop(above + Vector2(0, 100), 82 + t * 63, 6, _time * 1.2, tint, 1.45)
 	if _preferences.fx_quality >= 2:
 		for i in 8:
 			var ray := Vector2.from_angle(TAU * i / 8.0 + 0.28)
@@ -525,18 +529,18 @@ func _spiral(fx: Effect, reach: float, t: float, fade: float) -> void:
 	else:
 		radius *= (0.8 + 0.2 * t)
 	if fx.style == "singularity":
-		var scale := minf(radius * 0.72, 650.0)
+		var scale := minf(radius * 0.46, 340.0)
 		var unwind := smoothstep(0.72, 1.0, t)
 		_stamp(1, fx.origin, scale * (1.0 - 0.49 * unwind), -_time * 0.73, tint.a * (1.22 - 0.3 * unwind))
-		_stamp(6, fx.origin, minf(radius * 1.35, 800.0), _time * 0.24, tint.a * 0.56)
+		_stamp(6, fx.origin, minf(radius * 0.69, 432.0), _time * 0.24, tint.a * 0.40)
 		_glow(fx.origin, 120.0 + 50.0 * sin(t * PI), Color("#bd9aff", tint.a * 0.82))
 	elif fx.style == "collapse_gravity":
-		_stamp(1, fx.origin, 150.0 + t * 630.0, -t * 1.9, tint.a)
+		_stamp(1, fx.origin, 112.0 + t * 296.0, -t * 1.9, tint.a * 0.72)
 		_stamp(12, fx.origin, 66.0 + t * 340.0, t, tint.a * 0.82)
 	else:
 		var frame := 0 if fx.style == "vortex" else 6
-		_stamp(frame, fx.origin, minf(radius * 1.3, 670.0), _time * (0.6 if frame == 0 else -0.31), tint.a)
-	_glow(fx.origin, radius * 0.85, Color(tint, tint.a * 0.5))
+		_stamp(frame, fx.origin, minf(radius * 0.90, 430.0), _time * (0.6 if frame == 0 else -0.31), tint.a * 0.64)
+	_glow(fx.origin, radius * 0.61, Color(tint, tint.a * 0.37))
 	_ring(fx.origin, radius, Color(tint, tint.a * 0.72))
 	if _preferences.fx_quality >= 2 and fx.style != "collapse_gravity":
 		_vortex_embers(fx.origin, minf(radius, 595.0), tint, fx.style != "vortex")
@@ -547,7 +551,7 @@ func _spiral(fx: Effect, reach: float, t: float, fade: float) -> void:
 			var ratio := float(i) / segments
 			var angle := _time * 2.0 + arm * TAU / 3.0 + ratio * 5.3
 			var q := fx.origin + Vector2.from_angle(angle) * radius * ratio
-			_line(p, q, 1.0 + (1.0 - ratio) * 4.0, Color(tint, tint.a * (1.0 - ratio * 0.83)))
+			_line(p, q, 1.0 + (1.0 - ratio) * 1.35, Color(tint, tint.a * (1.0 - ratio * 0.83)))
 			p = q
 
 func _vortex_embers(at: Vector2, radius: float, tint: Color, inward: bool) -> void:
@@ -593,11 +597,29 @@ func _zap(at: Vector2, end: Vector2, tint: Color, width: float) -> void:
 		_beam(prior, point, width, tint)
 		prior = point
 
-func _hoop(center: Vector2, radius: float, sides: int, angle: float, tint: Color) -> void:
+func _sectors(center: Vector2, radius: float, angle: float, tint: Color) -> void:
+	for i in 4:
+		var start := angle + i * TAU / 4.0
+		var previous := center + Vector2.from_angle(start) * radius
+		for j in range(1, 6):
+			var point := center + Vector2.from_angle(start + j * 0.19) * radius
+			_line(previous, point, 1.45, tint)
+			previous = point
+
+func _filaments(at: Vector2, end: Vector2, gap: float, tint: Color) -> void:
+	var normal := at.direction_to(end).orthogonal()
+	_beam(at, end, 3.5, tint)
+	for i: int in [-1, 1]:
+		var offset := normal * i * gap
+		_line(at + offset, end + offset * 0.78, 1.7, Color(tint, tint.a * 0.74))
+		if _preferences.fx_quality >= 2:
+			_line(at.lerp(end, 0.15) + offset * 1.9, at.lerp(end, 0.88) + offset * 1.5, 1.2, Color(tint, tint.a * 0.46))
+
+func _hoop(center: Vector2, radius: float, sides: int, angle: float, tint: Color, width: float = 2.4) -> void:
 	var previous := center + Vector2.from_angle(angle) * radius
 	for i in range(1, sides + 1):
 		var point := center + Vector2.from_angle(angle + i * TAU / sides) * radius
-		_line(previous, point, 2.4, tint)
+		_line(previous, point, width, tint)
 		previous = point
 
 func _beam(at: Vector2, end: Vector2, width: float, tint: Color) -> void:
@@ -609,7 +631,10 @@ func _line(at: Vector2, end: Vector2, width: float, tint: Color) -> void:
 	var length := heading.length()
 	if length <= 0.001 or _line_count >= BUDGET:
 		return
-	_lines.item(_line_count, at.lerp(end, 0.5), heading, tint, width / length)
+	# Give subpixel filaments room for a feathered edge on smaller viewports.
+	var stroke := maxf(3.2, width)
+	var ink := Color(tint, tint.a * sqrt(width / stroke))
+	_lines.item(_line_count, at.lerp(end, 0.5), heading, ink, stroke / length)
 	_line_count += 1
 
 func _ring(at: Vector2, radius: float, tint: Color) -> void:
