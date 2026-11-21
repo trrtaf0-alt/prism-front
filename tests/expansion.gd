@@ -724,7 +724,7 @@ func _field_preview(fx: AttackEffects) -> void:
 	fx.update(0.25)
 	fx.capture("ice", center, center, 4.0, Color.LIGHT_SKY_BLUE, 0.55, 3)
 	fx.update(0.1)
-	check(fx._plate_count == 0 and fx._line_count >= 18 and fx._ring_count == 1, "freeze uses a line-drawn crystal and keeps its outer ring")
+	check(fx._plate_count == 0 and fx._line_count >= 30 and fx._ring_count == 2 and fx._glow_count > 1, "freeze draws a central crystal, growing shards and two ripples")
 	fx.update(0.55)
 
 func _attack_showcase(ui) -> void:

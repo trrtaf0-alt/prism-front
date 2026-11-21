@@ -633,11 +633,14 @@ func _ordnance(at: Vector2, reach: float, tint: Color, t: float, orbital: bool) 
 	_spray(at, minf(reach * 0.82, 172.0), tint, t, 18 if orbital else 12)
 
 func _cryo_field(at: Vector2, reach: float, tint: Color, t: float) -> void:
-	var rim := reach * (0.34 + 0.66 * t)
-	_ring(at, rim, Color(tint, tint.a * 0.81))
-	_glow(at, minf(reach * 0.24, 46.0), Color(tint, tint.a * 0.24))
-	var crystal := Color(tint.lerp(Color("#d6f5ff"), 0.55), tint.a * 0.88)
-	var size := clampf(reach * 0.16, 19.0, 38.0) * (0.91 + 0.14 * t)
+	var expansion := 1.0 - pow(1.0 - t, 1.6)
+	var rim := reach * lerpf(0.35, 1.0, expansion)
+	var frost := Color(tint.lerp(Color("#c3edff"), 0.44), tint.a)
+	_ring(at, rim, Color(frost, frost.a * 0.93))
+	_ring(at, rim * 0.72, Color(tint, tint.a * 0.66))
+	_glow(at, minf(reach * 0.38, 88.0), Color(tint, tint.a * 0.32))
+	var crystal := Color(tint.lerp(Color("#d6f5ff"), 0.64), tint.a)
+	var size := clampf(reach * 0.18, 21.0, 43.0) * (0.88 + 0.15 * expansion)
 	for i in 6:
 		var arm := Vector2.from_angle(i * TAU / 6.0 - PI / 6.0)
 		var stem := at + arm * size * 0.67
@@ -645,14 +648,29 @@ func _cryo_field(at: Vector2, reach: float, tint: Color, t: float) -> void:
 		for side: int in [-1, 1]:
 			var branch := arm.rotated(side * PI / 3.0) * size * 0.27
 			_line(stem, stem + branch, 1.25, Color(crystal, crystal.a * 0.78))
-	var clusters := 6 if _preferences.fx_quality > 0 else 3
+	var clusters := 9 if _preferences.fx_quality >= 2 else 5
+	var rotation := sin(at.x * 0.018 + at.y * 0.007) * 0.34
 	for i in clusters:
-		var ray := Vector2.from_angle(i * TAU / clusters + 0.24)
-		var tip := at + ray * rim
-		var fork := tip - ray * (15.0 + 5.0 * t)
-		var side := ray.orthogonal() * 6.0
-		_line(fork - side, tip, 1.45, tint)
-		_line(fork + side, tip, 1.45, tint)
+		var delay := float(i % 3) * 0.07
+		var growth := smoothstep(delay, delay + 0.28, t)
+		if growth <= 0.0:
+			continue
+		var ray := Vector2.from_angle(i * TAU / clusters + rotation)
+		var base := at + ray * rim * lerpf(0.43, 0.78, float((i * 5) % clusters) / clusters)
+		var axis := ray.rotated(0.24 if i % 2 == 0 else -0.24)
+		var length := minf(reach * (0.14 + 0.035 * (i % 3)), 44.0) * growth
+		var tip := base + axis * length
+		var shoulder := base + axis * length * 0.24
+		var edge := axis.orthogonal() * length * 0.19
+		var facet := Color(frost, frost.a * lerpf(0.33, 0.96, growth))
+		_line(tip, shoulder + edge, 1.55, facet)
+		_line(shoulder + edge, base, 1.35, facet)
+		_line(base, shoulder - edge, 1.35, facet)
+		_line(shoulder - edge, tip, 1.35, facet)
+		_line(shoulder, tip, 1.55, Color(crystal, facet.a * 0.83))
+		if i % 2 == 0:
+			_glow(shoulder, 14.0 + 9.0 * growth, Color(tint, tint.a * growth * 0.63))
+	_spray(at, minf(reach * 0.91, 185.0), Color(frost, frost.a * 0.73), expansion, 17)
 
 func _plasma_field(fx: Effect, reach: float, tint: Color) -> void:
 	const PERIOD := 0.72
