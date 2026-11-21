@@ -85,7 +85,7 @@ func load_profile() -> void:
 			entry.fastest_clear = minf(float(speed), float(entry.best_clear.seconds))
 
 func _campaign_section(mode: StringName) -> String:
-	return "%s_%s" % [BattleData.CAMPAIGN_RECORD, mode]
+	return "campaign_%02d_%s" % [BattleData.CAMPAIGN_RECORD_VERSIONS[mode], mode]
 
 func campaign_record(mode: StringName = &"easy") -> Dictionary:
 	if not _campaign_records.has(mode):

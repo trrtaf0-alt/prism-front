@@ -51,9 +51,9 @@ func _count_and_timing() -> void:
 	check(sim.primary_spawned == 820 and sim.queued == 0, "all original slots retained at W49")
 
 func _difficulty_and_escorts() -> void:
-	var health := [2_400_000, 19_000_000, 45_000_000]
-	var shields := [85_000, 263_500, 425_000]
-	var speed := [0.115, 0.155, 0.215]
+	var health := [8_000_000, 19_000_000, 45_000_000]
+	var shields := [161_500, 263_500, 425_000]
+	var speed := [0.12, 0.155, 0.215]
 	var expected_guardian := [440, 850, 3.3]
 	var index := 0
 	for mode: StringName in BattleData.DIFFICULTIES:
@@ -71,13 +71,15 @@ func _difficulty_and_escorts() -> void:
 		var opener := rules.enemy_for_wave(rules.mobs.lookup("normal"), 1, mode)
 		check(int(opener.health) == 5 and is_equal_approx(float(opener.speed), 1.0), "first wave retains its basic enemy stats")
 		var normal := rules.enemy_for_wave(rules.mobs.lookup("normal"), 50, mode)
-		check(int(normal.health) == [13, 50, 70][index], "late regular units have difficulty-appropriate health")
+		check(int(normal.health) == [35, 50, 70][index], "late regular units have difficulty-appropriate health")
 		var energy := rules.enemy_for_wave(rules.mobs.lookup("energy"), 50, mode)
-		check(int(energy.health) == [6760, 26000, 36400][index] and int(energy.shield) == [4680, 18000, 25200][index], "late energy HP and shield scale")
-		check(is_equal_approx(float(normal.speed), [1.08, 1.23, 1.32][index]) and rules.escort_shield(50, mode) == [54_000, 69_000, 86_000][index], "late support movement and escort shield use the selected difficulty")
+		check(int(energy.health) == [18200, 26000, 36400][index] and int(energy.shield) == [12600, 18000, 25200][index], "late energy HP and shield scale")
+		check(is_equal_approx(float(normal.speed), [1.14, 1.23, 1.32][index]) and rules.escort_shield(50, mode) == [57_000, 69_000, 86_000][index], "late support movement and escort shield use the selected difficulty")
 		var child := rules.enemy_for_wave(rules.mobs.lookup("split_2"), 50, mode)
-		check(int(child.health) == [10, 40, 56][index] and int(child.reward_rp) == 0, "generated enemies scale without introducing RP")
+		check(int(child.health) == [28, 40, 56][index] and int(child.reward_rp) == 0, "generated enemies scale without introducing RP")
 		index += 1
+	var easy_boss := rules.enemy_for_wave(rules.mobs.lookup("boss"), 50, &"easy")
+	check(int(easy_boss.regen.amount) == 552 and int(easy_boss.phases[0].shield) == 218_500 and int(easy_boss.phases[1].shield) == 304_000, "easy difficulty scales the boss phases and regeneration")
 	var calamity := rules.mobs.lookup("calamity")
 	check(rules.enemy_for_wave(calamity, 35, &"hard").health == 131670 and rules.enemy_for_wave(calamity, 39, &"hard").health == 217800, "new calamity armor encounter ramps to full health across five waves")
 	check(rules.mobs.lookup("boss").health == 2_400_000 and rules.mobs.lookup("normal").health == 5, "difficulty does not mutate shared enemy definitions")
@@ -158,7 +160,7 @@ func _victory_conditions() -> void:
 	sim.wave = 49
 	check(sim.start_wave() and sim.primary_spawned == 1 and sim.bosses.size() == 1, "boss spawns immediately and counts as a slot")
 	check(not sim.start_wave(), "manual next is locked during a wave")
-	sim._apply_damage(sim.bosses[0], 9_000_000, Vector2.ZERO)
+	sim._apply_damage(sim.bosses[0], 20_000_000, Vector2.ZERO)
 	sim.tick(STEP)
 	check(sim.active and sim.boss_killed and not sim.won and sim.queued > 0, "boss kill alone does not win")
 	sim._dispatch(900.0)
@@ -206,10 +208,16 @@ func _ui_and_record() -> void:
 	old.set_value("campaign_12_easy", "fastest_clear", 180.0)
 	old.set_value("campaign_13_easy", "fastest_clear", 170.0)
 	old.set_value("campaign_14_easy", "fastest_clear", 160.0)
+	old.set_value("campaign_15_easy", "wave", 50)
+	old.set_value("campaign_15_easy", "best_clear", {"wave": 50, "health": 100, "seconds": 150.0})
+	old.set_value("campaign_15_easy", "fastest_clear", 150.0)
+	old.set_value("campaign_15_normal", "wave", 16)
+	old.set_value("campaign_15_hard", "wave", 12)
 	old.set_value("visual", "quality", 1)
 	old.save(profile.file_path)
 	profile.load_profile()
 	check(profile.fx_quality == 2 and profile.campaign_record().fastest_clear == 0.0, "legacy quality migrates without mixing campaign records")
+	check(profile.campaign_record().wave == 0 and profile.campaign_record(&"normal").wave == 16 and profile.campaign_record(&"hard").wave == 12, "only the easy record starts a new balance version")
 	profile.best = 90
 	profile.master = 0.42
 	profile.apply_audio()
@@ -279,7 +287,7 @@ func _ui_and_record() -> void:
 		check(peak > 0.02, "the music bus receives a non-silent mix")
 		AudioServer.remove_bus_effect(music_bus, AudioServer.get_bus_effect_count(music_bus) - 1)
 		ui.set_physics_process(true)
-	sim._apply_damage(sim.bosses[0], 9_000_000, Vector2.ZERO)
+	sim._apply_damage(sim.bosses[0], 20_000_000, Vector2.ZERO)
 	check(sound.music_track == &"patrol" and sim.active, "boss death returns to normal music while escorts remain")
 	check(ui.wave_callout == "보스 격파", "boss kill keeps a concise combat confirmation")
 	sim.queued = 0
@@ -306,6 +314,7 @@ func _ui_and_record() -> void:
 	check(profile.campaign_record(&"normal").wave == 17 and profile.campaign_record(&"normal").best_clear.is_empty() and profile.campaign_record(&"hard").fastest_clear == 1900.0, "difficulty records are saved separately")
 	old.load(profile.file_path)
 	check(old.get_value("campaign_04", "fastest_clear") == 900.0 and old.get_value("campaign_05", "fastest_clear") == 700.0 and old.get_value("campaign_06_easy", "fastest_clear") == 600.0 and old.get_value("campaign_07_easy", "fastest_clear") == 500.0 and old.get_value("campaign_08_easy", "fastest_clear") == 400.0 and old.get_value("campaign_09_easy", "fastest_clear") == 300.0 and old.get_value("campaign_10_easy", "fastest_clear") == 250.0 and old.get_value("campaign_11_easy", "fastest_clear") == 200.0 and old.get_value("campaign_12_easy", "fastest_clear") == 180.0 and old.get_value("campaign_13_easy", "fastest_clear") == 170.0 and old.get_value("campaign_14_easy", "fastest_clear") == 160.0, "previous campaign record stays on disk")
+	check(old.get_value("campaign_15_easy", "fastest_clear") == 150.0 and old.get_value("campaign_16_easy", "fastest_clear") == 1500.0, "previous easy clear remains on disk alongside its new balance version")
 	check(profile.best == 90 and profile.campaign_record().wave == 50 and profile.campaign_record().fastest_clear == 1500.0 and profile.campaign_record().best_clear.health == 100 and profile.master == 0.42, "best defense, fastest time and settings persist")
 	ui.start_game()
 	check(ui.battle.wave == 0 and ui.battle.credits == 50 and ui.battle.research.points == 0 and ui.battle.total_kills == 0 and ui.battle.total_installs == 0 and not ui.battle.won and profile.campaign_record().fastest_clear == 1500.0, "restart resets campaign but retains saved record")
