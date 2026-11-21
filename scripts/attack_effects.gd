@@ -20,6 +20,7 @@ class Effect:
 	var radius: float
 	var tint: Color
 	var elapsed: float
+	var started_at: float
 	var life: float
 	var tracked := false
 	var track_cell: Vector4i
@@ -148,6 +149,7 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	rule.radius = radius
 	rule.tint = tint
 	rule.elapsed = 0.0
+	rule.started_at = _time
 	rule.life = lifetime
 	rule.tracked = tracked
 	rule.track_cell = key
@@ -297,7 +299,7 @@ func _render(fx: Effect) -> void:
 		"blast":
 			_ordnance(at, reach, tint, t, false)
 		"plasma":
-			_plasma_field(at, reach, tint)
+			_plasma_field(fx, reach, tint)
 		"split":
 			_split_burst(at, reach, tint, t)
 		"muzzle", "missile_launch", "phase_launch", "return_launch", "cryogenic_launch", "scatter_launch":
@@ -633,8 +635,16 @@ func _ordnance(at: Vector2, reach: float, tint: Color, t: float, orbital: bool) 
 func _cryo_field(at: Vector2, reach: float, tint: Color, t: float) -> void:
 	var rim := reach * (0.34 + 0.66 * t)
 	_ring(at, rim, Color(tint, tint.a * 0.81))
-	_stamp(5, at, minf(164.0, reach * 0.79), 0.15, tint.a * 0.55)
-	_glow(at, minf(reach * 0.48, 104.0), Color(tint, tint.a * 0.38))
+	_glow(at, minf(reach * 0.24, 46.0), Color(tint, tint.a * 0.24))
+	var crystal := Color(tint.lerp(Color("#d6f5ff"), 0.55), tint.a * 0.88)
+	var size := clampf(reach * 0.16, 19.0, 38.0) * (0.91 + 0.14 * t)
+	for i in 6:
+		var arm := Vector2.from_angle(i * TAU / 6.0 - PI / 6.0)
+		var stem := at + arm * size * 0.67
+		_line(at + arm * size * 0.27, at + arm * size, 1.55, crystal)
+		for side: int in [-1, 1]:
+			var branch := arm.rotated(side * PI / 3.0) * size * 0.27
+			_line(stem, stem + branch, 1.25, Color(crystal, crystal.a * 0.78))
 	var clusters := 6 if _preferences.fx_quality > 0 else 3
 	for i in clusters:
 		var ray := Vector2.from_angle(i * TAU / clusters + 0.24)
@@ -644,17 +654,23 @@ func _cryo_field(at: Vector2, reach: float, tint: Color, t: float) -> void:
 		_line(fork - side, tip, 1.45, tint)
 		_line(fork + side, tip, 1.45, tint)
 
-func _plasma_field(at: Vector2, reach: float, tint: Color) -> void:
-	var radius := reach * (0.94 + sin(_time * 6.5) * 0.045)
-	_ring(at, radius, Color(tint, tint.a * 0.62))
-	_stamp(4, at, minf(237.0, reach * 0.73), 0.0, tint.a * 0.49)
-	_glow(at, minf(128.0, reach * 0.45), Color(tint, tint.a * 0.56))
-	var ticks := 8 if _preferences.fx_quality > 0 else 4
-	for i in ticks:
-		var ray := Vector2.from_angle(i * TAU / ticks + _time * 0.36)
-		var edge := at + ray * radius * 0.93
-		var side := ray.orthogonal() * 9.0
-		_line(edge - side, edge + side, 1.55, Color(tint, tint.a * 0.76))
+func _plasma_field(fx: Effect, reach: float, tint: Color) -> void:
+	const PERIOD := 0.72
+	# A new damage tick refreshes visibility without rewinding waves already in flight.
+	var age := _time - fx.started_at
+	var count := 3 if _preferences.fx_quality > 0 else 2
+	var presence := sqrt(tint.a)
+	for i in count:
+		var age_offset := age - PERIOD * float(i) / count
+		if age_offset < 0.0:
+			continue
+		var phase := fposmod(age_offset, PERIOD) / PERIOD
+		var radius := reach * lerpf(0.08, 1.0, phase)
+		var fade := smoothstep(0.0, 0.16, phase) * (1.0 - smoothstep(0.58, 1.0, phase))
+		var wave := Color(tint.lerp(Color("#e3bcff"), 0.28 + phase * 0.37), presence * fade * 0.93)
+		_ring(fx.origin, radius, wave)
+		if i == 0 and _preferences.fx_quality >= 2 and radius > 22.0:
+			_ring(fx.origin, radius - 7.0, Color(wave, wave.a * 0.36))
 
 func _split_burst(at: Vector2, reach: float, tint: Color, t: float) -> void:
 	_ring(at, 10.0 + t * reach * 0.77, Color(tint, tint.a * 0.85))

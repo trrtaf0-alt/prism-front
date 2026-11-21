@@ -346,6 +346,7 @@ func _interface() -> void:
 	ui.start_game()
 	var sim: Battle = ui.battle
 	_sustained_preview(ui.field.advanced_fx)
+	_field_preview(ui.field.advanced_fx)
 	var original_best: int = root.get_node("Profile").best
 	check(ui.rp_label.text == "0" and ui.catalog_button.tooltip_text == "해금된 타워 1종", "HUD fresh research economy")
 	sim.start_wave()
@@ -709,10 +710,28 @@ func _sustained_preview(fx: AttackEffects) -> void:
 	check(fx._style_counts.get("laser", 0) == 0 and fx._style_counts.get("flame", 0) == 1, "laser leaves a short trail while flame is still visible")
 	fx.update(0.2)
 
+func _field_preview(fx: AttackEffects) -> void:
+	var center := Vector2(5, 5)
+	fx.capture("plasma", center, center, 9.0, Color.VIOLET, 0.24, 3)
+	fx.update(0.12)
+	var front := fx._rings._buffer[0]
+	fx.capture("plasma", center, center, 9.0, Color.VIOLET, 0.24, 3)
+	fx.update(0.13)
+	fx.capture("plasma", center, center, 9.0, Color.VIOLET, 0.24, 3)
+	fx.update(0.14)
+	check(fx._style_counts.get("plasma", 0) == 1 and fx._rings._buffer[0] > front and fx._ring_count >= 2, "plasma refresh keeps the previous wave moving and releases a second ring")
+	check(fx._plate_count == 0 and fx._glow_count == 0 and fx._line_count == 0, "plasma draws only spreading rings")
+	fx.update(0.25)
+	fx.capture("ice", center, center, 4.0, Color.LIGHT_SKY_BLUE, 0.55, 3)
+	fx.update(0.1)
+	check(fx._plate_count == 0 and fx._line_count >= 18 and fx._ring_count == 1, "freeze uses a line-drawn crystal and keeps its outer ring")
+	fx.update(0.55)
+
 func _attack_showcase(ui) -> void:
 	var test_groups := {
 		"fx-mid-beams": {"ids": ["tower_08", "tower_06", "tower_11"], "cells": [Vector2i(5, 2), Vector2i(8, 5), Vector2i(11, 8)], "ticks": 10},
 		"fx-mid-fields": {"ids": ["tower_14", "tower_15", "tower_19"], "cells": [Vector2i(5, 5), Vector2i(11, 8), Vector2i(17, 5)], "ticks": 12},
+		"fx-cryo-plasma-waves": {"ids": ["tower_14", "tower_15"], "cells": [Vector2i(5, 5), Vector2i(11, 8)], "ticks": 38, "advance_fx": true},
 		"fx-mid-projectiles": {"ids": ["tower_16", "tower_17", "tower_12"], "cells": [Vector2i(5, 2), Vector2i(11, 8), Vector2i(19, 6)], "ticks": 28},
 		"fx-upper-charge": {"ids": ["tower_07", "tower_18", "tower_26"], "cells": [Vector2i(5, 2), Vector2i(11, 8), Vector2i(18, 6)], "ticks": 12},
 		"fx-upper-strike": {"ids": ["tower_13", "tower_18", "tower_26"], "cells": [Vector2i(5, 2), Vector2i(11, 8), Vector2i(18, 6)], "ticks": 53},
@@ -735,6 +754,8 @@ func _attack_showcase(ui) -> void:
 			sim.spawn(2.0 + i * 1.79, tough)
 		for i in int(scene.ticks):
 			sim.tick(STEP)
+			if scene.get("advance_fx", false):
+				ui.field.advanced_fx.update(STEP)
 		await _capture(name)
 
 func _catalog_cards(ui: Control) -> Array[Button]:
