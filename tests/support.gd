@@ -136,7 +136,7 @@ func _quantum() -> void:
 	sim.support.tick(sim, 1.99)
 	check(hits.is_empty(), "quantum waits for the two-second window")
 	sim.support.tick(sim, 0.01)
-	check(target_1.health == 9860 and target_2.health == 9884 and hits.size() == 2, "independent 40% hits use one live target per attacker")
+	check(target_1.health == 9845 and target_2.health == 9878 and hits.size() == 2, "independent 55% hits use one live target per attacker")
 	check(doomed.health <= 0, "dead target stays ineligible")
 	sim.support.tick(sim, 2.0)
 	check(hits.size() == 2, "quantum does not feed itself")

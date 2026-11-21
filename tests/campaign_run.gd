@@ -12,12 +12,12 @@ const EARLY: Array[Vector2i] = [
 ]
 const POLICIES := {
 	"standard": [[2, 9, 12, 13, 18, 21, 25, 28, 29, 30], [9, 12, 13, 18, 21, 25], [28, 29, 30, 29, 25, 25, 29, 25]],
-	"splash": [[4, 7, 12, 18, 21, 25, 24, 29, 28], [7, 12, 18, 21, 24, 25], [29, 29, 29, 25, 29, 24, 25]],
+	"splash": [[4, 7, 12, 18, 21, 24, 25, 29, 28], [7, 12, 18, 21, 24, 25], [24, 29, 24, 29, 29, 25, 29, 25]],
 	"control": [[5, 6, 9, 15, 20, 21, 23, 25, 28, 29], [6, 9, 15, 20, 21, 23, 25], [28, 28, 29, 29, 25, 25, 29]],
 	"precision": [[3, 9, 11, 13, 18, 21, 25, 29], [9, 11, 13, 18, 21, 25], [29, 29, 29, 29, 25, 25]],
-	"focus": [[2, 9, 14, 21, 25, 28, 29], [9, 14, 21, 25], [28, 28, 29, 29, 29, 25, 25]],
+	"focus": [[2, 9, 14, 10, 21, 25, 28, 29], [9, 14, 10, 21, 25], [28, 28, 29, 29, 29, 25, 25]],
 	"spread": [[2, 4, 6, 7, 9, 12, 15, 18, 21, 23, 25, 29, 28], [6, 7, 9, 12, 18, 21, 23, 25], [29, 28, 29, 29, 25, 25]],
-	"rush": [[2, 9, 12, 13, 21, 25, 28, 29, 30], [9, 12, 13, 21, 25], [28, 30, 29, 25, 29, 25, 25]],
+	"rush": [[2, 9, 12, 13, 21, 25, 28, 30, 29], [9, 12, 13, 21, 25], [28, 30, 29, 25, 29, 25, 25]],
 }
 
 const SUPPORT_PLANS := {
@@ -36,6 +36,8 @@ var final_syncs := 0
 var rules := BattleData.new()
 var map := FieldMap.new()
 var policy := "standard"
+var roster_seed := 7043
+var summarize := false
 var seats: Array[Vector2i] = []
 var stage := 0
 var stage_two := -1.0
@@ -55,6 +57,8 @@ func _run() -> void:
 	for arg in args:
 		if arg.begins_with("--strategy="):
 			policy = arg.trim_prefix("--strategy=")
+		if arg.begins_with("--seed="):
+			roster_seed = int(arg.trim_prefix("--seed="))
 		if arg.begins_with("--support="):
 			support_plan = arg.trim_prefix("--support=")
 		if arg.begins_with("--difficulty="):
@@ -103,7 +107,8 @@ func _run() -> void:
 		ui.set_process_unhandled_input(false)
 		root.gui_disable_input = true
 		sim = ui.battle
-	sim.roster_seed = 7043
+	sim.roster_seed = roster_seed
+	summarize = "--summary" in args
 	var leaky := "--leaky" in args
 	if not leaky:
 		_place_opening(sim)
@@ -130,6 +135,7 @@ func _run() -> void:
 				if not sim.bosses.is_empty():
 					_track_phase(sim)
 		if sim.lost or sim.active:
+			_report_summary(sim)
 			printerr("%s FAILED wave=%d at %.1fs hp=%d queued=%d enemies=%d cash=%d RP=%d spent=%d towers=%s bossEscape=%s" % [
 				policy, wave, ticks * STEP, sim.health, sim.queued, sim.enemies.size(), sim.credits,
 				sim.research.points, invested, _build(sim), sim.boss_escaped,
@@ -157,6 +163,7 @@ func _run() -> void:
 				policy, wave, sim.health, sim.research.total_earned, sim.total_credits, sim.credits, invested,
 				_build(sim), first_unlock, first_buy, sim.research.completed.size(),
 			])
+	_report_summary(sim)
 	print("%s clear=%.2fs boss_wave=%.2fs boss_kill=%.2fs stage2=%.2fs stage3=%.2fs last_escort=%.2fs peak=%d final_peak=%d" % [
 		policy, sim.elapsed, sim.elapsed - sim.finale_started, sim.finale_boss_time, stage_two, stage_three, sim.finale_last_spawn, peak_live, peak_final,
 	])
@@ -211,6 +218,17 @@ func _track_phase(sim: Battle) -> void:
 			stage_three = time
 		stage = next
 
+func _report_summary(sim: Battle) -> void:
+	if not summarize:
+		return
+	print("BALANCE " + JSON.stringify({
+		"policy": policy, "support": support_plan, "seed": roster_seed, "difficulty": difficulty,
+		"wave": sim.wave, "won": sim.won, "health": sim.health, "time": sim.elapsed,
+		"boss_time": sim.finale_boss_time, "gross_spend": invested, "cash": sim.credits,
+		"earned": sim.total_credits, "rp": sim.research.total_earned, "research": sim.research.completed.size(),
+		"unlock": first_unlock, "placed": first_buy, "towers": _build(sim),
+	}))
+
 func _build(sim: Battle) -> Dictionary:
 	var out: Dictionary = {}
 	for tower in sim.towers:
@@ -264,8 +282,9 @@ func _prepare(sim: Battle) -> void:
 	if policy == "spread" and sim.wave >= 47:
 		for node in rules.research.ordered:
 			sim.research.purchase(node)
-	for number in [28, 29, 30]:
-		if sim.research.unlocked.has(_id(number)) and not first_unlock.has(number):
+	for tower_id in rules.research.unlocks:
+		var number := int(tower_id.right(2))
+		if sim.research.unlocked.has(tower_id) and not first_unlock.has(number):
 			first_unlock[number] = sim.wave
 	if sim.wave < 11:
 		var early := _id(int(options[0][0]))
@@ -279,8 +298,10 @@ func _prepare(sim: Battle) -> void:
 			var def := rules.towers.lookup(_id(number))
 			if not sim.research.unlocked.has(def.id):
 				continue
-			var cap := 4 if int(def.stage) <= 3 else (3 if number == 21 else 2)
-			if number == 25 and sim.wave >= 31:
+			var cap := 4 if int(def.stage) <= 3 else (3 if number in [21, 22, 24] else 2)
+			if number == 10:
+				cap = 2
+			elif int(def.stage) == 4 and sim.wave >= 31:
 				cap = 4
 			if _count(sim, def.id) < cap:
 				_buy(sim, def.id)
@@ -296,7 +317,7 @@ func _prepare(sim: Battle) -> void:
 					break
 	if sim.wave >= 43:
 		# Spend the surplus on mature single-target support once terminal purchases settle.
-		var reserve := 500_000 if policy in ["rush", "standard"] and _count(sim, _id(30)) == 0 else 0
+		var reserve := int(rules.towers.lookup(_id(30)).cost) if policy in ["rush", "standard"] and _count(sim, _id(30)) == 0 else 0
 		if sim.wave >= 48 or sim.credits > reserve + 160000:
 			for n in [25, 26, 21]:
 				var id := _id(n)
@@ -322,6 +343,7 @@ func _buy_support(sim: Battle, id: String) -> void:
 			best = candidate
 			score = weight
 	if sim.install(best, id):
+		invested += int(def.cost)
 		first_buy[int(id.get_slice("_", 1))] = sim.wave
 
 func _count(sim: Battle, id: String) -> int:
@@ -338,7 +360,7 @@ func _buy(sim: Battle, id: String) -> bool:
 		if sim.install(cell, id):
 			invested += int(rules.towers.lookup(id).cost)
 			var number := int(id.right(2))
-			if number >= 28 and not first_buy.has(number):
+			if not first_buy.has(number):
 				first_buy[number] = sim.wave
 			return true
 	return false

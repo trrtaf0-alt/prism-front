@@ -77,11 +77,18 @@ func _research() -> void:
 		if id != "survey":
 			check(run.purchase(id), "can purchase " + id)
 	check(run.completed.size() == 100 and run.unlocked.size() == 35 and run.points == 150_000 - full_cost, "all independent branches are obtainable in one run")
-	for pair: Array in [["singularity", 19360], ["spectrum", 27080], ["cataclysm", 42260]]:
+	for pair: Array in [["singularity", 17247], ["spectrum", 25058], ["cataclysm", 36073]]:
 		var cost := graph.minimum_cost(pair[0])
 		check(cost == pair[1], "minimum unique RP cost for %s = %d" % [pair[0], cost])
 	check(graph.minimum_cost("cataclysm", run.completed) == 0, "completed shared prerequisites not billed")
-	check(full_cost == 51275, "full web campaign cost")
+	check(full_cost == 55874, "full web campaign cost")
+	var cataclysm_plans := graph._plans("cataclysm", {}, {})
+	var optics_route := false
+	var control_route := false
+	for plan in cataclysm_plans:
+		optics_route = optics_route or (plan.has("spectrum") and not plan.has("singularity"))
+		control_route = control_route or (plan.has("singularity") and not plan.has("spectrum"))
+	check(optics_route and control_route, "cataclysm has a route through either existing terminal unlock")
 	var raw: Array = BattleData.read_json("res://data/research.json").nodes
 	_bad_graph(raw, "survey", "survey", "self reference")
 	_bad_graph(raw, "survey", "imaginary", "missing reference")
@@ -196,7 +203,7 @@ func _attack_details() -> void:
 	sim.tick(STEP)
 	var touched := 0
 	for drone in fixture:
-		touched += int(drone.health == 999969 and drone.status.stun_left > 0.0)
+		touched += int(drone.health == 999966 and drone.status.stun_left > 0.0)
 	check(touched == 300, "storm targets exactly 300 globally and applies shock")
 	sim = _new_battle()
 	_unlock(sim)
@@ -256,7 +263,7 @@ func _gravity_slow() -> void:
 	sim.damage(near, freeze)
 	sim.install(Vector2i(2, 4), "tower_20")
 	sim.tick(STEP)
-	check(near.health == 999969 and lead.health == 999978 and far.health == 1_000_000, "gravity cannon hits only the local field for 22")
+	check(near.health == 999969 and lead.health == 999982 and far.health == 1_000_000, "gravity cannon hits only the local field for 18")
 	var previous := near.progress
 	sim.tick(STEP)
 	check(is_equal_approx(near.progress - previous, STEP * 0.224) and near.position.is_equal_approx(map.position_at(near.progress)), "gravity cannon and freeze multiply without changing path")
@@ -275,7 +282,7 @@ func _projectile_behaviors() -> void:
 	sim.tick(STEP)
 	var touched := 0
 	for drone in row:
-		touched += int(drone.health == 997)
+		touched += int(drone.health == 996)
 	check(touched == 8, "piercing line damages exactly eight in order")
 	sim = _new_battle()
 	_unlock(sim)
@@ -296,7 +303,7 @@ func _projectile_behaviors() -> void:
 	for i in 12:
 		sim.tick(STEP)
 		shards = maxi(shards, sim.bolts.size())
-	check(target.health == 985 and shards == 16, "split bolt spawns sixteen real secondary bolts")
+	check(target.health == 978 and shards == 16, "split bolt spawns sixteen real secondary bolts")
 	sim = _new_battle()
 	_unlock(sim)
 	var launcher := Vector2i(3, 4)
@@ -323,8 +330,8 @@ func _projectile_behaviors() -> void:
 	sim.tick(STEP)
 	touched = 0
 	for drone in row:
-		touched += int(drone.health == 952)
-	check(touched == 12 and row.back().health == 952 and row.front().health == 1000, "photon hits the leading twelve enemies globally")
+		touched += int(drone.health == 956)
+	check(touched == 12 and row.back().health == 956 and row.front().health == 1000, "photon hits the leading twelve enemies globally")
 	sim = _new_battle()
 	_unlock(sim)
 	sim.install(Vector2i(2, 4), "tower_19")
@@ -335,8 +342,8 @@ func _projectile_behaviors() -> void:
 	sim.tick(STEP)
 	touched = 0
 	for drone in row:
-		touched += int(drone.health == 990)
-	check(touched == 4 and row.back().health == 990 and row.front().health == 1000 and beyond.health == 1000, "prism hits the leading four enemies within range")
+		touched += int(drone.health == 986)
+	check(touched == 4 and row.back().health == 986 and row.front().health == 1000 and beyond.health == 1000, "prism hits the leading four enemies within range")
 
 func _interface() -> void:
 	var packed := load("res://scenes/Front.tscn") as PackedScene

@@ -3,7 +3,7 @@ extends RefCounted
 
 const NUMBER_LIMIT: int = 9_000_000_000_000_000
 const FINAL_WAVE := 50
-const CAMPAIGN_RECORD := "campaign_13"
+const CAMPAIGN_RECORD := "campaign_14"
 const DIFFICULTIES := {&"easy": "쉬움", &"normal": "보통", &"hard": "어려움"}
 
 static func read_json(path: String) -> Dictionary:
@@ -38,6 +38,9 @@ func enemy_for_wave(base: Dictionary, wave: int, difficulty: StringName) -> Dict
 			phase.regen.amount = roundi(float(phase.regen.amount) * float(tuning.boss_regen))
 		return boss
 	var hp := curve(tuning.hp, wave)
+	var intro: Array = base.get("intro_hp", [])
+	if not intro.is_empty():
+		hp *= curve(intro, wave)
 	var speed := curve(tuning.speed, wave)
 	if hp == 1.0 and speed == 1.0:
 		return base

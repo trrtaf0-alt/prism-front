@@ -248,6 +248,7 @@
       "id": "calamity",
       "name": "재앙형",
       "health": 66000,
+      "intro_hp": [[35, 0.70], [37, 0.85], [39, 1.0]],
       "speed": 0.62,
       "reward": 3200,
       "reward_rp": 18,
