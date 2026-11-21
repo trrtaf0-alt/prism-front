@@ -44,6 +44,7 @@ func _run() -> void:
 		_finish()
 		return
 	var sim: Battle = ui.battle
+	check(_lines_fit(ui.forecast), "wave forecast fits at the larger mobile font size")
 	await _tap_control(ui.catalog_button)
 	if not _expect_modal("catalog"):
 		_finish()
@@ -63,6 +64,7 @@ func _run() -> void:
 	check(list_scroll.scroll_vertical > 0 and picker._selected == TowerRegistry.BASE, "tower list scrolls on a swipe without choosing a tower (scroll %d, selected %s)" % [list_scroll.scroll_vertical, picker._selected])
 	await _tap_button(ui.modal, "배치 준비")
 	check(ui.building, "touch enters placement")
+	check(_lines_fit(ui.build_hint), "placement instructions fit above the mobile buttons")
 	var cell := Vector2i(8, 4)
 	var at := _logical_to_input(ui, FieldView.pixel(Vector2(cell) + Vector2.ONE * 0.5))
 	await _tap(at)
@@ -78,6 +80,7 @@ func _run() -> void:
 	await _tap_control(ui.wave_button)
 	check(sim.wave == 1 and sim.active, "touch starts the wave")
 	await _capture("android-battle")
+	await _boss_text(sim)
 	await _tap_control(ui.research_button)
 	if _expect_modal("research"):
 		await _research(sim)
@@ -92,6 +95,25 @@ func _run() -> void:
 				check(ui.modal.find_children("*", "HSlider", true, false).size() == 5, "mobile effect settings include adjustable render costs")
 				await _capture("android-effects")
 	_finish()
+
+func _boss_text(sim: Battle) -> void:
+	var definition := sim.data.mobs.lookup("boss").duplicate()
+	definition.health = 420_000_000
+	definition.shield = 70_000_000
+	var boss := sim.spawn(20.0, definition)
+	ui._update_boss_hud()
+	await _tap(_logical_to_input(ui, FieldView.pixel(boss.position)))
+	check(ui.enemy_inspector.visible and _lines_fit(ui.enemy_hp) and _lines_fit(ui.enemy_shield_text), "full boss health and shield fit in the mobile enemy inspector")
+	check(ui.boss_panel.visible and _lines_fit(ui.boss_title) and _lines_fit(ui.boss_values), "full boss stats fit across both HUD lines")
+	await _capture("android-health")
+
+func _lines_fit(label: Label) -> bool:
+	var font := label.get_theme_font("font")
+	var size_px := label.get_theme_font_size("font_size")
+	for line in label.text.split("\n"):
+		if font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x > label.size.x:
+			return false
+	return not label.text.is_empty()
 
 func _field_gestures() -> void:
 	var first := _logical_to_input(ui, Vector2(760, 514))

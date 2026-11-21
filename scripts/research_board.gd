@@ -207,7 +207,16 @@ func _draw() -> void:
 		draw_rect(Rect2(at, Vector2(5.0, CARD.y)), color)
 		var badge := "해금" if node.has("unlock") else "경유"
 		draw_circle(at + Vector2(15, 23), 3.2, border)
-		if zoom >= 0.42:
+		if mobile and not overview_mode and zoom >= 0.95:
+			# Rasterize text at its display size so pinch zoom doesn't scale the glyph bitmap.
+			draw_set_transform(Vector2.ZERO)
+			var anchor := (offset + (at + Vector2(25, 0)) * view_scale).round()
+			var width := (CARD.x - 33.0) * zoom
+			draw_string(font, anchor + Vector2(0, roundf(20.0 * zoom)), node.name, HORIZONTAL_ALIGNMENT_LEFT, width, roundi(21.0 * zoom), Color("#f4f2e9"))
+			var badge_tint := border.lerp(Color("#f4f2e9"), 0.60)
+			draw_string(font, anchor + Vector2(0, roundf(39.0 * zoom)), "완료" if state == &"done" else badge, HORIZONTAL_ALIGNMENT_LEFT, width, roundi(17.0 * zoom), badge_tint)
+			draw_set_transform(offset, 0, view_scale)
+		elif not mobile and zoom >= 0.42:
 			draw_string(font, at + Vector2(25, 28), node.name, HORIZONTAL_ALIGNMENT_LEFT, 153, 17, Color("#eee9dc"))
 			draw_string(font, at + Vector2(175, 27), "완료" if state == &"done" else badge, HORIZONTAL_ALIGNMENT_RIGHT, 40, 12, border)
 	draw_set_transform(Vector2.ZERO)
@@ -219,5 +228,5 @@ func _draw() -> void:
 				continue
 			prior_stage = stage
 			var x := maxf(10.0, graph.point(id).x * zoom + offset.x - 18.0)
-			draw_string(font, Vector2(x, 29), graph.ZONES[stage], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color("#a5a8a5"))
+			draw_string(font, Vector2(x, 29), graph.ZONES[stage], HORIZONTAL_ALIGNMENT_LEFT, -1, 22 if mobile else 16, Color("#c5ccc9") if mobile else Color("#a5a8a5"))
 	draw_rect(viewport, EDGE.lerp(_stage_tint, 0.30), false)

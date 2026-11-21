@@ -38,7 +38,7 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 	var mobile: bool = owner_ui.get_tree().root.get_node("Profile").mobile_mode
 	_title = front.text_at(self, "연구", 36, 23, 43)
 	var controls := "한 손가락 이동  ·  두 손가락 확대·축소" if mobile else "드래그로 이동  ·  휠로 확대/축소  ·  R / Esc 닫기"
-	front.text_at(self, controls, 39, 82, 24 if mobile else 18, MUTED)
+	front.text_at(self, controls, 39, 82, 26 if mobile else 18, Color("#c5ccc9") if mobile else MUTED)
 	balance_label = front.text_at(self, "", 875, 40, 25, GOLD, 540)
 	balance_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	front.button_at(self, "전투로 돌아가기", Rect2(1510, 20, 304, 78) if mobile else Rect2(1510, 32, 304, 59), front.close_modal, true)
@@ -57,6 +57,9 @@ func setup(owner_ui: Control, session: ResearchRun, tower_registry: TowerRegistr
 			search.add_item(registry.lookup(id).name)
 			search.set_item_metadata(search.item_count - 1, id)
 	search.get_popup().max_size = Vector2i(460, 590)
+	if mobile:
+		search.add_theme_font_size_override("font_size", 26)
+		search.get_popup().add_theme_font_size_override("font_size", 26)
 	search.item_selected.connect(_jump_to_tower.bind(search))
 	front.place(search, self, Rect2(1192, 126, 620, 65) if mobile else Rect2(1392, 121, 420, 44))
 	var panel_rect := Rect2(1192, 203, 620, 728) if mobile else Rect2(1392, 183, 420, 746)
@@ -105,15 +108,15 @@ func _make_mobile_details(panel: Panel) -> void:
 	requirements = _mobile_detail(details, "", 24, INK)
 	_mobile_detail(details, "연구 결과", 26, MINT)
 	outcome = _mobile_detail(details, "", 24, INK)
-	link_summary = _mobile_detail(details, "", 22, MUTED)
+	link_summary = _mobile_detail(details, "", 24, MUTED)
 	buy = front.button_at(panel, "연구 완료", Rect2(22, 627, 576, 79), _purchase, true)
-	front.text_at(self, "녹색 완료  ·  금색 RP 부족  ·  회색 선행 조건 미충족", 37, 941, 22, MUTED)
+	front.text_at(self, "녹색 완료  ·  금색 RP 부족  ·  회색 선행 조건 미충족", 37, 941, 24, Color("#c5ccc9"))
 
 func _mobile_detail(parent: VBoxContainer, value: String, font_size: int, tint: Color) -> Label:
 	var label := Label.new()
 	label.text = value
 	label.add_theme_font_size_override("font_size", font_size)
-	label.add_theme_color_override("font_color", tint)
+	label.add_theme_color_override("font_color", Color("#c5ccc9") if tint == MUTED else tint)
 	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	label.mouse_filter = MOUSE_FILTER_IGNORE
 	parent.add_child(label)

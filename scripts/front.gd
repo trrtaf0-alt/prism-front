@@ -315,18 +315,19 @@ func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}) -> vo
 
 func _make_hud() -> void:
 	var mobile: bool = Profile.mobile_mode
-	_hud_text(screen, "웨이브", 86, 22, 17, MUTED, 126)
+	var caption_y := 14 if mobile else 22
+	_hud_text(screen, "웨이브", 86, caption_y, 17, MUTED, 126)
 	wave_label = _hud_text(screen, "", 86, 43, 28, LIGHT, 126)
-	_hud_text(screen, "기지", 249, 22, 17, MUTED, 152)
+	_hud_text(screen, "기지", 249, caption_y, 17, MUTED, 152)
 	health_label = _hud_text(screen, "", 249, 43, 28, MINT, 154)
 	panel_at(screen, Rect2(250, 84, BASE_BAR_WIDTH, 3), "#131d22", "#131d22")
 	health_bar = ColorRect.new()
 	health_bar.color = MINT
 	health_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	place(health_bar, screen, Rect2(250, 84, BASE_BAR_WIDTH, 3))
-	_hud_text(screen, "재화", 442, 22, 17, MUTED, 156)
+	_hud_text(screen, "재화", 442, caption_y, 17, MUTED, 156)
 	credits_label = _hud_text(screen, "", 442, 43, 28, GOLD, 156)
-	_hud_text(screen, "RP", 626, 22, 17, MUTED, 146)
+	_hud_text(screen, "RP", 626, caption_y, 17, MUTED, 146)
 	rp_label = _hud_text(screen, "0", 626, 43, 28, Color("#c3b5d0"), 146)
 	_hud_text(screen, BattleData.DIFFICULTIES[battle.difficulty], 800, 46, 19, MUTED, 110)
 	if battle.constraints.active():
@@ -341,8 +342,8 @@ func _make_hud() -> void:
 	_hud_button("일시정지" if mobile else "일시정지 · Esc", Rect2(1692, 23, 170, 75) if mobile else Rect2(1704, 38, 158, 44), show_pause)
 	wave_button = _hud_button("웨이브 시작", Rect2(1457, 23, 220, 75) if mobile else Rect2(1500, 38, 190, 44), start_wave, true)
 	status = _right_hud_text("", 1190, 46, 20, LIGHT, 253 if mobile else 294)
-	forecast = _right_hud_text("", 1460, 104 if mobile else 93, 17, MINT, 402)
-	result = _right_hud_text("", 1460, 148, 17, GOLD, 402)
+	forecast = _right_hud_text("", 1272 if mobile else 1460, 104 if mobile else 93, 17, MINT, 590 if mobile else 402)
+	result = _right_hud_text("", 1272 if mobile else 1460, 176 if mobile else 148, 17, GOLD, 590 if mobile else 402)
 	_forecast_wave = -1
 
 	build_button = _hud_button("", Rect2(1050, 970, 394, 79) if mobile else Rect2(1166, 998, 316, 44), toggle_build, true)
@@ -350,12 +351,12 @@ func _make_hud() -> void:
 	build_button.tooltip_text = "같은 타워 배치 · 1"
 	catalog_button = _hud_button("타워 선택", Rect2(1458, 970, 180, 79) if mobile else Rect2(1496, 998, 148, 44), show_catalog)
 	research_button = _hud_button("연구" if mobile else "연구 · R", Rect2(1652, 970, 210, 79) if mobile else Rect2(1658, 998, 204, 44), show_research)
-	build_hint = _right_hud_text("", 1000 if mobile else 1100, 1050 if mobile else 1046, 19 if mobile else 16, MUTED, 862 if mobile else 762)
+	build_hint = _right_hud_text("", 1275 if mobile else 1100, 931 if mobile else 1046, 16, MUTED, 587 if mobile else 762)
 	placement_label = _hud_text(screen, "", 0, 0, 18, LIGHT, 0)
 	placement_label.add_theme_stylebox_override("normal", box("#121a22f0", "#536b70ad"))
 	placement_label.hide()
-	tower_heading = _hud_text(screen, "", 86, 871, 26, LIGHT, 500)
-	tower_stats = _hud_text(screen, "", 86, 911, 17, MINT, 560)
+	tower_heading = _hud_text(screen, "", 86, 855 if mobile else 871, 26, LIGHT, 500)
+	tower_stats = _hud_text(screen, "", 86, 894 if mobile else 911, 17, MINT, 560)
 	sell_button = _hud_button("타워 판매", Rect2(86, 970, 208, 79) if mobile else Rect2(86, 998, 168, 44), sell_selected)
 	support_button = _hud_button("지원 상태", Rect2(310, 970, 190, 79) if mobile else Rect2(268, 998, 144, 44), show_support_details)
 
@@ -367,36 +368,39 @@ func _make_hud() -> void:
 
 	boss_panel = Control.new()
 	boss_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(boss_panel, screen, Rect2(660, 904, BOSS_BAR_WIDTH, 53))
-	boss_title = _hud_text(boss_panel, "", 0, 0, 18, GOLD, 155)
-	boss_values = _hud_text(boss_panel, "", 155, 0, 17, LIGHT, 445)
+	place(boss_panel, screen, Rect2(660, 867 if mobile else 904, BOSS_BAR_WIDTH, 90 if mobile else 53))
+	boss_title = _hud_text(boss_panel, "", 0, 0, 18, GOLD, BOSS_BAR_WIDTH if mobile else 155)
+	boss_values = _hud_text(boss_panel, "", 0 if mobile else 155, 30 if mobile else 0, 17, LIGHT, BOSS_BAR_WIDTH if mobile else 445)
 	boss_values.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	panel_at(boss_panel, Rect2(0, 31, BOSS_BAR_WIDTH, 6), "#432e32", "#432e32")
+	var boss_bar_y := 64 if mobile else 31
+	panel_at(boss_panel, Rect2(0, boss_bar_y, BOSS_BAR_WIDTH, 6), "#432e32", "#432e32")
 	boss_body = ColorRect.new()
 	boss_body.color = Color("#e1a284")
 	boss_body.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(boss_body, boss_panel, Rect2(0, 31, BOSS_BAR_WIDTH, 6))
+	place(boss_body, boss_panel, Rect2(0, boss_bar_y, BOSS_BAR_WIDTH, 6))
 	boss_shield = ColorRect.new()
 	boss_shield.color = Color("#8dbdc9")
 	boss_shield.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(boss_shield, boss_panel, Rect2(0, 40, BOSS_BAR_WIDTH, 2))
+	place(boss_shield, boss_panel, Rect2(0, boss_bar_y + 9, BOSS_BAR_WIDTH, 2))
 	_make_enemy_inspector()
 
 func _make_enemy_inspector() -> void:
-	enemy_inspector = panel_at(screen, Rect2(0, 0, 306, 88), "#111922f5", "#536675")
-	enemy_name = text_at(enemy_inspector, "", 16, 8, 22, LIGHT, INSPECT_BAR_WIDTH)
-	enemy_hp = text_at(enemy_inspector, "", 16, 38, 18, LIGHT, INSPECT_BAR_WIDTH)
-	enemy_hp_fill = _inspection_bar(67.0, Color("#e58b9c"))
-	enemy_shield_text = text_at(enemy_inspector, "", 16, 79, 17, Color("#a6e1fa"), INSPECT_BAR_WIDTH)
-	enemy_shield_fill = _inspection_bar(107.0, Color("#7ecdff"))
+	var mobile: bool = Profile.mobile_mode
+	var width := 420.0 if mobile else INSPECT_BAR_WIDTH
+	enemy_inspector = panel_at(screen, Rect2(0, 0, width + 32, 88), "#111922f5", "#536675")
+	enemy_name = text_at(enemy_inspector, "", 16, 8, 28 if mobile else 22, LIGHT, width)
+	enemy_hp = text_at(enemy_inspector, "", 16, 45 if mobile else 38, 24 if mobile else 18, LIGHT, width)
+	enemy_hp_fill = _inspection_bar(80.0 if mobile else 67.0, width, Color("#e58b9c"))
+	enemy_shield_text = text_at(enemy_inspector, "", 16, 92 if mobile else 79, 24 if mobile else 17, Color("#a6e1fa"), width)
+	enemy_shield_fill = _inspection_bar(127.0 if mobile else 107.0, width, Color("#7ecdff"))
 	enemy_inspector.hide()
 
-func _inspection_bar(y: float, color: Color) -> ColorRect:
-	var track := panel_at(enemy_inspector, Rect2(16, y, INSPECT_BAR_WIDTH, 5), "#2b3846", "#2b3846")
+func _inspection_bar(y: float, width: float, color: Color) -> ColorRect:
+	var track := panel_at(enemy_inspector, Rect2(16, y, width, 5), "#2b3846", "#2b3846")
 	var fill := ColorRect.new()
 	fill.color = color
 	fill.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	place(fill, track, Rect2(0, 0, INSPECT_BAR_WIDTH, 5))
+	place(fill, track, Rect2(0, 0, width, 5))
 	return fill
 
 func _inspect_enemy(point: Vector2) -> void:
@@ -417,14 +421,14 @@ func _inspect_enemy(point: Vector2) -> void:
 		return
 	enemy_name.text = target.definition.name
 	enemy_hp.text = "본체 HP  %s / %s" % [CombatReference.number(target.health), CombatReference.number(target.maximum_health)]
-	enemy_hp_fill.size.x = INSPECT_BAR_WIDTH * float(target.health) / target.maximum_health
+	enemy_hp_fill.size.x = enemy_hp.size.x * float(target.health) / target.maximum_health
 	var shielded := target.shield_hp > 0
 	enemy_shield_text.visible = shielded
 	(enemy_shield_fill.get_parent() as Control).visible = shielded
 	if shielded:
 		enemy_shield_text.text = "보호막  %s / %s" % [CombatReference.number(target.shield_hp), CombatReference.number(target.shield_max)]
-		enemy_shield_fill.size.x = INSPECT_BAR_WIDTH * float(target.shield_hp) / maxi(1, target.shield_max)
-	enemy_inspector.size.y = 127.0 if shielded else 88.0
+		enemy_shield_fill.size.x = enemy_shield_text.size.x * float(target.shield_hp) / maxi(1, target.shield_max)
+	enemy_inspector.size.y = enemy_shield_fill.get_parent().position.y + 20.0 if shielded else enemy_hp_fill.get_parent().position.y + 21.0
 	var offset := Vector2(23.0, -enemy_inspector.size.y - 14.0)
 	if point.y + offset.y < 95.0:
 		offset.y = 21.0
@@ -439,9 +443,11 @@ func _update_zoom_button() -> void:
 	zoom_button.text = "%d%%" % roundi(camera_fx.manual_zoom * 100.0)
 
 func _hud_text(parent: Control, value: String, x: float, y: float, font_size: int, color: Color, width: float) -> Label:
-	var label := text_at(parent, value, x, y, font_size, color, width)
+	var mobile: bool = Profile.mobile_mode
+	var tint := color.lerp(LIGHT, 0.50) if mobile and color == MUTED else color
+	var label := text_at(parent, value, x, y, maxi(font_size, 24) if mobile else font_size, tint, width)
 	label.add_theme_color_override("font_outline_color", Color("#080d12e6"))
-	label.add_theme_constant_override("outline_size", 4)
+	label.add_theme_constant_override("outline_size", 2 if mobile else 4)
 	return label
 
 func _right_hud_text(value: String, x: float, y: float, font_size: int, color: Color, width: float) -> Label:
@@ -462,8 +468,13 @@ func _update_boss_hud() -> void:
 		return
 	var boss := battle.bosses[0]
 	boss_title.text = "%s  ·  %d단계" % [boss.definition.name, boss.mob.phase + 1]
-	var shield_text := "  /  보호막 %d" % boss.shield_hp if boss.shield_hp > 0 else ""
-	boss_values.text = "본체 %d / %d%s" % [boss.health, boss.maximum_health, shield_text]
+	var mobile: bool = Profile.mobile_mode
+	var health := CombatReference.number(boss.health) if mobile else str(boss.health)
+	var max_health := CombatReference.number(boss.maximum_health) if mobile else str(boss.maximum_health)
+	var shield := CombatReference.number(boss.shield_hp) if mobile else str(boss.shield_hp)
+	boss_values.text = "본체 %s / %s" % [health, max_health]
+	if boss.shield_hp > 0:
+		boss_values.text += "  /  보호막 " + shield
 	boss_body.size.x = BOSS_BAR_WIDTH * float(boss.health) / float(boss.maximum_health)
 	boss_shield.size.x = BOSS_BAR_WIDTH * float(boss.shield_hp) / maxi(1, boss.shield_max)
 
