@@ -333,7 +333,7 @@ func _codex_reference(ui: Control) -> void:
 		codex._show_entry(index)
 		check(codex._detail.text.contains(codex._entries.get_item_text(index)), "tower codex detail " + codex._entries.get_item_text(index))
 		if codex._entries.get_item_metadata(index) == "tower_30":
-			check(codex._detail.text.contains("100,000") and codex._detail.text.contains("3.5초"), "cataclysm details use current damage and windup")
+			check(codex._entries.get_item_text(index) == "카타클리즘" and codex._detail.text.contains("100,000") and codex._detail.text.contains("3.5초"), "cataclysm details use current damage and windup")
 			codex._entries.select(index)
 			codex._entries.ensure_current_is_visible()
 			await capture("codex-towers")

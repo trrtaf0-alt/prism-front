@@ -396,7 +396,7 @@ func _interface() -> void:
 	board.overview()
 	await _capture("research-overview")
 	board.select_node("phase_bridge", true)
-	check(ui.research_screen.description.text == rules.research.nodes["phase_bridge"].description and ui.research_screen.link_summary.text.contains("대격변 격발 연동"), "bridge detail describes its role and links")
+	check(ui.research_screen.description.text == rules.research.nodes["phase_bridge"].description and ui.research_screen.link_summary.text.contains("카타클리즘 격발 연동"), "bridge detail describes its role and links")
 	await _capture("research-phase-bridge")
 	board.select_node("cataclysm", true)
 	check(board.highlighted.size() > 65 and ui.research_screen.buy.disabled, "terminal path and locked condition display")

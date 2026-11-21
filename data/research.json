@@ -87,7 +87,7 @@
     {"id":"wide_bore","name":"광폭 발진기","cost_rp":770,"stage":4,"lane":0,"requirements":{"all":["railgun","pulse"]},"position":[4969,100]},
     {"id":"doom","name":"파멸포 설계","cost_rp":1590,"stage":4,"lane":0,"requirements":{"all":["wide_bore",{"any":["nova","photon"]}]},"position":[5758,100],"unlock":{"type":"tower","id":"tower_26"}},
     {"id":"phase_alignment","name":"다중 포신 위상 정렬","cost_rp":1000,"stage":4,"lane":1,"requirements":{"all":[{"all":["split","return"]},"photon_gate"]},"position":[4443,320]},
-    {"id":"phase_bridge","name":"교차 위상 동기화","cost_rp":1720,"stage":4,"lane":1,"requirements":{"all":["phase_alignment",{"any":["doom","storm"]}]},"position":[6021,320],"description":"파멸포 또는 폭풍 타워의 출력으로 위상을 맞춥니다. 전역 광선 위상망과 대격변 격발 연동으로 이어집니다."},
+    {"id":"phase_bridge","name":"교차 위상 동기화","cost_rp":1720,"stage":4,"lane":1,"requirements":{"all":["phase_alignment",{"any":["doom","storm"]}]},"position":[6021,320],"description":"파멸포 또는 폭풍 타워의 출력으로 위상을 맞춥니다. 전역 광선 위상망과 카타클리즘 격발 연동으로 이어집니다."},
     {"id":"shear","name":"과부하 증폭기 설계","cost_rp":1000,"stage":4,"lane":4,"requirements":{"all":["ignition",{"any":["signature","gradient"]}]},"position":[4720,1090],"unlock":{"type":"tower","id":"tower_34"},"description":"피해 +40% · 속도 +30%"},
     {"id":"event_horizon","name":"사건지평선 정렬","cost_rp":1850,"stage":5,"lane":4,"requirements":{"all":["vortex",{"any":["nova",{"all":["gravity","pulse"]}]}]},"position":[6376,980]},
     {"id":"grav_circuit","name":"폐곡 중력 회로","cost_rp":2400,"stage":5,"lane":4,"requirements":{"all":["event_horizon",{"any":["storm","doom"]}]},"position":[6639,980]},
@@ -96,8 +96,8 @@
     {"id":"spectrum","name":"스펙트럼 인가","cost_rp":5700,"stage":5,"lane":2,"requirements":{"all":["white_web","nova"]},"position":[7428,540],"unlock":{"type":"tower","id":"tower_29"}},
     {"id":"weapon_frame","name":"상공 무기 골조","cost_rp":1200,"stage":5,"lane":0,"requirements":{"all":["doom","orbital","nova"]},"position":[6376,100]},
     {"id":"convergence","name":"전장 규모 에너지 수렴","cost_rp":800,"stage":5,"lane":3,"requirements":{"all":["weapon_frame","white_web",{"any":["singularity","spectrum"]}]},"position":[7691,760]},
-    {"id":"interlock","name":"대격변 격발 연동","cost_rp":900,"stage":5,"lane":1,"requirements":{"all":["convergence",{"any":["phase_bridge",{"all":["vortex","pulse"]}]}]},"position":[7954,320]},
-    {"id":"cataclysm","name":"대격변 인가","cost_rp":6900,"stage":5,"lane":0,"requirements":"interlock","position":[8217,100],"unlock":{"type":"tower","id":"tower_30"}},
+    {"id":"interlock","name":"카타클리즘 격발 연동","cost_rp":900,"stage":5,"lane":1,"requirements":{"all":["convergence",{"any":["phase_bridge",{"all":["vortex","pulse"]}]}]},"position":[7954,320]},
+    {"id":"cataclysm","name":"카타클리즘 인가","cost_rp":6900,"stage":5,"lane":0,"requirements":"interlock","position":[8217,100],"unlock":{"type":"tower","id":"tower_30"}},
     {"id":"capture","name":"양자 연결망 설계","cost_rp":1150,"stage":5,"lane":4,"requirements":{"all":["white_web",{"any":["prism","railgun"]}]},"position":[7440,1090],"unlock":{"type":"tower","id":"tower_35"},"description":"2초마다 최대 단일 표적 피해의 55%"},
     {"id":"spectral_clock","name":"전장 지휘 코어 설계","cost_rp":1950,"stage":5,"lane":4,"requirements":{"all":["weapon_frame","grav_circuit",{"any":["shear","capture"]},{"any":["nova","storm"]}]},"position":[7970,1090],"unlock":{"type":"tower","id":"tower_36"},"description":"전역 피해 +20% · 속도 +15% · 15초마다 5초간 속도 추가 +20%"}
   ]
