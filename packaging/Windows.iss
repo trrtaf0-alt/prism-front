@@ -21,6 +21,7 @@ AppName={#AppName}
 AppVersion={#AppVersion}
 DefaultDirName={localappdata}\Programs\{#AppId}
 DefaultGroupName={#AppName}
+SetupIconFile=..\assets\prism.ico
 UninstallDisplayIcon={app}\PrismFront.exe
 DisableWelcomePage=yes
 DisableDirPage=yes
@@ -52,8 +53,8 @@ Source: "..\assets\Godot-COPYRIGHT.txt"; DestDir: "{app}\Licenses"; Flags: ignor
 Source: "..\assets\OFL.txt"; DestDir: "{app}\Licenses"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\PrismFront.exe"; WorkingDir: "{app}"
-Name: "{userdesktop}\{#AppName}"; Filename: "{app}\PrismFront.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\PrismFront.exe"; WorkingDir: "{app}"; IconFilename: "{app}\PrismFront.exe"; IconIndex: 0
+Name: "{userdesktop}\{#AppName}"; Filename: "{app}\PrismFront.exe"; WorkingDir: "{app}"; IconFilename: "{app}\PrismFront.exe"; IconIndex: 0; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\PrismFront.exe"; WorkingDir: "{app}"; Description: "프리즘 방어선 실행"; Flags: nowait postinstall skipifsilent

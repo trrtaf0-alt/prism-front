@@ -7,6 +7,7 @@ config/version="0.6.1"
 run/main_scene="res://scenes/Front.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 config/icon="res://assets/prism.svg"
+config/windows_native_icon="res://assets/prism.ico"
 
 [autoload]
 Profile="*res://scripts/profile.gd"
