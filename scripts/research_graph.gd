@@ -135,13 +135,13 @@ func ancestors(id: String) -> Dictionary:
 			pending.append_array(parents[next])
 	return found
 
-func minimum_cost(id: String, completed: Dictionary = {}) -> int:
+func minimum_cost(id: String, completed: Dictionary = {}, price_percent: int = 100) -> int:
 	var memo: Dictionary = {}
 	var best := BattleData.NUMBER_LIMIT
 	for plan: Dictionary in _plans(id, completed, memo):
 		var cost := 0
 		for step: String in plan:
-			cost += int(nodes[step].cost_rp)
+			cost += RunConstraints.scaled(int(nodes[step].cost_rp), price_percent)
 		best = mini(best, cost)
 	return best
 

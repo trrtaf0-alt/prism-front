@@ -5,14 +5,22 @@ signal changed
 signal purchased(id: String, unlocked: String, advanced_stage: bool)
 
 var graph: ResearchGraph
+var _cost_percent: int
 var points := 0
 var total_earned := 0
 var highest_stage := 0
 var completed: Dictionary = {}
 var unlocked: Dictionary = {TowerRegistry.BASE: true}
 
-func _init(definitions: ResearchGraph) -> void:
+func _init(definitions: ResearchGraph, price_percent: int = 100) -> void:
 	graph = definitions
+	_cost_percent = price_percent
+
+func cost(id: String) -> int:
+	return RunConstraints.scaled(int(graph.nodes[id].cost_rp), _cost_percent)
+
+func minimum_cost(id: String) -> int:
+	return graph.minimum_cost(id, completed, _cost_percent)
 
 func earn(amount: int) -> void:
 	if amount <= 0:
@@ -29,13 +37,13 @@ func state(id: String) -> StringName:
 	var node: Dictionary = graph.nodes[id]
 	if not ResearchGraph.satisfied(node.requirements, completed):
 		return &"locked"
-	return &"ready" if points >= int(node.cost_rp) else &"insufficient"
+	return &"ready" if points >= cost(id) else &"insufficient"
 
 func purchase(id: String) -> bool:
 	if state(id) != &"ready":
 		return false
 	var node: Dictionary = graph.nodes[id]
-	points -= int(node.cost_rp)
+	points -= cost(id)
 	completed[id] = true
 	var tower := str(node.get("unlock", {}).get("id", ""))
 	if not tower.is_empty():

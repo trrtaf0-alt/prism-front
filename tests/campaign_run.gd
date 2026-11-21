@@ -38,6 +38,7 @@ var map := FieldMap.new()
 var policy := "standard"
 var roster_seed := 7043
 var summarize := false
+var constraint_levels: Dictionary = {}
 var seats: Array[Vector2i] = []
 var stage := 0
 var stage_two := -1.0
@@ -63,6 +64,14 @@ func _run() -> void:
 			support_plan = arg.trim_prefix("--support=")
 		if arg.begins_with("--difficulty="):
 			difficulty = StringName(arg.trim_prefix("--difficulty="))
+		if arg.begins_with("--constraints="):
+			for token in arg.trim_prefix("--constraints=").split(",", false):
+				var pair := token.split(":", false)
+				if pair.size() != 2 or not RunConstraints.DEFINITIONS.has(StringName(pair[0])) or not pair[1].is_valid_int() or int(pair[1]) not in range(6):
+					printerr("Invalid constraint id:level " + token)
+					quit(2)
+					return
+				constraint_levels[StringName(pair[0])] = int(pair[1])
 		if arg.begins_with("--save-finale="):
 			snapshot_path = arg.trim_prefix("--save-finale=")
 		if arg.begins_with("--boss-trial="):
@@ -95,14 +104,14 @@ func _run() -> void:
 			var tile := Vector2i(x, y)
 			if map.tile_at(tile) == "." and not seats.has(tile):
 				seats.append(tile)
-	var sim := Battle.new(map, rules, difficulty)
+	var sim := Battle.new(map, rules, difficulty, constraint_levels)
 	var ui
 	if "--visual" in args and DisplayServer.get_name() != "headless":
 		var packed := load("res://scenes/Front.tscn") as PackedScene
 		ui = packed.instantiate()
 		root.add_child(ui)
 		await process_frame
-		ui.start_game(difficulty)
+		ui.start_game(difficulty, constraint_levels)
 		ui.set_physics_process(false)
 		ui.set_process_unhandled_input(false)
 		root.gui_disable_input = true
@@ -194,7 +203,8 @@ func _save_finale(sim: Battle) -> bool:
 		"difficulty": str(difficulty), "strategy": policy, "seed": sim.roster_seed,
 		"health": sim.health, "credits": sim.credits, "points": sim.research.points,
 		"completed": sim.research.completed.keys(), "towers": towers,
-		"command_clock": sim.support.command_time,
+		"command_clock": sim.support.command_time, "constraints": constraint_levels,
+		"credit_remainder": sim._credit_remainder, "rp_remainder": sim._rp_remainder,
 	}))
 	print("Saved W49 %s/%s: HP=%d cash=%d RP=%d towers=%d" % [difficulty, policy, sim.health, sim.credits, sim.research.points, sim.towers.size()])
 	return true
@@ -206,7 +216,7 @@ func _final_support_event(event: StringName, _kind: int, _start: Vector2, _finis
 func _place_opening(sim: Battle) -> void:
 	for i in 5:
 		if sim.install(seats[i]):
-			invested += 10
+			invested += int(sim.tower_definition(TowerRegistry.BASE).cost)
 
 func _track_phase(sim: Battle) -> void:
 	var next := sim.bosses[0].mob.phase
@@ -222,7 +232,7 @@ func _report_summary(sim: Battle) -> void:
 	if not summarize:
 		return
 	print("BALANCE " + JSON.stringify({
-		"policy": policy, "support": support_plan, "seed": roster_seed, "difficulty": difficulty,
+		"policy": policy, "support": support_plan, "seed": roster_seed, "difficulty": difficulty, "constraints": constraint_levels,
 		"wave": sim.wave, "won": sim.won, "health": sim.health, "time": sim.elapsed,
 		"boss_time": sim.finale_boss_time, "gross_spend": invested, "cash": sim.credits,
 		"earned": sim.total_credits, "rp": sim.research.total_earned, "research": sim.research.completed.size(),
@@ -247,7 +257,7 @@ func _research(sim: Battle, choice: String) -> void:
 	for path in paths:
 		var cost := 0
 		for key in path:
-			cost += int(graph.nodes[key].cost_rp)
+			cost += sim.research.cost(key)
 		if cost < cheapest:
 			cheapest = cost
 			selected = path
@@ -264,7 +274,7 @@ func _prepare(sim: Battle) -> void:
 		if _count(sim, id) > 0:
 			continue
 		var node: String = rules.research.unlocks[id]
-		if rules.research.minimum_cost(node, sim.research.completed) <= sim.research.points:
+		if sim.research.minimum_cost(node) <= sim.research.points:
 			if not sim.research.unlocked.has(id):
 				_research(sim, id)
 				if sim.research.unlocked.has(id):
@@ -317,15 +327,15 @@ func _prepare(sim: Battle) -> void:
 					break
 	if sim.wave >= 43:
 		# Spend the surplus on mature single-target support once terminal purchases settle.
-		var reserve := int(rules.towers.lookup(_id(30)).cost) if policy in ["rush", "standard"] and _count(sim, _id(30)) == 0 else 0
+		var reserve := int(sim.tower_definition(_id(30)).cost) if policy in ["rush", "standard"] and _count(sim, _id(30)) == 0 else 0
 		if sim.wave >= 48 or sim.credits > reserve + 160000:
 			for n in [25, 26, 21]:
 				var id := _id(n)
-				if _count(sim, id) < (7 if n == 25 else 4) and sim.credits >= reserve + int(rules.towers.lookup(id).cost):
+				if _count(sim, id) < (7 if n == 25 else 4) and sim.credits >= reserve + int(sim.tower_definition(id).cost):
 					_buy(sim, id)
 
 func _buy_support(sim: Battle, id: String) -> void:
-	var def := rules.towers.lookup(id)
+	var def := sim.tower_definition(id)
 	if sim.credits < int(def.cost):
 		return
 	var best := Vector2i(-1, -1)
@@ -354,11 +364,11 @@ func _count(sim: Battle, id: String) -> int:
 	return result
 
 func _buy(sim: Battle, id: String) -> bool:
-	if not sim.research.unlocked.has(id) or sim.credits < int(rules.towers.lookup(id).cost):
+	if not sim.research.unlocked.has(id) or sim.credits < int(sim.tower_definition(id).cost):
 		return false
 	for cell in seats:
 		if sim.install(cell, id):
-			invested += int(rules.towers.lookup(id).cost)
+			invested += int(sim.tower_definition(id).cost)
 			var number := int(id.right(2))
 			if not first_buy.has(number):
 				first_buy[number] = sim.wave

@@ -78,9 +78,9 @@ static func tower_text(def: Dictionary, data: BattleData) -> String:
 	rows.append("자동 조준  출구에 가까운 적 우선")
 	return "\n".join(rows)
 
-static func enemy_text(base: Dictionary, data: BattleData, wave: int, mode: StringName) -> String:
+static func enemy_text(base: Dictionary, data: BattleData, wave: int, mode: StringName, constraints: RunConstraints = null) -> String:
 	var actual_wave := BattleData.FINAL_WAVE if base.boss else wave
-	var unit := data.enemy_for_wave(base, actual_wave, mode)
+	var unit := data.enemy_for_wave(base, actual_wave, mode, constraints)
 	var appearance := "능력으로 생성" if unit.child else "%d웨이브부터 편성" % int(unit.first_wave)
 	if unit.boss:
 		appearance = "%d웨이브에 1기" % BattleData.FINAL_WAVE
@@ -91,14 +91,19 @@ static func enemy_text(base: Dictionary, data: BattleData, wave: int, mode: Stri
 	rows.append("")
 	rows.append("[b]%s · %d웨이브[/b]" % [BattleData.DIFFICULTIES[mode], actual_wave])
 	rows.append("본체 HP  %s  ·  자체 보호막  %s" % [number(unit.health), number(unit.shield)])
-	rows.append("이동 속도  %s칸/초  ·  처치 재화  %s  ·  RP  %d" % [number(unit.speed), number(unit.reward), rp])
+	var paid_credits := float(unit.reward)
+	var paid_rp := float(rp)
+	if constraints != null:
+		paid_credits *= constraints.value(&"credits") / 100.0
+		paid_rp *= constraints.value(&"rp") / 100.0
+	rows.append("이동 속도  %s칸/초  ·  처치 재화  %s  ·  RP  %s" % [number(unit.speed), number(paid_credits), number(paid_rp)])
 	rows.append("본체 피해 감소  %s  ·  고유 방해 저항  %s" % [percent(unit.armor), percent(unit.control_resist)])
 	if not unit.child and not unit.boss:
 		rows.append("기본 편성 가중치  %s%s" % [number(unit.weight), "  ·  웨이브 상한 %d기" % int(unit.wave_cap) if unit.wave_cap > 0 else ""])
 		if unit.has("intro_cap"):
 			rows.append("첫 편성 상한  %d기  ·  2웨이브마다 1기 증가" % int(unit.intro_cap))
 	if wave >= int(unit.first_wave) and unit.id in WaveRoster.LIGHT_ESCORTS + WaveRoster.ESCORT_LEADERS:
-		var escort := data.escort_shield(wave, mode)
+		var escort := data.escort_shield(wave, mode, constraints)
 		if escort > 0:
 			rows.append("호위 분대 편입 시 보호막  %d" % escort)
 	rows.append("")

@@ -232,9 +232,10 @@ func _style_menu_button(button: Button, accent: Color, primary: bool = false) ->
 			button.add_theme_color_override(state, Color("#0b1b24"))
 
 func show_difficulty() -> void:
-	var panel := _open_modal("difficulty", Vector2(932, 376))
+	var panel := _open_modal("difficulty", Vector2(932, 438))
 	text_at(panel, "난이도 선택", 34, 21, 40)
 	_style_menu_button(button_at(panel, "돌아가기", Rect2(768, 28, 130, 46), close_modal), MENU_CYAN)
+	_style_menu_button(button_at(panel, "제약 모드", Rect2(34, 355, 196, 48), show_constraints), MENU_CYAN)
 	var colors := [MENU_CYAN, GOLD, PINK]
 	var index := 0
 	for mode: StringName in BattleData.DIFFICULTIES:
@@ -253,7 +254,13 @@ func show_difficulty() -> void:
 			option.grab_focus()
 		index += 1
 
-func start_game(difficulty: StringName = &"easy") -> void:
+func show_constraints() -> void:
+	var panel := _open_modal("constraints", Vector2(1342, 860))
+	var picker := ConstraintsScreen.new()
+	place(picker, panel, Rect2(Vector2.ZERO, panel.size))
+	picker.setup(self)
+
+func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}) -> void:
 	if not map_error.is_empty():
 		return
 	_replace_screen()
@@ -271,7 +278,7 @@ func start_game(difficulty: StringName = &"easy") -> void:
 	callout_time = 0.0
 	defeat_delay = 0.0
 	last_base_damage = 0
-	battle = Battle.new(map, data, difficulty)
+	battle = Battle.new(map, data, difficulty, levels)
 	battle.effect.connect(_battle_effect)
 	battle.tower_installed.connect(Sound.deploy_cue)
 	battle.attack_visual.connect(Sound.attack_cue)
@@ -310,6 +317,8 @@ func _make_hud() -> void:
 	_hud_text(screen, "RP", 626, 22, 17, MUTED, 146)
 	rp_label = _hud_text(screen, "0", 626, 43, 28, Color("#c3b5d0"), 146)
 	_hud_text(screen, BattleData.DIFFICULTIES[battle.difficulty], 800, 46, 19, MUTED, 110)
+	if battle.constraints.active():
+		_hud_text(screen, "제약 %d종" % battle.constraints.count(), 800, 74, 17, MENU_CYAN, 110)
 	zoom_button = _hud_button("100%", Rect2(928, 38, 106, 44), _reset_zoom)
 	zoom_button.tooltip_text = "휠: 확대·축소  ·  휠 드래그: 이동  ·  클릭: 초기화"
 
@@ -483,7 +492,7 @@ func _update_hud() -> void:
 	for control: Control in [tower_heading, tower_stats, sell_button, support_button]:
 		control.visible = has_tower
 	if building and not has_tower:
-		var definition := data.towers.lookup(build_id)
+		var definition := battle.tower_definition(build_id)
 		tower_heading.show()
 		tower_stats.show()
 		tower_heading.text = definition.name
@@ -510,7 +519,7 @@ func _update_hud() -> void:
 	sell_button.disabled = not has_tower or battle.lost
 
 func _update_placement() -> void:
-	var blueprint := data.towers.lookup(build_id)
+	var blueprint := battle.tower_definition(build_id)
 	var cost := int(blueprint.cost)
 	var available := not battle.lost and not battle.won
 	build_button.disabled = not available or (not building and battle.credits < cost)
@@ -520,13 +529,18 @@ func _update_placement() -> void:
 	placement_label.hide()
 	if not available:
 		return
-	if battle.credits < cost:
+	if battle.at_tower_limit():
+		build_hint.text = "타워 %d / %d기 · 설치 한도" % [battle.towers.size(), battle.tower_limit()]
+	elif battle.credits < cost:
 		build_hint.text = "재화 %d 부족" % (cost - battle.credits)
 	elif not building:
 		build_hint.text = "1  빠른 배치"
 	if not building or modal != null:
 		return
-	build_hint.text = "좌클릭  배치   ·   우클릭 / Esc  취소" if battle.credits >= cost else "%s   ·   Esc  취소" % build_hint.text
+	if battle.at_tower_limit():
+		build_hint.text += "   ·   Esc 취소"
+	else:
+		build_hint.text = "좌클릭  배치   ·   우클릭 / Esc  취소" if battle.credits >= cost else "%s   ·   Esc  취소" % build_hint.text
 	var cell := field.hovered
 	var status_at_tile := battle.placement_status(cell, build_id)
 	if status_at_tile == Battle.Placement.OUTSIDE:
@@ -543,6 +557,8 @@ func _update_placement() -> void:
 			message = "이미 타워가 있습니다"
 		Battle.Placement.TERRAIN:
 			message = "장애물" if map.tile_at(cell) == "#" else "적 이동 경로"
+		Battle.Placement.LIMIT:
+			message = "설치 한도 %d기" % battle.tower_limit()
 		Battle.Placement.FUNDS:
 			message = "재화 %d 부족" % (cost - battle.credits)
 		Battle.Placement.LOCKED:
@@ -569,7 +585,7 @@ func _update_forecast() -> void:
 	_forecast_wave = upcoming
 	_forecast_seed = battle.roster_seed
 	var forecast_text := ""
-	var escort := data.escort_shield(upcoming, battle.difficulty) > 0
+	var escort := data.escort_shield(upcoming, battle.difficulty, battle.constraints) > 0
 	if upcoming == BattleData.FINAL_WAVE:
 		forecast_text = "보스 1 · 지원군 %d\n단계 전환 시 보호막 갱신" % (data.wave_count(upcoming) - 1)
 		if escort:
@@ -597,7 +613,7 @@ func _update_forecast() -> void:
 	forecast.text = forecast_text
 
 func toggle_build() -> void:
-	if battle.lost or battle.won or (not building and battle.credits < int(data.towers.lookup(build_id).cost)):
+	if battle.lost or battle.won or (not building and battle.credits < int(battle.tower_definition(build_id).cost)):
 		return
 	building = not building
 	selected = NONE
@@ -663,6 +679,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		match modal_kind:
 			"pause", "research", "catalog", "support", "difficulty":
 				close_modal()
+			"constraints":
+				show_difficulty()
 			"codex":
 				_close_codex()
 			"effects_settings":
@@ -740,7 +758,8 @@ func _boss_event(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color,
 		callout_time = 2.7
 
 func _wave_started(number: int) -> void:
-	Profile.record_wave(number, battle.difficulty)
+	if not battle.constraints.active():
+		Profile.record_wave(number, battle.difficulty)
 	result.text = ""
 	if number == BattleData.FINAL_WAVE:
 		wave_callout = ""
@@ -818,7 +837,7 @@ func show_pause() -> void:
 	button_at(panel, "계속하기", Rect2(36, 152, 408, 54), close_modal, true).grab_focus()
 	button_at(panel, "설정", Rect2(36, 214, 195, 54), show_settings.bind("pause_settings"))
 	button_at(panel, "도감 · K", Rect2(249, 214, 195, 54), show_codex)
-	button_at(panel, "다시 시작", Rect2(36, 276, 408, 54), start_game.bind(battle.difficulty))
+	button_at(panel, _restart_label(), Rect2(36, 276, 408, 54), start_game.bind(battle.difficulty))
 	button_at(panel, "메인 메뉴", Rect2(36, 338, 408, 54), show_menu)
 
 func show_codex() -> void:
@@ -838,7 +857,9 @@ func _close_codex() -> void:
 
 func _cleared(record: Dictionary) -> void:
 	Sound.play_music()
-	Profile.record_clear(record)
+	var constrained := battle.constraints.active()
+	if not constrained:
+		Profile.record_clear(record)
 	var entry := Profile.campaign_record(battle.difficulty)
 	callout_time = 0.0
 	toast.hide()
@@ -851,8 +872,9 @@ func _cleared(record: Dictionary) -> void:
 		["총 플레이 시간", _duration(record.seconds)], ["보스전 시간", _duration(record.finale)],
 		["남은 기지 HP", str(record.health)], ["총 처치", str(record.kills)],
 		["획득 재화", str(record.credits)], ["완료 연구", "%d / 100" % int(record.research)],
-		["타워 설치", "%d회" % int(record.installed)], ["최단 기록", _duration(entry.fastest_clear)],
+		["타워 설치", "%d회" % int(record.installed)],
 	]
+	stats.append(["제약", "%d종" % battle.constraints.count()] if constrained else ["최단 기록", _duration(entry.fastest_clear)])
 	for i in stats.size():
 		var x := 44 + int(i % 4) * 205
 		var y := 112 + floori(i / 4.0) * 110
@@ -861,12 +883,17 @@ func _cleared(record: Dictionary) -> void:
 	text_at(panel, "설치한 5단계 공격 타워", 44, 344, 19, MUTED)
 	var terminal := " · ".join(PackedStringArray(record.terminal))
 	text_at(panel, terminal if not terminal.is_empty() else "없음", 44, 380, 23, GOLD, 812)
-	if Profile.save_error:
+	if constrained:
+		text_at(panel, "제약 모드 클리어", 44, 445, 18, MENU_CYAN)
+	elif Profile.save_error:
 		text_at(panel, "클리어 기록을 저장하지 못했습니다.", 44, 445, 18, PINK)
 	else:
 		text_at(panel, "최고 방어 기록  ·  기지 HP %d" % entry.best_clear.health, 44, 445, 18, MUTED)
-	button_at(panel, "다시 시작", Rect2(44, 506, 390, 62), start_game.bind(battle.difficulty), true).grab_focus()
+	button_at(panel, _restart_label(), Rect2(44, 506, 390, 62), start_game.bind(battle.difficulty), true).grab_focus()
 	button_at(panel, "메인 메뉴", Rect2(466, 506, 390, 62), show_menu)
+
+func _restart_label() -> String:
+	return "일반 게임 다시 시작" if battle.constraints.active() else "다시 시작"
 
 func _duration(seconds: float) -> String:
 	var whole := maxi(0, floori(seconds))
@@ -876,10 +903,12 @@ func show_game_over() -> void:
 	var panel := _open_modal("defeat", Vector2(522, 412))
 	text_at(panel, "보스 탈출" if battle.boss_escaped and battle.health > 0 else "게임 오버", 36, 27, 47, PINK)
 	text_at(panel, "도달 웨이브", 39, 116, 19, MUTED)
-	text_at(panel, "최고 기록", 280, 116, 19, MUTED)
+	var constrained := battle.constraints.active()
+	text_at(panel, "적용 제약" if constrained else "최고 기록", 280, 116, 19, MUTED)
 	text_at(panel, str(battle.wave), 39, 148, 31, LIGHT, 222)
-	text_at(panel, str(Profile.campaign_record(battle.difficulty).wave), 280, 148, 31, GOLD, 206)
-	button_at(panel, "다시 시작", Rect2(36, 229, 450, 59), start_game.bind(battle.difficulty), true).grab_focus()
+	var detail := "%d종" % battle.constraints.count() if constrained else str(Profile.campaign_record(battle.difficulty).wave)
+	text_at(panel, detail, 280, 148, 31, GOLD, 206)
+	button_at(panel, _restart_label(), Rect2(36, 229, 450, 59), start_game.bind(battle.difficulty), true).grab_focus()
 	button_at(panel, "메인 메뉴", Rect2(36, 301, 450, 59), show_menu)
 
 func show_settings(return_to: String) -> void:
@@ -967,7 +996,7 @@ func show_catalog(show_all: bool = false) -> void:
 	var initial_focus := close
 	for i in ids.size():
 		var id := ids[i]
-		var def := data.towers.lookup(id)
+		var def := battle.tower_definition(id)
 		var ready := battle.research.unlocked.has(id)
 		var affordable := battle.credits >= int(def.cost)
 		var at := Vector2(34 + (i % columns) * 239, 143 + floori(float(i) / columns) * 100)
@@ -996,7 +1025,7 @@ func show_catalog(show_all: bool = false) -> void:
 		tile.accessibility_name = "%s, %s, %s" % [def.name, role, subtitle]
 		if id == build_id and not tile.disabled:
 			initial_focus = tile
-	_catalog_detail(detail, data.towers.lookup(build_id))
+	_catalog_detail(detail, battle.tower_definition(build_id))
 	initial_focus.grab_focus()
 
 func _catalog_detail(label: RichTextLabel, definition: Dictionary) -> void:
@@ -1062,7 +1091,7 @@ func _choose_tower(id: String) -> void:
 	if not battle.research.unlocked.has(id):
 		show_research(id)
 		return
-	if battle.credits < int(data.towers.lookup(id).cost):
+	if battle.credits < int(battle.tower_definition(id).cost):
 		return
 	build_id = id
 	close_modal()

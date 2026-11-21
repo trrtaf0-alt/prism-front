@@ -19,7 +19,11 @@ var status_rules: Dictionary = read_json("res://data/status.json")
 var towers := TowerRegistry.new(turret, read_json("res://data/towers.json").get("towers", []))
 var research := ResearchGraph.new(read_json("res://data/research.json").get("nodes", []), towers)
 
-func enemy_for_wave(base: Dictionary, wave: int, difficulty: StringName) -> Dictionary:
+func enemy_for_wave(base: Dictionary, wave: int, difficulty: StringName, constraints: RunConstraints = null) -> Dictionary:
+	var unit := _difficulty_enemy(base, wave, difficulty)
+	return constraints.enemy(unit) if constraints != null and constraints.active() else unit
+
+func _difficulty_enemy(base: Dictionary, wave: int, difficulty: StringName) -> Dictionary:
 	if base.id == "guardian":
 		return base
 	var tuning: Dictionary = difficulty_rules.get(str(difficulty), {})
@@ -73,12 +77,13 @@ func wave_reward(wave: int) -> int:
 func slot_rp_multiplier(wave: int) -> float:
 	return curve(balance.rp_scale, wave)
 
-func escort_shield(wave: int, difficulty: StringName) -> int:
+func escort_shield(wave: int, difficulty: StringName, constraints: RunConstraints = null) -> int:
 	var config: Dictionary = balance.get("escorts", {})
 	var anchors: Array = difficulty_rules.get(str(difficulty), {}).get("escort_shield", [])
 	if wave < int(config.get("first_wave", FINAL_WAVE + 1)) or anchors.is_empty():
 		return 0
-	return maxi(0, roundi(curve(anchors, wave)))
+	var amount := maxi(0, roundi(curve(anchors, wave)))
+	return RunConstraints.scaled(amount, constraints.value(&"enemy_shield")) if constraints != null else amount
 
 func spawn_interval(wave: int) -> float:
 	return maxf(0.04, 0.5 * pow(0.95, maxi(0, wave - 1)))

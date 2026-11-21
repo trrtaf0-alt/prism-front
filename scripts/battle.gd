@@ -12,7 +12,7 @@ signal support_visual(event: StringName, kind: int, start: Vector2, finish: Vect
 signal mob_visual(kind: StringName, start: Vector2, finish: Vector2, tint: Color, lifetime: float)
 signal attack_visual(style: String, origin: Vector2, end: Vector2, radius: float, tint: Color, life: float, stage: int)
 
-enum Placement { READY, OUTSIDE, OCCUPIED, TERRAIN, LOCKED, FUNDS, ENDED }
+enum Placement { READY, OUTSIDE, OCCUPIED, TERRAIN, LOCKED, LIMIT, FUNDS, ENDED }
 
 # All distances are measured in tiles. The display converts them to pixels.
 const HIT_RADIUS := 0.21
@@ -95,6 +95,13 @@ var support := TowerSupport.new()
 var arsenal := TowerArsenal.new()
 var field_diagonal: float
 var research: ResearchRun
+var constraints: RunConstraints
+var _tower_prices: Dictionary = {}
+var _tower_limit: int
+var _credit_percent: int
+var _rp_percent: int
+var _credit_remainder := 0
+var _rp_remainder := 0
 var data: BattleData
 var field: FieldMap
 var health: int
@@ -153,11 +160,15 @@ var _advanced_impact_budget := 4
 var _needs_cleanup := false
 var _maximum_step := 0.0
 
-func _init(map: FieldMap, rules: BattleData, mode: StringName = &"easy") -> void:
+func _init(map: FieldMap, rules: BattleData, mode: StringName = &"easy", levels: Dictionary = {}) -> void:
 	field = map
 	data = rules
 	difficulty = mode if BattleData.DIFFICULTIES.has(mode) else &"easy"
-	research = ResearchRun.new(data.research)
+	constraints = RunConstraints.new(levels)
+	research = ResearchRun.new(data.research, constraints.value(&"research_price"))
+	_tower_limit = constraints.value(&"tower_limit")
+	_credit_percent = constraints.value(&"credits")
+	_rp_percent = constraints.value(&"rp")
 	health = int(data.balance.base_health)
 	credits = int(data.balance.starting_credits)
 	_range = float(data.turret.range)
@@ -174,6 +185,24 @@ func _init(map: FieldMap, rules: BattleData, mode: StringName = &"easy") -> void
 		_bucket_leaders.append(null)
 		_used_slots.append(-1)
 
+func tower_definition(id: String) -> Dictionary:
+	var definition := data.towers.lookup(id)
+	if definition.is_empty() or constraints.value(&"tower_price") == 100:
+		return definition
+	if not _tower_prices.has(id):
+		var priced := definition.duplicate()
+		priced.cost = RunConstraints.scaled(int(definition.cost), constraints.value(&"tower_price"))
+		var refund_ratio := float(definition.get("refund_ratio", float(definition.refund) / float(definition.cost)))
+		priced.refund = floori(float(priced.cost) * refund_ratio)
+		_tower_prices[id] = priced
+	return _tower_prices[id]
+
+func tower_limit() -> int:
+	return _tower_limit
+
+func at_tower_limit() -> bool:
+	return _tower_limit > 0 and towers.size() >= _tower_limit
+
 func placement_status(cell: Vector2i, id: String) -> Placement:
 	if lost or won:
 		return Placement.ENDED
@@ -183,9 +212,11 @@ func placement_status(cell: Vector2i, id: String) -> Placement:
 		return Placement.OCCUPIED
 	if field.tile_at(cell) != ".":
 		return Placement.TERRAIN
-	var definition := data.towers.lookup(id)
+	var definition := tower_definition(id)
 	if definition.is_empty() or not research.unlocked.has(id):
 		return Placement.LOCKED
+	if at_tower_limit():
+		return Placement.LIMIT
 	return Placement.READY if credits >= int(definition.cost) else Placement.FUNDS
 
 func can_install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
@@ -197,7 +228,7 @@ func install(cell: Vector2i, id: String = TowerRegistry.BASE) -> bool:
 	var tower := Turret.new()
 	tower.cell = cell
 	tower.position = Vector2(cell) + Vector2(0.5, 0.5)
-	tower.definition = data.towers.lookup(id)
+	tower.definition = tower_definition(id)
 	tower.effective = tower.definition
 	_cache_range(tower, float(tower.definition.range))
 	towers.append(tower)
@@ -250,7 +281,7 @@ func start_wave() -> bool:
 	_rp_multiplier = data.slot_rp_multiplier(wave)
 	_interval = data.spawn_interval(wave)
 	_spawn_clock = _interval
-	_escort_shield = data.escort_shield(wave, difficulty)
+	_escort_shield = data.escort_shield(wave, difficulty, constraints)
 	var escort: Dictionary = data.balance.escorts if _escort_shield > 0 else {}
 	_roster = WaveRoster.new(data.mobs, wave, queued, roster_seed ^ wave, escort)
 	if wave == BattleData.FINAL_WAVE:
@@ -283,7 +314,7 @@ func _dispatch(delta: float) -> void:
 func _wave_enemy(definition: Dictionary) -> Dictionary:
 	var id: String = definition.id
 	if not _wave_enemies.has(id):
-		_wave_enemies[id] = data.enemy_for_wave(definition, wave, difficulty)
+		_wave_enemies[id] = data.enemy_for_wave(definition, wave, difficulty, constraints)
 	return _wave_enemies[id]
 
 func spawn(progress: float = 0.0, enemy_definition: Dictionary = {}) -> Drone:
@@ -362,8 +393,7 @@ func _finish_wave() -> void:
 		lost = true
 		defeated.emit(wave)
 		return
-	var reward := data.wave_reward(wave)
-	_award_credits(reward)
+	var reward := _award_credits(data.wave_reward(wave))
 	won = final
 	wave_finished.emit(wave, reward)
 	if won:
@@ -830,7 +860,7 @@ func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool
 		total_kills += 1
 		_award_credits(int(drone.definition.reward))
 		var base_rp := int(drone.definition.get("reward_rp", 0))
-		research.earn(roundi(base_rp * _rp_multiplier) if drone.primary else base_rp)
+		_award_rp(roundi(base_rp * _rp_multiplier) if drone.primary else base_rp)
 		var child: String = drone.definition.get("split_to", "")
 		if not child.is_empty():
 			queue_birth(drone.progress, child, EnemyRegistry.SPLIT_COUNT)
@@ -990,9 +1020,24 @@ func nearest_in_radius(center: Vector2, radius: float, seen: Dictionary, detect_
 			distance = squared
 	return nearest
 
-func _award_credits(amount: int) -> void:
+# Carry fractional awards within the current run so small rewards keep the same reduction.
+@warning_ignore("integer_division")
+func _award_credits(amount: int) -> int:
+	if _credit_percent != 100:
+		var total := amount * _credit_percent + _credit_remainder
+		amount = total / 100
+		_credit_remainder = total % 100
 	total_credits += amount
 	_credit(amount)
+	return amount
+
+@warning_ignore("integer_division")
+func _award_rp(amount: int) -> void:
+	if _rp_percent != 100:
+		var total := amount * _rp_percent + _rp_remainder
+		amount = total / 100
+		_rp_remainder = total % 100
+	research.earn(amount)
 
 func _credit(amount: int) -> void:
 	credits = mini(BattleData.NUMBER_LIMIT, credits + amount)

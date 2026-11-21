@@ -118,14 +118,14 @@ func _refresh() -> void:
 	var id := board.focus_id
 	var node: Dictionary = run.graph.nodes[id]
 	var state := run.state(id)
-	var def := registry.lookup(str(node.get("unlock", {}).get("id", "")))
+	var def: Dictionary = front.battle.tower_definition(str(node.get("unlock", {}).get("id", "")))
 	balance_label.text = "%d RP     ·     연구 %d / %d" % [run.points, run.completed.size(), run.graph.ids.size()]
 	heading.text = node.name
 	if _last_focus != id or _completed_count != run.completed.size():
-		_minimum = run.graph.minimum_cost(id, run.completed)
+		_minimum = run.minimum_cost(id)
 		_last_focus = id
 		_completed_count = run.completed.size()
-	cost.text = "%d RP    ·    남은 최소 %d RP" % [int(node.cost_rp), _minimum]
+	cost.text = "%d RP    ·    남은 최소 %d RP" % [run.cost(id), _minimum]
 	requirements.text = run.graph.requirement_text(node.requirements, run.completed)
 	if def.is_empty():
 		description.text = node.get("description", "%s 계열의 연결 연구입니다." % ResearchGraph.LANES[int(node.lane)])

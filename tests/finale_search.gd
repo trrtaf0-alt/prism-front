@@ -120,21 +120,21 @@ func _run() -> void:
 	quit()
 
 func _restore() -> Battle:
-	var sim := Battle.new(map, rules, StringName(snapshot.difficulty))
+	var sim := Battle.new(map, rules, StringName(snapshot.difficulty), snapshot.get("constraints", {}))
 	sim.wave = 49
 	sim.health = int(snapshot.health)
 	sim.roster_seed = int(snapshot.seed)
 	var completed: Array = snapshot.completed
 	var points := int(snapshot.points)
 	for id: String in completed:
-		points += int(rules.research.nodes[id].cost_rp)
+		points += sim.research.cost(id)
 	sim.research.earn(points)
 	for id: String in rules.research.ordered:
 		if id in completed and not sim.research.purchase(id):
 			return null
 	sim.credits = int(snapshot.credits)
 	for row: Array in snapshot.towers:
-		sim.credits += int(rules.towers.lookup(row[0]).cost)
+		sim.credits += int(sim.tower_definition(row[0]).cost)
 	for row: Array in snapshot.towers:
 		var cell := Vector2i(int(row[1]), int(row[2]))
 		if not sim.install(cell, row[0]):
@@ -142,6 +142,8 @@ func _restore() -> Battle:
 		var tower: Battle.Turret = sim.occupied[cell]
 		tower.cooldown = float(row[3])
 		tower.angle = float(row[4])
+	sim._credit_remainder = int(snapshot.get("credit_remainder", 0))
+	sim._rp_remainder = int(snapshot.get("rp_remainder", 0))
 	sim.support.command_time = float(snapshot.command_clock)
 	return sim
 
@@ -151,7 +153,7 @@ func _buy_until(sim: Battle, id: String, limit: int) -> void:
 			break
 
 func _place(sim: Battle, id: String) -> bool:
-	var def := rules.towers.lookup(id)
+	var def := sim.tower_definition(id)
 	if sim.credits < int(def.cost) or not sim.research.unlocked.has(id):
 		return false
 	var best := Vector2i(-1, -1)

@@ -84,13 +84,14 @@ func _refresh(_value: float) -> void:
 func _show_entry(index: int) -> void:
 	var id: String = _entries.get_item_metadata(index)
 	var data: BattleData = _host.data
+	var battle: Battle = _host.battle
 	if _enemies:
 		var mode: StringName = _difficulty.get_selected_metadata()
 		var def := data.mobs.lookup(id)
 		_wave_label.visible = not def.boss
 		_wave.visible = not def.boss
 		_difficulty.position.x = 0.0 if def.boss else 226.0
-		_detail.text = CombatReference.enemy_text(def, data, int(_wave.value), mode)
+		_detail.text = CombatReference.enemy_text(def, data, int(_wave.value), mode, battle.constraints if battle != null else null)
 	else:
-		_detail.text = CombatReference.tower_text(data.towers.lookup(id), data)
+		_detail.text = CombatReference.tower_text(battle.tower_definition(id) if battle != null else data.towers.lookup(id), data)
 	_detail.scroll_to_line(0)
