@@ -10,54 +10,85 @@ var _wave_controls: Control
 var _wave_label: Label
 var _wave: SpinBox
 var _difficulty: OptionButton
+var _difficulty_x := 226.0
+var _title_size := 30
 var _enemies := false
 
-func setup(host: Control, initial_wave: int, initial_mode: StringName, close: Callable) -> void:
+func setup(host: Control, initial_wave: int, initial_mode: StringName, close: Callable, mobile: bool) -> void:
 	_host = host
+	_title_size = 44 if mobile else 30
 	mouse_filter = MOUSE_FILTER_IGNORE
-	_host.text_at(self, "도감", 36, 26, 39)
-	_host.button_at(self, "닫기", Rect2(1260, 27, 100, 48), close)
-	_tower_tab = _host.button_at(self, "타워  %d" % _host.data.towers.ids.size(), Rect2(36, 95, 150, 48), _populate.bind(false))
-	_enemy_tab = _host.button_at(self, "적  %d" % _host.data.mobs.definitions.size(), Rect2(198, 95, 150, 48), _populate.bind(true))
+	_host.text_at(self, "도감", 36, 26, 50 if mobile else 39)
+	_host.button_at(self, "닫기", Rect2(size.x - 220, 24, 184, 82) if mobile else Rect2(1260, 27, 100, 48), close)
+	var tower_tab_rect := Rect2(204, 24, 208, 82) if mobile else Rect2(36, 95, 150, 48)
+	var enemy_tab_rect := Rect2(428, 24, 208, 82) if mobile else Rect2(198, 95, 150, 48)
+	_tower_tab = _host.button_at(self, "타워  %d" % _host.data.towers.ids.size(), tower_tab_rect, _populate.bind(false))
+	_enemy_tab = _host.button_at(self, "적  %d" % _host.data.mobs.definitions.size(), enemy_tab_rect, _populate.bind(true))
 	var group := ButtonGroup.new()
 	for button in [_tower_tab, _enemy_tab]:
 		button.toggle_mode = true
 		button.button_group = group
 
 	_entries = ItemList.new()
-	_entries.add_theme_font_size_override("font_size", 23)
-	_entries.add_theme_constant_override("v_separation", 15)
+	_entries.add_theme_font_size_override("font_size", 34 if mobile else 23)
+	_entries.add_theme_constant_override("v_separation", 27 if mobile else 15)
 	_entries.add_theme_stylebox_override("panel", _host.box("#101820", "#314451"))
-	_host.place(_entries, self, Rect2(36, 158, 312, 669))
+	var list_rect := Rect2(36, 132, 416, size.y - 168) if mobile else Rect2(36, 158, 312, 669)
+	_host.place(_entries, self, list_rect)
 	_entries.item_selected.connect(_show_entry)
+	if mobile:
+		_enable_mobile_list(list_rect)
 
-	_host.panel_at(self, Rect2(370, 158, 990, 669), "#111921", "#314451")
+	var body := Rect2(478, 132, size.x - 514, size.y - 168) if mobile else Rect2(370, 158, 990, 669)
+	_host.panel_at(self, body, "#111921", "#314451")
 	_detail = RichTextLabel.new()
 	_detail.bbcode_enabled = true
-	_detail.add_theme_font_size_override("normal_font_size", 24)
-	_detail.add_theme_constant_override("line_separation", 8)
-	_host.place(_detail, self, Rect2(402, 183, 926, 616))
+	if mobile:
+		_host.mobile_reading_text(_detail)
+	else:
+		_detail.add_theme_font_size_override("normal_font_size", 24)
+		_detail.add_theme_constant_override("line_separation", 8)
+	_host.place(_detail, self, body.grow(-32.0) if mobile else Rect2(402, 183, 926, 616))
 
 	_wave_controls = Control.new()
 	_wave_controls.mouse_filter = MOUSE_FILTER_IGNORE
-	_host.place(_wave_controls, self, Rect2(370, 95, 990, 48))
-	_wave_label = _host.text_at(_wave_controls, "웨이브", 0, 9, 23)
+	_host.place(_wave_controls, self, Rect2(720, 24, 770, 82) if mobile else Rect2(370, 95, 990, 48))
+	_wave_label = _host.text_at(_wave_controls, "웨이브", 0, 18 if mobile else 9, 31 if mobile else 23)
 	_wave = SpinBox.new()
 	_wave.min_value = 1
 	_wave.max_value = BattleData.FINAL_WAVE
 	_wave.value = initial_wave
-	_host.place(_wave, _wave_controls, Rect2(90, 0, 120, 48))
+	if mobile:
+		_wave.get_line_edit().add_theme_font_size_override("font_size", 33)
+	_host.place(_wave, _wave_controls, Rect2(122, 0, 168, 82) if mobile else Rect2(90, 0, 120, 48))
 	_difficulty = OptionButton.new()
 	for mode: StringName in BattleData.DIFFICULTIES:
 		_difficulty.add_item(BattleData.DIFFICULTIES[mode])
 		_difficulty.set_item_metadata(_difficulty.item_count - 1, mode)
 		if mode == initial_mode:
 			_difficulty.select(_difficulty.item_count - 1)
-	_host.place(_difficulty, _wave_controls, Rect2(226, 0, 150, 48))
+	if mobile:
+		_difficulty_x = 310.0
+		_difficulty.add_theme_font_size_override("font_size", 32)
+		_difficulty.get_popup().add_theme_font_size_override("font_size", 30)
+	_host.place(_difficulty, _wave_controls, Rect2(_difficulty_x, 0, 216, 82) if mobile else Rect2(_difficulty_x, 0, 150, 48))
 	_wave.value_changed.connect(_refresh)
 	_difficulty.item_selected.connect(_refresh)
 	_populate(false)
 	_tower_tab.grab_focus()
+
+func _enable_mobile_list(rect: Rect2) -> void:
+	var input_area := Control.new()
+	_host.place(input_area, self, rect)
+	var gesture := TouchGesture.new()
+	input_area.gui_input.connect(func(event: InputEvent): gesture.handle(event))
+	gesture.panned.connect(func(delta: Vector2): _entries.get_v_scroll_bar().value -= delta.y)
+	gesture.tapped.connect(func(point: Vector2):
+		var index := _entries.get_item_at_position(point, true)
+		if index >= 0:
+			_entries.select(index)
+			_show_entry(index)
+	)
 
 func _populate(enemies: bool) -> void:
 	_enemies = enemies
@@ -90,8 +121,8 @@ func _show_entry(index: int) -> void:
 		var def := data.mobs.lookup(id)
 		_wave_label.visible = not def.boss
 		_wave.visible = not def.boss
-		_difficulty.position.x = 0.0 if def.boss else 226.0
-		_detail.text = CombatReference.enemy_text(def, data, int(_wave.value), mode, battle.constraints if battle != null else null)
+		_difficulty.position.x = 0.0 if def.boss else _difficulty_x
+		_detail.text = CombatReference.enemy_text(def, data, int(_wave.value), mode, battle.constraints if battle != null else null, _title_size)
 	else:
-		_detail.text = CombatReference.tower_text(battle.tower_definition(id) if battle != null else data.towers.lookup(id), data)
+		_detail.text = CombatReference.tower_text(battle.tower_definition(id) if battle != null else data.towers.lookup(id), data, _title_size)
 	_detail.scroll_to_line(0)

@@ -1,6 +1,9 @@
 class_name MobileTowerPicker
 extends Control
 
+const MARGIN := 30.0
+const LIST_WIDTH := 560.0
+
 var _front
 var _scroll: ScrollContainer
 var _list: VBoxContainer
@@ -14,13 +17,14 @@ func setup(host: Control, show_all: bool, initial: String) -> void:
 	_front = host
 	mouse_filter = MOUSE_FILTER_IGNORE
 	var battle: Battle = _front.battle
-	_front.text_at(self, "타워 선택", 40, 23, 42)
-	_front.text_at(self, "재화 %d" % battle.credits, 1040, 37, 26)
-	_front.button_at(self, "닫기", Rect2(1370, 24, 187, 74), _front.close_modal)
-	_front.button_at(self, "해금됨", Rect2(40, 101, 238, 72), _front.show_catalog.bind(false), not show_all)
-	_front.button_at(self, "전체", Rect2(294, 101, 238, 72), _front.show_catalog.bind(true), show_all)
+	_front.text_at(self, "타워 선택", MARGIN, 23, 50)
+	var funds: Label = _front.text_at(self, "재화 %s" % CombatReference.number(battle.credits), size.x - 715, 40, 32, Color("#dcc197"), 470)
+	funds.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_front.button_at(self, "닫기", Rect2(size.x - 224, 23, 194, 82), _front.close_modal)
+	_front.button_at(self, "해금됨", Rect2(MARGIN, 122, 273, 76), _front.show_catalog.bind(false), not show_all)
+	_front.button_at(self, "전체", Rect2(317, 122, 273, 76), _front.show_catalog.bind(true), show_all)
 
-	var list_rect := Rect2(40, 186, 560, 672)
+	var list_rect := Rect2(MARGIN, 217, LIST_WIDTH, size.y - 247)
 	_scroll = ScrollContainer.new()
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	_front.place(_scroll, self, list_rect)
@@ -34,13 +38,14 @@ func setup(host: Control, show_all: bool, initial: String) -> void:
 	_gesture.panned.connect(func(delta: Vector2): _scroll.scroll_vertical -= roundi(delta.y))
 	_gesture.tapped.connect(_tap_tower)
 
-	_front.panel_at(self, Rect2(626, 103, 931, 664), "#101820", "#314451")
+	var detail_x := LIST_WIDTH + 2 * MARGIN
+	var detail_width := size.x - detail_x - MARGIN
+	_front.panel_at(self, Rect2(detail_x, 122, detail_width, size.y - 260), "#101820", "#314451")
 	_details = RichTextLabel.new()
 	_details.bbcode_enabled = true
-	_details.add_theme_font_size_override("normal_font_size", 29)
-	_details.add_theme_constant_override("line_separation", 10)
-	_front.place(_details, self, Rect2(654, 132, 875, 605))
-	_action = _front.button_at(self, "", Rect2(626, 784, 931, 74), _choose, true)
+	_front.mobile_reading_text(_details)
+	_front.place(_details, self, Rect2(detail_x + 34, 151, detail_width - 68, size.y - 318))
+	_action = _front.button_at(self, "", Rect2(detail_x, size.y - 120, detail_width, 90), _choose, true)
 
 	var first: Button
 	var initial_button: Button
@@ -64,8 +69,8 @@ func _add_tower(id: String, def: Dictionary, unlocked: bool) -> Button:
 	var button := Button.new()
 	button.text = "%s  ·  %d%s" % [def.name, def.cost, "" if unlocked else "  ·  연구"]
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	button.custom_minimum_size.y = 83.0
-	button.add_theme_font_size_override("font_size", 28)
+	button.custom_minimum_size.y = 94.0
+	button.add_theme_font_size_override("font_size", 32)
 	button.add_theme_color_override("font_color", def.tint.lightened(0.27))
 	button.toggle_mode = true
 	button.button_group = _group
@@ -88,7 +93,7 @@ func _select(id: String) -> void:
 	_selected = id
 	var battle: Battle = _front.battle
 	var def := battle.tower_definition(id)
-	_details.text = CombatReference.tower_text(def, battle.data)
+	_details.text = CombatReference.tower_text(def, battle.data, 44)
 	_details.scroll_to_line(0)
 	if battle.research.unlocked.has(id):
 		_action.text = "배치 준비" if battle.credits >= int(def.cost) else "재화 %d 부족" % (int(def.cost) - battle.credits)

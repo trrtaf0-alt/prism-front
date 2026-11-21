@@ -20,8 +20,8 @@ static func tower_summary(def: Dictionary) -> String:
 		hit = "받는 피해 +%s  ·  최대 %d중첩" % [percent(def.mark_bonus), def.mark_cap]
 	return "%s\n사거리 %s  ·  %s" % [hit, reach, TowerRegistry.ATTACK_NAMES[def.attack]]
 
-static func tower_text(def: Dictionary, data: BattleData) -> String:
-	var rows := PackedStringArray([_heading(def.name), tower_summary(def)])
+static func tower_text(def: Dictionary, data: BattleData, title_size: int = 30) -> String:
+	var rows := PackedStringArray([_heading(def.name, title_size), tower_summary(def)])
 	var tier := "시작 타워" if def.stage == 0 else "%d단계" % def.stage
 	rows.append("%s  ·  설치 %s  ·  판매 +%s" % [tier, number(def.cost), number(def.refund)])
 	if not def.research_id.is_empty():
@@ -78,14 +78,14 @@ static func tower_text(def: Dictionary, data: BattleData) -> String:
 	rows.append("자동 조준  출구에 가까운 적 우선")
 	return "\n".join(rows)
 
-static func enemy_text(base: Dictionary, data: BattleData, wave: int, mode: StringName, constraints: RunConstraints = null) -> String:
+static func enemy_text(base: Dictionary, data: BattleData, wave: int, mode: StringName, constraints: RunConstraints = null, title_size: int = 30) -> String:
 	var actual_wave := BattleData.FINAL_WAVE if base.boss else wave
 	var unit := data.enemy_for_wave(base, actual_wave, mode, constraints)
 	var appearance := "능력으로 생성" if unit.child else "%d웨이브부터 편성" % int(unit.first_wave)
 	if unit.boss:
 		appearance = "%d웨이브에 1기" % BattleData.FINAL_WAVE
 	var rp := int(unit.reward_rp) if unit.child else roundi(float(unit.reward_rp) * data.slot_rp_multiplier(actual_wave))
-	var rows := PackedStringArray([_heading(unit.name), appearance])
+	var rows := PackedStringArray([_heading(unit.name, title_size), appearance])
 	if not unit.child and not unit.boss and wave < int(unit.first_wave):
 		rows.append("선택한 웨이브에는 아직 등장하지 않습니다.")
 	rows.append("")
@@ -140,5 +140,5 @@ static func _append_recovery(rows: PackedStringArray, regen: Dictionary, boost: 
 			number(boost.interval), number(boost.range), int(boost.targets), percent(boost.bonus), number(boost.duration),
 		])
 
-static func _heading(title: String) -> String:
-	return "[font_size=30][b]%s[/b][/font_size]" % title
+static func _heading(title: String, font_size: int) -> String:
+	return "[font_size=%d][b]%s[/b][/font_size]" % [font_size, title]

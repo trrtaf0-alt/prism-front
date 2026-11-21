@@ -56,6 +56,7 @@ func _run() -> void:
 	check(ui.modal.texture_filter == CanvasItem.TEXTURE_FILTER_NEAREST, "mobile panels share the HUD glyph sampling")
 	var picker := ui.modal.get_child(0).get_child(0) as MobileTowerPicker
 	check(picker != null and picker._details.text.contains("기본 피해 1"), "mobile catalog presents base tower stats")
+	check(picker._details.size.x > 1_000 and picker._details.get_theme_font_size("normal_font_size") >= 34, "mobile tower stats use the wide reading column")
 	await _tap_button(ui.modal, "전체")
 	picker = ui.modal.get_child(0).get_child(0) as MobileTowerPicker
 	check(picker._list.get_child_count() == sim.data.towers.ids.size(), "all existing towers are in the mobile catalog")
@@ -86,6 +87,7 @@ func _run() -> void:
 	check(sim.wave == 1 and sim.active, "touch starts the wave")
 	await _capture("android-battle")
 	await _boss_text(sim)
+	await _codex()
 	await _tap_control(ui.research_button)
 	if _expect_modal("research"):
 		await _research(sim)
@@ -100,6 +102,36 @@ func _run() -> void:
 				check(ui.modal.find_children("*", "HSlider", true, false).size() == 5, "mobile effect settings include adjustable render costs")
 				await _capture("android-effects")
 	_finish()
+
+func _codex() -> void:
+	await _tap_control(ui.screen.get_node("BattleCodex"))
+	if not _expect_modal("codex"):
+		return
+	var codex := ui.modal.get_child(0).get_child(0) as CombatCodex
+	await _tap_control(codex._enemy_tab)
+	var list := codex._entries
+	var point := Vector2(70, 100)
+	var item := list.get_item_at_position(point, true)
+	await _tap(_logical_to_input(list, point))
+	check(item > 0 and list.is_selected(item) and codex._detail.text.contains(list.get_item_text(item)), "mobile codex row opens enemy details")
+	await _swipe(_logical_to_input(list, Vector2(90, 730)), _logical_to_input(list, Vector2(90, 180)))
+	check(list.get_v_scroll_bar().value > 0 and list.is_selected(item), "mobile codex list scrolls without changing the selected row")
+	var index := 0
+	while index < list.item_count and list.get_item_metadata(index) != "boss":
+		index += 1
+	if index == list.item_count:
+		check(false, "final boss is present in the mobile codex")
+		return
+	list.select(index)
+	list.ensure_current_is_visible()
+	codex._show_entry(index)
+	await process_frame
+	var details := codex._detail
+	await _swipe(_logical_to_input(details, Vector2(180, 640)), _logical_to_input(details, Vector2(180, 120)))
+	check(details.get_v_scroll_bar().value > 0, "mobile codex body scrolls by touch")
+	await _capture("android-codex")
+	await _tap_button(ui.modal, "닫기")
+	check(ui.modal == null and ui.battle.active, "closing the mobile codex resumes the current wave")
 
 func _boss_text(sim: Battle) -> void:
 	var definition := sim.data.mobs.lookup("boss").duplicate()
@@ -132,6 +164,7 @@ func _field_gestures() -> void:
 func _research(sim: Battle) -> void:
 	var board: ResearchBoard = ui.research_screen.board
 	check(board.mobile and board.zoom > 1.0, "research starts with readable mobile cards")
+	check(ui.research_screen.description.get_theme_font_size("font_size") >= 34, "mobile research body uses the reading font size")
 	var start := _logical_to_input(board, Vector2(220, 395))
 	var midpoint := _logical_to_input(board, Vector2(420, 395))
 	var end := _logical_to_input(board, Vector2(575, 395))

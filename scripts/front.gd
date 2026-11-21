@@ -11,6 +11,7 @@ const NONE := Vector2i(-1, -1)
 const BASE_BAR_WIDTH := 138.0
 const BOSS_BAR_WIDTH := 600.0
 const INSPECT_BAR_WIDTH := 274.0
+const MOBILE_READING_SIZE := Vector2(1856, 1016)
 
 var data := BattleData.new()
 var map := FieldMap.new()
@@ -189,6 +190,14 @@ func panel_at(parent: Node, rect: Rect2, fill: String = "#171c21", border: Strin
 	place(panel, parent, rect)
 	return panel
 
+func mobile_reading_text(label: RichTextLabel) -> void:
+	for style in ["normal_font_size", "bold_font_size", "italics_font_size", "bold_italics_font_size"]:
+		label.add_theme_font_size_override(style, 34)
+	label.add_theme_constant_override("line_separation", 14)
+	var gesture := TouchGesture.new()
+	label.gui_input.connect(func(event: InputEvent): gesture.handle(event))
+	gesture.panned.connect(func(delta: Vector2): label.get_v_scroll_bar().value -= delta.y)
+
 func _drop(node: Node) -> void:
 	if is_instance_valid(node):
 		remove_child(node)
@@ -222,7 +231,7 @@ func show_menu() -> void:
 	var mobile: bool = Profile.mobile_mode
 	var play := button_at(screen, "게임 시작", Rect2(165, 550, 414, 91) if mobile else Rect2(165, 550, 330, 70), show_difficulty)
 	play.name = "StartGame"
-	play.add_theme_font_size_override("font_size", 27)
+	play.add_theme_font_size_override("font_size", 38 if mobile else 27)
 	_style_menu_button(play, MENU_CYAN, true)
 	play.disabled = not map_error.is_empty()
 
@@ -469,7 +478,7 @@ func _right_hud_text(value: String, x: float, y: float, font_size: int, color: C
 func _hud_button(value: String, rect: Rect2, action: Callable, primary: bool = false) -> Button:
 	var button := button_at(screen, value, rect, action)
 	if Profile.mobile_mode:
-		button.add_theme_font_size_override("font_size", 25)
+		button.add_theme_font_size_override("font_size", 29)
 		button.add_theme_stylebox_override("normal", box("#192b2b" if primary else "#121a22", "#829d95" if primary else "#586873"))
 		button.add_theme_stylebox_override("disabled", box("#101820", "#34414a"))
 	else:
@@ -961,12 +970,12 @@ func show_pause() -> void:
 
 func show_codex() -> void:
 	_codex_from_pause = modal_kind == "pause"
-	var panel := _open_modal("codex", Vector2(1396, 861))
+	var panel := _open_modal("codex", MOBILE_READING_SIZE if Profile.mobile_mode else Vector2(1396, 861))
 	var codex := CombatCodex.new()
 	place(codex, panel, Rect2(Vector2.ZERO, panel.size))
 	var wave := clampi(battle.wave, 1, BattleData.FINAL_WAVE) if game else 1
 	var mode := battle.difficulty if game else &"easy"
-	codex.setup(self, wave, mode, _close_codex)
+	codex.setup(self, wave, mode, _close_codex, Profile.mobile_mode)
 
 func _close_codex() -> void:
 	if _codex_from_pause:
@@ -1070,13 +1079,13 @@ func show_settings(return_to: String) -> void:
 	button_at(panel, "닫기", Rect2(318, 595, 266, 56), _leave_settings, true).grab_focus()
 
 func _show_mobile_settings(return_to: String) -> void:
-	var panel := _open_modal(return_to, Vector2(750, 626))
-	text_at(panel, "설정", 36, 24, 43)
+	var panel := _open_modal(return_to, Vector2(960, 626))
+	text_at(panel, "설정", 36, 24, 50)
 	_settings_slider(panel, "마스터 볼륨", 137, &"master")
 	_settings_slider(panel, "효과음 볼륨", 245, &"effects")
 	_settings_slider(panel, "배경음악 볼륨", 353, &"music")
-	button_at(panel, "전투 효과 설정", Rect2(36, 477, 420, 91), show_effect_settings)
-	button_at(panel, "닫기", Rect2(473, 477, 241, 91), _leave_settings, true)
+	button_at(panel, "전투 효과 설정", Rect2(36, 477, 528, 91), show_effect_settings)
+	button_at(panel, "닫기", Rect2(586, 477, 338, 91), _leave_settings, true)
 
 func can_open_research() -> bool:
 	return game and not battle.lost and not battle.won and (not battle.active or bool(data.balance.research_available_during_wave))
@@ -1084,7 +1093,7 @@ func can_open_research() -> bool:
 func show_research(tower_id: String = "") -> void:
 	if not can_open_research():
 		return
-	var panel := _open_modal("research", Vector2(1848, 1002))
+	var panel := _open_modal("research", MOBILE_READING_SIZE if Profile.mobile_mode else Vector2(1848, 1002))
 	research_screen = ResearchScreen.new()
 	place(research_screen, panel, Rect2(Vector2.ZERO, panel.size))
 	research_screen.setup(self, battle.research, data.towers, research_view, tower_id)
@@ -1104,7 +1113,7 @@ func show_catalog(show_all: bool = false) -> void:
 	if battle.lost or battle.won:
 		return
 	if Profile.mobile_mode:
-		var pane := _open_modal("catalog", Vector2(1597, 897))
+		var pane := _open_modal("catalog", MOBILE_READING_SIZE)
 		var picker := MobileTowerPicker.new()
 		place(picker, pane, Rect2(Vector2.ZERO, pane.size))
 		picker.setup(self, show_all, build_id)
@@ -1237,15 +1246,19 @@ func _choose_tower(id: String) -> void:
 	_sync_selection()
 
 func show_effect_settings() -> void:
-	var panel := _open_modal("effects_settings", Vector2(780, 919) if Profile.mobile_mode else Vector2(692, 810))
-	text_at(panel, "전투 효과 설정", 35, 24, 39)
-	text_at(panel, "효과 품질", 38, 108, 22, MUTED)
+	var mobile: bool = Profile.mobile_mode
+	var panel := _open_modal("effects_settings", Vector2(960, 919) if mobile else Vector2(692, 810))
+	text_at(panel, "전투 효과 설정", 35, 24, 50 if mobile else 39)
+	text_at(panel, "효과 품질", 38, 104 if mobile else 108, 32 if mobile else 22, LIGHT if mobile else MUTED)
 	var quality := OptionButton.new()
+	if mobile:
+		quality.add_theme_font_size_override("font_size", 32)
+		quality.get_popup().add_theme_font_size_override("font_size", 30)
 	for label in ["최소", "낮음", "보통", "높음"]:
 		quality.add_item(label)
 	quality.select(Profile.fx_quality)
 	quality.item_selected.connect(_set_fx_quality)
-	place(quality, panel, Rect2(320, 92, 421, 67) if Profile.mobile_mode else Rect2(320, 104, 334, 46))
+	place(quality, panel, Rect2(380, 92, 542, 67) if mobile else Rect2(320, 104, 334, 46))
 	_visual_slider(panel, "파티클 밀도", "fx_particles", 174)
 	_visual_slider(panel, "화면 섬광", "fx_flash", 262)
 	_visual_slider(panel, "화면 흔들림", "fx_shake", 350)
@@ -1253,22 +1266,25 @@ func show_effect_settings() -> void:
 	_visual_slider(panel, "충격 왜곡", "fx_warp", 526)
 	var dim := CheckButton.new()
 	dim.text = "강한 밝기 낮추기"
+	if mobile:
+		dim.add_theme_font_size_override("font_size", 32)
 	dim.button_pressed = Profile.fx_dim
 	dim.toggled.connect(_set_fx_dim)
-	place(dim, panel, Rect2(36, 675, 708, 68) if Profile.mobile_mode else Rect2(36, 614, 618, 55))
-	button_at(panel, "설정으로 돌아가기", Rect2(36, 793, 708, 86) if Profile.mobile_mode else Rect2(36, 722, 618, 54), show_settings.bind(settings_origin), true).grab_focus()
+	place(dim, panel, Rect2(36, 675, 888, 68) if mobile else Rect2(36, 614, 618, 55))
+	button_at(panel, "설정으로 돌아가기", Rect2(36, 793, 888, 86) if mobile else Rect2(36, 722, 618, 54), show_settings.bind(settings_origin), true).grab_focus()
 
 func _visual_slider(parent: Control, title: String, key: String, y: float) -> void:
 	var value := float(Profile.get(key))
-	text_at(parent, title, 38, y, 21, MUTED)
-	var percent := text_at(parent, "%d%%" % roundi(value * 100), parent.size.x - 158, y, 25 if Profile.mobile_mode else 21, MINT, 120)
+	var font_size := 32 if Profile.mobile_mode else 21
+	text_at(parent, title, 38, y, font_size, LIGHT if Profile.mobile_mode else MUTED)
+	var percent := text_at(parent, "%d%%" % roundi(value * 100), parent.size.x - 158, y, font_size, MINT, 120)
 	percent.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var slider := HSlider.new()
 	slider.max_value = 100.0
 	slider.step = 1.0
 	slider.value = value * 100.0
 	slider.value_changed.connect(_set_fx_value.bind(key, percent))
-	place(slider, parent, Rect2(38, y + 34, parent.size.x - 76, 47) if Profile.mobile_mode else Rect2(38, y + 37, 616, 25))
+	place(slider, parent, Rect2(38, y + 41, parent.size.x - 76, 45) if Profile.mobile_mode else Rect2(38, y + 37, 616, 25))
 
 func _set_fx_quality(index: int) -> void:
 	Profile.fx_quality = index
@@ -1285,8 +1301,9 @@ func _set_fx_value(value: float, key: String, percent: Label) -> void:
 
 func _settings_slider(parent: Control, name_text: String, y: float, key: StringName) -> void:
 	var value: float = Profile.get(key)
-	text_at(parent, name_text, 36, y - 20, 21, MUTED)
-	var number := text_at(parent, "%d%%" % roundi(value * 100), parent.size.x - 128, y - 22, 25 if Profile.mobile_mode else 21, MINT, 92)
+	var font_size := 32 if Profile.mobile_mode else 21
+	text_at(parent, name_text, 36, y - 20, font_size, LIGHT if Profile.mobile_mode else MUTED)
+	var number := text_at(parent, "%d%%" % roundi(value * 100), parent.size.x - 128, y - 22, font_size, MINT, 92)
 	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var slider := HSlider.new()
 	slider.min_value = 0
