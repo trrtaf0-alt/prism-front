@@ -200,7 +200,7 @@ func _update_batches() -> void:
 	if _dim_towers != dim:
 		_dim_towers = dim
 		_tower_material.set_shader_parameter("emission", 0.29 if dim else 0.68)
-	var halos: bool = _preferences.fx_quality > 0
+	var halos: bool = _preferences.fx_quality > (1 if _preferences.mobile_mode else 0)
 	var glow_strength := 0.46 if dim else 1.0
 	_tower_halos.begin(battle.towers.size() if halos else 0)
 	_bases.begin(battle.towers.size())
@@ -228,7 +228,12 @@ func _update_batches() -> void:
 	_tower_halos.finish()
 	_bases.finish()
 	_heads.finish()
-	_mobs.submit(battle, ORIGIN, _preferences.fx_dim, _preferences.fx_quality)
+	# On a zoomed mobile view, keep off-screen bodies out of the render batches.
+	var visible_region := Rect2()
+	if _preferences.mobile_mode and scale.x > 1.02:
+		var local_bounds: Rect2 = transform.affine_inverse() * SCREEN
+		visible_region = Rect2((local_bounds.position - ORIGIN) / CELL, local_bounds.size / CELL).grow(2.0)
+	_mobs.submit(battle, ORIGIN, _preferences.fx_dim, _preferences.fx_quality, visible_region)
 	var traces := 0
 	var detail: bool = _preferences.fx_quality >= 2
 	_bolts.begin(battle.bolts.size() + (mini(80, battle.bolts.size()) if detail else 0))

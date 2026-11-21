@@ -8,33 +8,38 @@ var _host
 var _levels: Dictionary = {}
 var _buttons: Dictionary = {}
 var _effects: Dictionary = {}
+var _steppers: Dictionary = {}
 var _difficulty: OptionButton
 var _summary: Label
 
 func setup(host: Control) -> void:
 	_host = host
+	var mobile: bool = host.get_tree().root.get_node("Profile").mobile_mode
 	mouse_filter = MOUSE_FILTER_IGNORE
 	_host.text_at(self, "제약 모드", 38, 22, 40)
 	_host.text_at(self, "0은 꺼짐 · 1~5단계를 조합해 이번 게임에 적용", 40, 87, 20, MUTED)
-	_host.button_at(self, "돌아가기", Rect2(1190, 26, 114, 48), _host.show_difficulty)
+	_host.button_at(self, "돌아가기", Rect2(1135, 20, 169, 73) if mobile else Rect2(1190, 26, 114, 48), _host.show_difficulty)
 	_host.text_at(self, "난이도", 884, 85, 20, MUTED)
 	_difficulty = OptionButton.new()
 	for mode: StringName in BattleData.DIFFICULTIES:
 		_difficulty.add_item(BattleData.DIFFICULTIES[mode])
 		_difficulty.set_item_metadata(_difficulty.item_count - 1, mode)
 	_difficulty.select(1)
-	_host.place(_difficulty, self, Rect2(987, 72, 183, 51))
+	_host.place(_difficulty, self, Rect2(965, 79, 153, 65) if mobile else Rect2(987, 72, 183, 51))
 
 	var index := 0
 	for id: StringName in RunConstraints.DEFINITIONS:
 		var column := int(index >= 5)
 		var row := index - column * 5
-		_make_row(id, Vector2(38 + column * 640, 143 + row * 102))
+		if mobile:
+			_make_stepper(id, Vector2(38 + column * 640, 154 + row * 113))
+		else:
+			_make_row(id, Vector2(38 + column * 640, 143 + row * 102))
 		index += 1
 
-	_summary = _host.text_at(self, "", 38, 787, 21, MUTED)
-	_host.button_at(self, "모두 초기화", Rect2(830, 774, 184, 57), _reset)
-	var start: Button = _host.button_at(self, "이 설정으로 시작", Rect2(1030, 774, 274, 57), _start, true)
+	_summary = _host.text_at(self, "", 38, 881 if mobile else 787, 25 if mobile else 21, MUTED)
+	_host.button_at(self, "모두 초기화", Rect2(789, 856, 223, 77) if mobile else Rect2(830, 774, 184, 57), _reset)
+	var start: Button = _host.button_at(self, "이 설정으로 시작", Rect2(1030, 856, 274, 77) if mobile else Rect2(1030, 774, 274, 57), _start, true)
 	_refresh_summary()
 	start.grab_focus()
 
@@ -57,13 +62,34 @@ func _make_row(id: StringName, at: Vector2) -> void:
 	choices[0].set_pressed_no_signal(true)
 	_buttons[id] = choices
 
+func _make_stepper(id: StringName, at: Vector2) -> void:
+	var row: Panel = _host.panel_at(self, Rect2(at, Vector2(626, 103)), "#111c27", "#283d4d")
+	_host.text_at(row, RunConstraints.DEFINITIONS[id][0], 18, 13, 27, ACCENT, 356)
+	var value: Label = _host.text_at(row, "0단계 · 꺼짐", 18, 55, 23, MUTED, 356)
+	_effects[id] = value
+	var less: Button = _host.button_at(row, "−", Rect2(400, 13, 91, 77), _adjust.bind(id, -1))
+	var more: Button = _host.button_at(row, "+", Rect2(507, 13, 101, 77), _adjust.bind(id, 1))
+	less.accessibility_name = "%s 단계 낮추기" % RunConstraints.DEFINITIONS[id][0]
+	more.accessibility_name = "%s 단계 높이기" % RunConstraints.DEFINITIONS[id][0]
+	less.disabled = true
+	_steppers[id] = [less, more]
+
+func _adjust(id: StringName, delta: int) -> void:
+	_select(id, clampi(int(_levels.get(id, 0)) + delta, 0, 5))
+
 func _select(id: StringName, level: int) -> void:
 	if level == 0:
 		_levels.erase(id)
 	else:
 		_levels[id] = level
 	var label: Label = _effects[id]
-	label.text = RunConstraints.effect_text(id, level)
+	var effect := RunConstraints.effect_text(id, level)
+	if _steppers.has(id):
+		label.text = "%d단계 · %s" % [level, effect]
+		_steppers[id][0].disabled = level == 0
+		_steppers[id][1].disabled = level == 5
+	else:
+		label.text = effect
 	label.add_theme_color_override("font_color", ACCENT if level > 0 else MUTED)
 	_refresh_summary()
 
@@ -71,8 +97,8 @@ func _refresh_summary() -> void:
 	_summary.text = "%d / %d개 제약 적용" % [_levels.size(), RunConstraints.DEFINITIONS.size()]
 
 func _reset() -> void:
-	for id: StringName in _buttons:
-		var choices: Array[Button] = _buttons[id]
+	for id: StringName in RunConstraints.DEFINITIONS:
+		var choices: Array = _buttons.get(id, [])
 		for level in choices.size():
 			choices[level].set_pressed_no_signal(level == 0)
 		_select(id, 0)

@@ -7,6 +7,8 @@ const EDGE := Color("#414b50")
 const GOLD := Color("#dcc197")
 
 var run: ResearchRun
+var mobile := false
+var _gesture := TouchGesture.new()
 var zoom := 0.80
 var overview_mode := false
 var offset := Vector2(28, 10)
@@ -25,6 +27,11 @@ func _ready() -> void:
 	clip_contents = true
 	mouse_filter = MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = CURSOR_DRAG
+	if mobile:
+		zoom = 1.35
+		_gesture.tapped.connect(_pick)
+		_gesture.panned.connect(_pan)
+		_gesture.pinched.connect(_zoom_from)
 	for id in run.graph.ids:
 		var point := run.graph.point(id)
 		bounds = bounds.expand(point + CARD * 0.5 + Vector2(32, 88))
@@ -59,7 +66,7 @@ func select_node(id: String, pan_to: bool = false) -> void:
 	highlighted = run.graph.ancestors(id)
 	if pan_to:
 		overview_mode = false
-		zoom = 0.9
+		zoom = 1.35 if mobile else 0.9
 		var alignment := 0.38 if int(run.graph.nodes[id].stage) == 0 else 0.74
 		offset = size * Vector2(alignment, 0.5) - run.graph.point(id) * zoom
 		_clamp_offset()
@@ -87,15 +94,13 @@ func _clamp_offset() -> void:
 	offset = offset.clamp(size - bounds.size * _view_scale() - margin, margin)
 
 func _gui_input(event: InputEvent) -> void:
+	if mobile and (_gesture.handle(event) or event.device == InputEvent.DEVICE_ID_EMULATION):
+		accept_event()
+		return
 	if event is InputEventMouseButton:
 		if event.pressed and event.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
-			var anchor: Vector2 = (event.position - offset) / _view_scale()
 			var factor := 1.18 if event.button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.18
-			overview_mode = false
-			zoom = clampf(zoom * factor, 0.10, 1.55)
-			offset = event.position - anchor * _view_scale()
-			_clamp_offset()
-			queue_redraw()
+			_zoom_from(event.position, event.position, factor)
 			accept_event()
 		elif event.button_index in [MOUSE_BUTTON_LEFT, MOUSE_BUTTON_MIDDLE]:
 			if event.pressed:
@@ -110,10 +115,21 @@ func _gui_input(event: InputEvent) -> void:
 	elif event is InputEventMouseMotion and _pressed:
 		_moved = _moved or event.position.distance_squared_to(_press_point) > 25.0
 		if _moved:
-			offset += event.relative
-			_clamp_offset()
-			queue_redraw()
+			_pan(event.relative)
 		accept_event()
+
+func _pan(delta: Vector2) -> void:
+	offset += delta
+	_clamp_offset()
+	queue_redraw()
+
+func _zoom_from(before: Vector2, after: Vector2, factor: float) -> void:
+	var anchor := (before - offset) / _view_scale()
+	overview_mode = false
+	zoom = clampf(zoom * factor, 0.10, 2.4 if mobile else 1.55)
+	offset = after - anchor * _view_scale()
+	_clamp_offset()
+	queue_redraw()
 
 func _pick(at: Vector2) -> void:
 	var point := (at - offset) / _view_scale()
@@ -121,6 +137,17 @@ func _pick(at: Vector2) -> void:
 		if Rect2(run.graph.point(id) - CARD * 0.5, CARD).has_point(point):
 			select_node(id)
 			return
+	if mobile and not overview_mode:
+		var nearest := ""
+		var distance := INF
+		for id in run.graph.ids:
+			var center := run.graph.point(id)
+			var card := Rect2(center - CARD * 0.5, CARD).grow(14.0 / zoom)
+			if card.has_point(point) and point.distance_squared_to(center) < distance:
+				distance = point.distance_squared_to(center)
+				nearest = id
+		if not nearest.is_empty():
+			select_node(nearest)
 
 func set_stage_tint(color: Color) -> void:
 	_stage_tint = color

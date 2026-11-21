@@ -67,6 +67,20 @@ Windows 10/11 64비트용 설치판과 무설치판은 [GitHub 릴리즈](https:
 
 최종 사용자 맵은 같은 스키마로 `data/map.json`을 추가하면 적용됩니다. 좌표는 0부터 시작하는 `[x, y]`입니다. `.`는 빈칸, `#`는 장애물, `=`는 경로, `S`는 시작, `E`는 출구입니다. 30자씩 18행을 작성하고 연결된 `path`를 선언합니다.
 
+## Android에서 플레이
+
+가로 화면에서 사용할 수 있습니다. 타워를 선택하고 설치할 칸을 한 번 눌러 미리 본 뒤, 같은 칸을 다시 눌러 설치합니다. 설치 모드 밖에서 타워를 누르면 능력치와 판매 버튼이 표시됩니다. 전장은 두 손가락으로 확대·축소하고 확대 상태에서 한 손가락으로 이동합니다. 연구망은 한 손가락 드래그로 이동하고 두 손가락으로 확대·축소합니다. 노드를 누른 뒤 **연구 완료**를 누르면 확정됩니다.
+
+모바일은 기본 전투 효과 품질을 낮음으로 시작합니다. **설정 → 전투 효과 설정**에서 품질과 파티클 밀도 등을 조절할 수 있습니다.
+
+Android APK를 만들려면 Godot 4.7.2의 Android 내보내기 템플릿을 설치하고, 에디터 설정에서 JDK와 Android SDK 경로를 지정합니다. 다음 명령은 설치 테스트용 디버그 서명 APK를 생성합니다. [Godot Android 내보내기 안내](https://docs.godotengine.org/en/4.7/tutorials/export/exporting_for_android.html)
+
+```powershell
+& $Godot --headless --editor --path . --import --quit
+New-Item -ItemType Directory -Force dist | Out-Null
+& $Godot --headless --path . --export-debug Android dist/PrismFront.apk
+```
+
 ## Windows 내보내기
 
 [Godot 4.7.2 안정 버전](https://godotengine.org/download/archive/4.7.2-stable/)과 같은 버전의 표준 내보내기 템플릿을 준비합니다. 프로젝트 루트에서 PowerShell로 실행합니다.

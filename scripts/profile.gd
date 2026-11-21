@@ -21,10 +21,12 @@ var fx_shake := 0.35
 var fx_zoom := 0.60
 var fx_warp := 0.55
 var fx_dim := false
+var mobile_mode := OS.has_feature("android")
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var args := OS.get_cmdline_user_args()
+	mobile_mode = mobile_mode or ("--qa" in args and "--mobile-ui" in args)
 	if "--qa" in args or "--benchmark" in args:
 		file_path = "user://test_profile.cfg"
 	load_profile()
@@ -40,12 +42,12 @@ func load_profile() -> void:
 	resolution = 1
 	best = 0
 	_campaign_records.clear()
-	fx_quality = 3
-	fx_particles = 0.85
+	fx_quality = 1 if mobile_mode else 3
+	fx_particles = 0.3 if mobile_mode else 0.85
 	fx_flash = 0.45
-	fx_shake = 0.35
-	fx_zoom = 0.60
-	fx_warp = 0.55
+	fx_shake = 0.18 if mobile_mode else 0.35
+	fx_zoom = 0.2 if mobile_mode else 0.60
+	fx_warp = 0.0 if mobile_mode else 0.55
 	fx_dim = false
 	var config := ConfigFile.new()
 	if config.load(file_path) != OK:
@@ -53,7 +55,7 @@ func load_profile() -> void:
 	master = _volume(config.get_value("audio", "master", master), master)
 	effects = _volume(config.get_value("audio", "effects", effects), effects)
 	music = _volume(config.get_value("audio", "music", music), music)
-	var legacy_quality: int = int(config.get_value("visual", "quality", 2))
+	var legacy_quality: int = int(config.get_value("visual", "quality", fx_quality - 1))
 	var quality: Variant = config.get_value("visual", "quality_v2", legacy_quality + 1)
 	if quality is int:
 		fx_quality = clampi(quality, 0, 3)
@@ -174,6 +176,8 @@ func _set_bus(index: int, value: float) -> void:
 	AudioServer.set_bus_volume_db(index, linear_to_db(maxf(value, 0.001)))
 
 func apply_display() -> void:
+	if mobile_mode:
+		return
 	var window := get_window()
 	window.min_size = Vector2i(800, 450)
 	window.mode = Window.MODE_FULLSCREEN if fullscreen else Window.MODE_WINDOWED

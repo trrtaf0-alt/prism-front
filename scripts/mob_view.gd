@@ -40,6 +40,8 @@ var _last_time := -1.0
 var _last_count := -1
 var _last_quality := -1
 var _last_dim := false
+var _last_visible_region := Rect2()
+var _visible_drones: Array[Battle.Drone] = []
 
 var _cell: float
 
@@ -75,20 +77,29 @@ func setup(glow: Texture2D, cell: float) -> void:
 	_counts.resize(bodies.size())
 	_used.resize(bodies.size())
 
-func submit(battle: Battle, origin: Vector2, dim: bool, quality: int) -> void:
+func submit(battle: Battle, origin: Vector2, dim: bool, quality: int, visible_region: Rect2 = Rect2()) -> void:
 	var total := battle.enemies.size()
-	if _last_time == battle.elapsed and _last_count == total and _last_quality == quality and _last_dim == dim:
+	if _last_time == battle.elapsed and _last_count == total and _last_quality == quality and _last_dim == dim and _last_visible_region == visible_region:
 		return
 	_last_time = battle.elapsed
 	_last_count = total
 	_last_quality = quality
 	_last_dim = dim
+	_last_visible_region = visible_region
+	var drones: Array[Battle.Drone] = battle.enemies
+	_visible_drones.clear()
+	if visible_region.has_area():
+		for drone in battle.enemies:
+			if visible_region.has_point(drone.position):
+				_visible_drones.append(drone)
+		drones = _visible_drones
+		total = drones.size()
 	_counts.fill(0)
 	_used.fill(0)
 	var shielded := 0
 	var injured := 0
 	var marked := 0
-	for drone in battle.enemies:
+	for drone in drones:
 		_counts[drone.shape] += 1
 		shielded += int(drone.shield_hp > 0)
 		injured += int(drone.health < drone.maximum_health)
@@ -111,7 +122,7 @@ func submit(battle: Battle, origin: Vector2, dim: bool, quality: int) -> void:
 	marked = 0
 	var path := battle.field.path
 	var last := path.size() - 2
-	for drone in battle.enemies:
+	for drone in drones:
 		var color := drone.tint
 		if drone.boss:
 			color = BOSS_COLORS[clampi(drone.mob.phase, 0, BOSS_COLORS.size() - 1)]

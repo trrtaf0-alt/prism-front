@@ -81,19 +81,20 @@ func _run() -> void:
 		quit(1)
 		return
 	var profile = root.get_node("Profile")
-	profile.fx_quality = 3
-	profile.fx_particles = 0.85
+	var mobile: bool = profile.mobile_mode
+	profile.fx_quality = 1 if mobile else 3
+	profile.fx_particles = 0.30 if mobile else 0.85
 	profile.fx_dim = false
 	profile.fx_shake = 0.35
 	var packed := load("res://scenes/Front.tscn") as PackedScene
 	ui = packed.instantiate()
 	root.add_child(ui)
-	root.size = Vector2i(1920, 1080)
+	root.size = Vector2i(960, 540) if mobile else Vector2i(1920, 1080)
 	root.gui_disable_input = true
 	ui.set_process_unhandled_input(false)
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	Engine.max_fps = 120
-	print("Renderer: ", RenderingServer.get_video_adapter_name(), " / ", root.size, " / High")
+	print("Renderer: ", RenderingServer.get_video_adapter_name(), " / ", root.size, " / ", "Mobile low" if mobile else "High")
 	process_frame.connect(_frame)
 	physics_frame.connect(_physics)
 	_reset()
@@ -180,7 +181,8 @@ func _frame() -> void:
 		times.append(delta * 1000.0)
 		measured += delta
 	var limit := 12.0 if tier == SIZES.size() - 1 else 10.0
-	if elapsed < limit or (tier == SIZES.size() - 1 and ticks < 250 and elapsed < 28.0):
+	var waiting_for_mobile_activity: bool = root.get_node("Profile").mobile_mode and impacts == 0 and elapsed < 45.0
+	if elapsed < limit or waiting_for_mobile_activity or (tier == SIZES.size() - 1 and ticks < 250 and elapsed < 28.0):
 		return
 	times.sort()
 	print("%d mobs: %.1f FPS; frame p95 %.2f ms; %d ticks; peak %d; %d guard links; %d cataclysm casts" % [

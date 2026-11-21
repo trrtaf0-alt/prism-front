@@ -108,6 +108,8 @@ func capture(style: String, start: Vector2, finish: Vector2, radius: float, tint
 	var large := style.begins_with("charge_") or style in ["cataclysm", "nova", "singularity", "collapse_gravity", "doom", "orbit", "mob_boss_spawn", "mob_boss_down", "mob_phase", "support_sync"]
 	var layer := _huge if large else _ordinary
 	var limit: int = HUGE_LIMIT if large else LIMITS[_preferences.fx_quality]
+	if _preferences.mobile_mode and _preferences.fx_quality <= 1:
+		limit = 8 if large else mini(limit, 22)
 	var from := _field.position + start * _cell
 	var to := _field.position + finish * _cell
 	var extent := Rect2(from.min(to), (to - from).abs()).grow(maxf(_cell, radius * _cell))

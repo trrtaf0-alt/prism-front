@@ -63,6 +63,9 @@ var enemy_hp_fill: ColorRect
 var enemy_shield_fill: ColorRect
 var _enemy_pick_radius := 1.0
 var _panning := false
+var _touch := TouchGesture.new()
+var _touch_preview := NONE
+var _touch_enemy := Vector2(-1, -1)
 var _codex_from_pause := false
 var last_base_damage := 0
 var flash := 0.0
@@ -79,6 +82,10 @@ var _heading_font := FontVariation.new()
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_init_theme()
+	if Profile.mobile_mode:
+		_touch.tapped.connect(_tap_battlefield)
+		_touch.panned.connect(_pan_battlefield_touch)
+		_touch.pinched.connect(_pinch_battlefield)
 	var map_path := "res://data/map.json"
 	if not FileAccess.file_exists(map_path):
 		map_path = "res://data/sample_map.json"
@@ -156,6 +163,8 @@ func text_at(parent: Node, value: String, x: float, y: float, font_size: int, co
 func button_at(parent: Node, value: String, rect: Rect2, action: Callable, primary: bool = false) -> Button:
 	var button := Button.new()
 	button.text = value
+	if Profile.mobile_mode:
+		button.add_theme_font_size_override("font_size", clampi(roundi(rect.size.y * 0.39), 22, 33))
 	if primary:
 		button.add_theme_stylebox_override("normal", box("#35433f", "#849991"))
 		button.add_theme_color_override("font_color", Color("#edf3eb"))
@@ -199,15 +208,16 @@ func show_menu() -> void:
 	defeat_delay = 0.0
 	text_at(screen, "PRISM FRONT", 160, 385, 84, Color("#edf5f9"))
 
-	var play := button_at(screen, "게임 시작", Rect2(165, 550, 330, 70), show_difficulty)
+	var mobile: bool = Profile.mobile_mode
+	var play := button_at(screen, "게임 시작", Rect2(165, 550, 414, 91) if mobile else Rect2(165, 550, 330, 70), show_difficulty)
 	play.name = "StartGame"
 	play.add_theme_font_size_override("font_size", 27)
 	_style_menu_button(play, MENU_CYAN, true)
 	play.disabled = not map_error.is_empty()
 
-	var settings := button_at(screen, "설정", Rect2(165, 636, 102, 53), show_settings.bind("menu"))
-	var codex := button_at(screen, "도감", Rect2(279, 636, 102, 53), show_codex)
-	var exit := button_at(screen, "종료", Rect2(393, 636, 102, 53), get_tree().quit)
+	var settings := button_at(screen, "설정", Rect2(165, 664, 130, 76) if mobile else Rect2(165, 636, 102, 53), show_settings.bind("menu"))
+	var codex := button_at(screen, "도감", Rect2(307, 664, 130, 76) if mobile else Rect2(279, 636, 102, 53), show_codex)
+	var exit := button_at(screen, "종료", Rect2(449, 664, 130, 76) if mobile else Rect2(393, 636, 102, 53), get_tree().quit)
 	for button in [settings, codex, exit]:
 		_style_menu_button(button, MENU_CYAN)
 		button.add_theme_stylebox_override("normal", box("#0b141d", "#293c48"))
@@ -231,10 +241,11 @@ func _style_menu_button(button: Button, accent: Color, primary: bool = false) ->
 			button.add_theme_color_override(state, Color("#0b1b24"))
 
 func show_difficulty() -> void:
-	var panel := _open_modal("difficulty", Vector2(932, 438))
+	var mobile: bool = Profile.mobile_mode
+	var panel := _open_modal("difficulty", Vector2(932, 470) if mobile else Vector2(932, 438))
 	text_at(panel, "난이도 선택", 34, 21, 40)
-	_style_menu_button(button_at(panel, "돌아가기", Rect2(768, 28, 130, 46), close_modal), MENU_CYAN)
-	_style_menu_button(button_at(panel, "제약 모드", Rect2(34, 355, 196, 48), show_constraints), MENU_CYAN)
+	_style_menu_button(button_at(panel, "돌아가기", Rect2(737, 20, 161, 64) if mobile else Rect2(768, 28, 130, 46), close_modal), MENU_CYAN)
+	_style_menu_button(button_at(panel, "제약 모드", Rect2(34, 355, 264, 78) if mobile else Rect2(34, 355, 196, 48), show_constraints), MENU_CYAN)
 	var colors := [MENU_CYAN, GOLD, PINK]
 	var index := 0
 	for mode: StringName in BattleData.DIFFICULTIES:
@@ -254,7 +265,7 @@ func show_difficulty() -> void:
 		index += 1
 
 func show_constraints() -> void:
-	var panel := _open_modal("constraints", Vector2(1342, 860))
+	var panel := _open_modal("constraints", Vector2(1342, 950) if Profile.mobile_mode else Vector2(1342, 860))
 	var picker := ConstraintsScreen.new()
 	place(picker, panel, Rect2(Vector2.ZERO, panel.size))
 	picker.setup(self)
@@ -268,6 +279,7 @@ func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}) -> vo
 	selected = NONE
 	building = false
 	_panning = false
+	_reset_battle_touch()
 	build_id = TowerRegistry.BASE
 	research_view.clear()
 	_credits_shown = -1
@@ -302,6 +314,7 @@ func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}) -> vo
 	_update_hud()
 
 func _make_hud() -> void:
+	var mobile: bool = Profile.mobile_mode
 	_hud_text(screen, "웨이브", 86, 22, 17, MUTED, 126)
 	wave_label = _hud_text(screen, "", 86, 43, 28, LIGHT, 126)
 	_hud_text(screen, "기지", 249, 22, 17, MUTED, 152)
@@ -318,33 +331,33 @@ func _make_hud() -> void:
 	_hud_text(screen, BattleData.DIFFICULTIES[battle.difficulty], 800, 46, 19, MUTED, 110)
 	if battle.constraints.active():
 		_hud_text(screen, "제약 %d종" % battle.constraints.count(), 800, 74, 17, MENU_CYAN, 110)
-	zoom_button = _hud_button("100%", Rect2(928, 38, 106, 44), _reset_zoom)
-	zoom_button.tooltip_text = "휠: 확대·축소  ·  휠 드래그: 이동  ·  클릭: 초기화"
-	var reference := _hud_button("도감 · K", Rect2(1048, 38, 124, 44), show_codex)
+	zoom_button = _hud_button("100%", Rect2(924, 23, 118, 75) if mobile else Rect2(928, 38, 106, 44), _reset_zoom)
+	zoom_button.tooltip_text = "두 손가락으로 확대·축소 · 눌러서 초기화" if mobile else "휠: 확대·축소  ·  휠 드래그: 이동  ·  클릭: 초기화"
+	var reference := _hud_button("도감" if mobile else "도감 · K", Rect2(1052, 23, 124, 75) if mobile else Rect2(1048, 38, 124, 44), show_codex)
 	reference.name = "BattleCodex"
 	reference.tooltip_text = "타워와 적의 능력치 · 열람 중 전투 일시정지"
 
 	# Center the actions on the seam between tile rows, leaving tile centers clickable.
-	_hud_button("일시정지 · Esc", Rect2(1704, 38, 158, 44), show_pause)
-	wave_button = _hud_button("웨이브 시작", Rect2(1500, 38, 190, 44), start_wave, true)
-	status = _right_hud_text("", 1190, 46, 20, LIGHT, 294)
-	forecast = _right_hud_text("", 1460, 93, 17, MINT, 402)
+	_hud_button("일시정지" if mobile else "일시정지 · Esc", Rect2(1692, 23, 170, 75) if mobile else Rect2(1704, 38, 158, 44), show_pause)
+	wave_button = _hud_button("웨이브 시작", Rect2(1457, 23, 220, 75) if mobile else Rect2(1500, 38, 190, 44), start_wave, true)
+	status = _right_hud_text("", 1190, 46, 20, LIGHT, 253 if mobile else 294)
+	forecast = _right_hud_text("", 1460, 104 if mobile else 93, 17, MINT, 402)
 	result = _right_hud_text("", 1460, 148, 17, GOLD, 402)
 	_forecast_wave = -1
 
-	build_button = _hud_button("", Rect2(1166, 998, 316, 44), toggle_build, true)
+	build_button = _hud_button("", Rect2(1050, 970, 394, 79) if mobile else Rect2(1166, 998, 316, 44), toggle_build, true)
 	build_button.toggle_mode = true
 	build_button.tooltip_text = "같은 타워 배치 · 1"
-	catalog_button = _hud_button("타워 선택", Rect2(1496, 998, 148, 44), show_catalog)
-	research_button = _hud_button("연구 · R", Rect2(1658, 998, 204, 44), show_research)
-	build_hint = _right_hud_text("", 1100, 1046, 16, MUTED, 762)
+	catalog_button = _hud_button("타워 선택", Rect2(1458, 970, 180, 79) if mobile else Rect2(1496, 998, 148, 44), show_catalog)
+	research_button = _hud_button("연구" if mobile else "연구 · R", Rect2(1652, 970, 210, 79) if mobile else Rect2(1658, 998, 204, 44), show_research)
+	build_hint = _right_hud_text("", 1000 if mobile else 1100, 1050 if mobile else 1046, 19 if mobile else 16, MUTED, 862 if mobile else 762)
 	placement_label = _hud_text(screen, "", 0, 0, 18, LIGHT, 0)
 	placement_label.add_theme_stylebox_override("normal", box("#121a22f0", "#536b70ad"))
 	placement_label.hide()
 	tower_heading = _hud_text(screen, "", 86, 871, 26, LIGHT, 500)
 	tower_stats = _hud_text(screen, "", 86, 911, 17, MINT, 560)
-	sell_button = _hud_button("타워 판매", Rect2(86, 998, 168, 44), sell_selected)
-	support_button = _hud_button("지원 상태", Rect2(268, 998, 144, 44), show_support_details)
+	sell_button = _hud_button("타워 판매", Rect2(86, 970, 208, 79) if mobile else Rect2(86, 998, 168, 44), sell_selected)
+	support_button = _hud_button("지원 상태", Rect2(310, 970, 190, 79) if mobile else Rect2(268, 998, 144, 44), show_support_details)
 
 	warning_edge = panel_at(screen, FieldView.SCREEN.grow(-3), "#00000000", "#ff467d")
 	warning_edge.hide()
@@ -438,7 +451,7 @@ func _right_hud_text(value: String, x: float, y: float, font_size: int, color: C
 
 func _hud_button(value: String, rect: Rect2, action: Callable, primary: bool = false) -> Button:
 	var button := button_at(screen, value, rect, action)
-	button.add_theme_font_size_override("font_size", 19)
+	button.add_theme_font_size_override("font_size", 25 if Profile.mobile_mode else 19)
 	button.add_theme_stylebox_override("normal", box("#192b2bcf" if primary else "#121a22c7", "#829d958f" if primary else "#58687378"))
 	button.add_theme_stylebox_override("disabled", box("#101820a3", "#34414a68"))
 	return button
@@ -535,11 +548,14 @@ func _update_placement() -> void:
 		build_hint.text = "타워 %d / %d기 · 설치 한도" % [battle.towers.size(), battle.tower_limit()]
 	elif battle.credits < cost:
 		build_hint.text = "재화 %d 부족" % (cost - battle.credits)
-	elif not building:
+	elif not building and not Profile.mobile_mode:
 		build_hint.text = "1  빠른 배치"
 	if not building or modal != null:
 		return
-	if battle.at_tower_limit():
+	if Profile.mobile_mode:
+		if battle.credits >= cost and not battle.at_tower_limit():
+			build_hint.text = "칸을 두 번 눌러 설치 · 배치 버튼으로 취소"
+	elif battle.at_tower_limit():
 		build_hint.text += "   ·   Esc 취소"
 	else:
 		build_hint.text = "좌클릭  배치   ·   우클릭 / Esc  취소" if battle.credits >= cost else "%s   ·   Esc  취소" % build_hint.text
@@ -618,6 +634,7 @@ func toggle_build() -> void:
 	if battle.lost or battle.won or (not building and battle.credits < int(battle.tower_definition(build_id).cost)):
 		return
 	building = not building
+	_reset_battle_touch()
 	selected = NONE
 	_sync_selection()
 
@@ -643,7 +660,11 @@ func _physics_process(delta: float) -> void:
 func _process(delta: float) -> void:
 	if game and modal == null:
 		camera_fx.update(delta)
-		if not battle.lost:
+		if not battle.lost and Profile.mobile_mode:
+			field.hovered = _touch_preview if building else NONE
+			if FieldView.SCREEN.has_point(_touch_enemy):
+				_inspect_enemy(_touch_enemy)
+		elif not battle.lost:
 			var hovered_control := get_viewport().gui_get_hovered_control()
 			var cursor := get_local_mouse_position()
 			field.hovered = NONE if hovered_control is Button or _panning else camera_fx.cell_under(cursor)
@@ -666,6 +687,10 @@ func _process(delta: float) -> void:
 		_update_hud()
 
 func _input(event: InputEvent) -> void:
+	if Profile.mobile_mode and game and modal == null and (event is InputEventScreenTouch or event is InputEventScreenDrag):
+		if _touch.tracks(event.index) and _touch.handle(make_input_local(event)):
+			get_viewport().set_input_as_handled()
+			return
 	if not _panning:
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_MIDDLE and not event.pressed:
@@ -676,43 +701,71 @@ func _input(event: InputEvent) -> void:
 		camera_fx.pan_by(motion.relative)
 		get_viewport().set_input_as_handled()
 
+func _notification(what: int) -> void:
+	if not is_node_ready() or not Profile.mobile_mode:
+		return
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		_back()
+	elif what == NOTIFICATION_APPLICATION_PAUSED:
+		_reset_battle_touch()
+		if game and modal == null and not battle.lost and not battle.won:
+			show_pause()
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		match modal_kind:
-			"pause", "research", "catalog", "support", "difficulty":
-				close_modal()
-			"constraints":
-				show_difficulty()
-			"codex":
-				_close_codex()
-			"effects_settings":
-				show_settings(settings_origin)
-			"menu", "pause_settings":
-				_leave_settings()
-			"":
-				if game and not battle.lost:
-					if building:
-						toggle_build()
-					else:
-						show_pause()
+		_back()
 		get_viewport().set_input_as_handled()
 		return
+	if _handle_shortcuts(event):
+		return
+	if not game or modal != null or battle.lost or battle.won:
+		return
+	if Profile.mobile_mode and event is InputEventScreenTouch and event.pressed:
+		var touch := make_input_local(event) as InputEventScreenTouch
+		if FieldView.SCREEN.has_point(touch.position) and _touch.handle(touch):
+			get_viewport().set_input_as_handled()
+		return
+	if Profile.mobile_mode and event.device == InputEvent.DEVICE_ID_EMULATION:
+		return
+	_handle_battle_mouse(event)
+
+func _back() -> void:
+	match modal_kind:
+		"pause", "research", "catalog", "support", "difficulty":
+			close_modal()
+		"constraints":
+			show_difficulty()
+		"codex":
+			_close_codex()
+		"effects_settings":
+			show_settings(settings_origin)
+		"menu", "pause_settings":
+			_leave_settings()
+		"":
+			if game and not battle.lost:
+				if building:
+					toggle_build()
+				else:
+					show_pause()
+
+func _handle_shortcuts(event: InputEvent) -> bool:
 	if game and event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_R:
 		if modal_kind == "research":
 			close_modal()
 		elif modal == null:
 			show_research()
 		get_viewport().set_input_as_handled()
-		return
+		return true
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_K:
 		if modal_kind == "codex":
 			_close_codex()
 		elif modal == null or modal_kind == "pause":
 			show_codex()
 		get_viewport().set_input_as_handled()
-		return
-	if not game or modal != null or battle.lost or battle.won:
-		return
+		return true
+	return false
+
+func _handle_battle_mouse(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_1:
 		toggle_build()
 		get_viewport().set_input_as_handled()
@@ -738,6 +791,39 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				selected = cell if battle.occupied.has(cell) else NONE
 		_sync_selection()
+
+func _reset_battle_touch() -> void:
+	_touch.clear()
+	_touch_preview = NONE
+	_touch_enemy = Vector2(-1, -1)
+
+func _tap_battlefield(point: Vector2) -> void:
+	if not FieldView.SCREEN.has_point(point):
+		return
+	var cell := camera_fx.cell_under(point)
+	if building:
+		_touch_enemy = Vector2(-1, -1)
+		if cell == _touch_preview and cell != NONE:
+			battle.install(cell, build_id)
+		_touch_preview = cell
+		field.hovered = cell
+	else:
+		selected = cell if battle.occupied.has(cell) else NONE
+		_touch_enemy = point if selected == NONE else Vector2(-1, -1)
+		_inspect_enemy(_touch_enemy)
+	_sync_selection()
+
+func _pan_battlefield_touch(delta: Vector2) -> void:
+	_touch_preview = NONE
+	_touch_enemy = Vector2(-1, -1)
+	enemy_inspector.hide()
+	if camera_fx.manual_zoom > 1.0:
+		camera_fx.pan_by(delta)
+
+func _pinch_battlefield(before: Vector2, after: Vector2, factor: float) -> void:
+	camera_fx.zoom_at(before, factor)
+	_pan_battlefield_touch(after - before)
+	_update_zoom_button()
 
 func _battle_effect(kind: StringName, _point: Vector2, _direction: Vector2) -> void:
 	if kind != &"install":
@@ -819,6 +905,7 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 	if is_instance_valid(field):
 		field.frozen = true
 		_panning = false
+		_reset_battle_touch()
 		enemy_inspector.hide()
 		placement_label.hide()
 		camera_fx.suspend(true)
@@ -833,14 +920,15 @@ func _open_modal(kind: String, dimensions: Vector2) -> Panel:
 func show_pause() -> void:
 	if battle.lost:
 		return
-	var panel := _open_modal("pause", Vector2(480, 432))
+	var mobile: bool = Profile.mobile_mode
+	var panel := _open_modal("pause", Vector2(560, 536) if mobile else Vector2(480, 432))
 	text_at(panel, "일시정지", 35, 29, 39)
 	text_at(panel, "웨이브 %d  /  기지 %d" % [battle.wave, battle.health], 36, 93, 20, MUTED)
-	button_at(panel, "계속하기", Rect2(36, 152, 408, 54), close_modal, true).grab_focus()
-	button_at(panel, "설정", Rect2(36, 214, 195, 54), show_settings.bind("pause_settings"))
-	button_at(panel, "도감 · K", Rect2(249, 214, 195, 54), show_codex)
-	button_at(panel, _restart_label(), Rect2(36, 276, 408, 54), start_game.bind(battle.difficulty))
-	button_at(panel, "메인 메뉴", Rect2(36, 338, 408, 54), show_menu)
+	button_at(panel, "계속하기", Rect2(36, 140, 488, 80) if mobile else Rect2(36, 152, 408, 54), close_modal, true).grab_focus()
+	button_at(panel, "설정", Rect2(36, 235, 236, 78) if mobile else Rect2(36, 214, 195, 54), show_settings.bind("pause_settings"))
+	button_at(panel, "도감" if mobile else "도감 · K", Rect2(288, 235, 236, 78) if mobile else Rect2(249, 214, 195, 54), show_codex)
+	button_at(panel, _restart_label(), Rect2(36, 328, 488, 78) if mobile else Rect2(36, 276, 408, 54), start_game.bind(battle.difficulty))
+	button_at(panel, "메인 메뉴", Rect2(36, 421, 488, 78) if mobile else Rect2(36, 338, 408, 54), show_menu)
 
 func show_codex() -> void:
 	_codex_from_pause = modal_kind == "pause"
@@ -915,6 +1003,9 @@ func show_game_over() -> void:
 
 func show_settings(return_to: String) -> void:
 	settings_origin = return_to
+	if Profile.mobile_mode:
+		_show_mobile_settings(return_to)
+		return
 	var panel := _open_modal(return_to, Vector2(620, 689))
 	text_at(panel, "설정", 35, 24, 42)
 	_settings_slider(panel, "마스터 볼륨", 124, &"master")
@@ -949,6 +1040,15 @@ func show_settings(return_to: String) -> void:
 	button_at(panel, "전투 효과 설정", Rect2(36, 595, 266, 56), show_effect_settings)
 	button_at(panel, "닫기", Rect2(318, 595, 266, 56), _leave_settings, true).grab_focus()
 
+func _show_mobile_settings(return_to: String) -> void:
+	var panel := _open_modal(return_to, Vector2(750, 626))
+	text_at(panel, "설정", 36, 24, 43)
+	_settings_slider(panel, "마스터 볼륨", 137, &"master")
+	_settings_slider(panel, "효과음 볼륨", 245, &"effects")
+	_settings_slider(panel, "배경음악 볼륨", 353, &"music")
+	button_at(panel, "전투 효과 설정", Rect2(36, 477, 420, 91), show_effect_settings)
+	button_at(panel, "닫기", Rect2(473, 477, 241, 91), _leave_settings, true)
+
 func can_open_research() -> bool:
 	return game and not battle.lost and not battle.won and (not battle.active or bool(data.balance.research_available_during_wave))
 
@@ -973,6 +1073,12 @@ func _research_purchased(_id: String, tower_id: String, advanced_stage: bool) ->
 
 func show_catalog(show_all: bool = false) -> void:
 	if battle.lost or battle.won:
+		return
+	if Profile.mobile_mode:
+		var pane := _open_modal("catalog", Vector2(1597, 897))
+		var picker := MobileTowerPicker.new()
+		place(picker, pane, Rect2(Vector2.ZERO, pane.size))
+		picker.setup(self, show_all, build_id)
 		return
 	var ids: Array[String] = []
 	for id in data.towers.ids:
@@ -1102,7 +1208,7 @@ func _choose_tower(id: String) -> void:
 	_sync_selection()
 
 func show_effect_settings() -> void:
-	var panel := _open_modal("effects_settings", Vector2(692, 810))
+	var panel := _open_modal("effects_settings", Vector2(780, 919) if Profile.mobile_mode else Vector2(692, 810))
 	text_at(panel, "전투 효과 설정", 35, 24, 39)
 	text_at(panel, "효과 품질", 38, 108, 22, MUTED)
 	var quality := OptionButton.new()
@@ -1110,7 +1216,7 @@ func show_effect_settings() -> void:
 		quality.add_item(label)
 	quality.select(Profile.fx_quality)
 	quality.item_selected.connect(_set_fx_quality)
-	place(quality, panel, Rect2(320, 104, 334, 46))
+	place(quality, panel, Rect2(320, 92, 421, 67) if Profile.mobile_mode else Rect2(320, 104, 334, 46))
 	_visual_slider(panel, "파티클 밀도", "fx_particles", 174)
 	_visual_slider(panel, "화면 섬광", "fx_flash", 262)
 	_visual_slider(panel, "화면 흔들림", "fx_shake", 350)
@@ -1120,20 +1226,20 @@ func show_effect_settings() -> void:
 	dim.text = "강한 밝기 낮추기"
 	dim.button_pressed = Profile.fx_dim
 	dim.toggled.connect(_set_fx_dim)
-	place(dim, panel, Rect2(36, 614, 618, 55))
-	button_at(panel, "설정으로 돌아가기", Rect2(36, 722, 618, 54), show_settings.bind(settings_origin), true).grab_focus()
+	place(dim, panel, Rect2(36, 675, 708, 68) if Profile.mobile_mode else Rect2(36, 614, 618, 55))
+	button_at(panel, "설정으로 돌아가기", Rect2(36, 793, 708, 86) if Profile.mobile_mode else Rect2(36, 722, 618, 54), show_settings.bind(settings_origin), true).grab_focus()
 
 func _visual_slider(parent: Control, title: String, key: String, y: float) -> void:
 	var value := float(Profile.get(key))
 	text_at(parent, title, 38, y, 21, MUTED)
-	var percent := text_at(parent, "%d%%" % roundi(value * 100), 534, y, 21, MINT, 120)
+	var percent := text_at(parent, "%d%%" % roundi(value * 100), parent.size.x - 158, y, 25 if Profile.mobile_mode else 21, MINT, 120)
 	percent.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var slider := HSlider.new()
 	slider.max_value = 100.0
 	slider.step = 1.0
 	slider.value = value * 100.0
 	slider.value_changed.connect(_set_fx_value.bind(key, percent))
-	place(slider, parent, Rect2(38, y + 37, 616, 25))
+	place(slider, parent, Rect2(38, y + 34, parent.size.x - 76, 47) if Profile.mobile_mode else Rect2(38, y + 37, 616, 25))
 
 func _set_fx_quality(index: int) -> void:
 	Profile.fx_quality = index
@@ -1148,17 +1254,17 @@ func _set_fx_value(value: float, key: String, percent: Label) -> void:
 	percent.text = "%d%%" % roundi(value)
 	Profile.save_profile()
 
-func _settings_slider(parent: Node, name_text: String, y: float, key: StringName) -> void:
+func _settings_slider(parent: Control, name_text: String, y: float, key: StringName) -> void:
 	var value: float = Profile.get(key)
 	text_at(parent, name_text, 36, y - 20, 21, MUTED)
-	var number := text_at(parent, "%d%%" % roundi(value * 100), 492, y - 22, 21, MINT, 92)
+	var number := text_at(parent, "%d%%" % roundi(value * 100), parent.size.x - 128, y - 22, 25 if Profile.mobile_mode else 21, MINT, 92)
 	number.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	var slider := HSlider.new()
 	slider.min_value = 0
 	slider.max_value = 100
 	slider.step = 1
 	slider.value = roundi(value * 100)
-	place(slider, parent, Rect2(36, y + 18, 548, 28))
+	place(slider, parent, Rect2(36, y + 18, parent.size.x - 72, 58) if Profile.mobile_mode else Rect2(36, y + 18, 548, 28))
 	slider.value_changed.connect(_set_volume.bind(key, number))
 	if key != &"music":
 		slider.drag_ended.connect(_volume_preview)
