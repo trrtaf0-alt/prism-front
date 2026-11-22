@@ -28,9 +28,9 @@ const SUPPORT_PLANS := {
 
 const PRODUCTION_PLANS := {
 	"none": [],
-	"cash": [[39, 26, 3], [43, 20, 1], [38, 9, 4], [37, 1, 3]],
-	"research": [[42, 25, 2], [44, 22, 1], [41, 13, 3], [40, 6, 3]],
-	"mixed": [[45, 29, 1], [39, 26, 3], [42, 25, 2], [43, 20, 1], [44, 22, 1],
+	"cash": [[45, 39, 1], [39, 35, 3], [43, 20, 1], [38, 9, 4], [37, 1, 3]],
+	"research": [[45, 39, 1], [42, 36, 2], [44, 22, 1], [41, 13, 3], [40, 6, 3]],
+	"mixed": [[45, 39, 1], [39, 35, 3], [42, 36, 2], [43, 20, 1], [44, 22, 1],
 		[41, 13, 3], [38, 9, 4], [40, 6, 3], [37, 1, 3]],
 }
 
@@ -41,6 +41,7 @@ var production_spend := 0
 var production_research := 0
 var production_breakdown: Dictionary = {}
 var production_guard := false
+var production_priority := false
 var production_seats: Array[Vector2i] = []
 var support_plan := "none"
 var difficulty := &"easy"
@@ -72,6 +73,7 @@ func _initialize() -> void:
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
 	production_guard = "--production-guard" in args
+	production_priority = "--production-priority" in args
 	for arg in args:
 		if arg.begins_with("--strategy="):
 			policy = arg.trim_prefix("--strategy=")
@@ -193,10 +195,13 @@ func _run() -> void:
 				"produced_rp": production_rp, "production_breakdown": production_breakdown,
 			}))
 		if wave < BattleData.FINAL_WAVE:
+			var invested_before_defense := production_priority and wave >= 35 and _count(sim, _id(25)) > 0 \
+				and _prepare_economy(sim, true)
 			_prepare(sim)
 			if production_guard:
 				_fill_defense_gap(sim)
-			_prepare_economy(sim)
+			if not invested_before_defense:
+				_prepare_economy(sim)
 		if wave == BattleData.FINAL_WAVE - 1 and not snapshot_path.is_empty():
 			var saved := _save_finale(sim)
 			quit(0 if saved else 1)
@@ -376,16 +381,23 @@ func _prepare(sim: Battle) -> void:
 				if _count(sim, id) < (7 if n == 25 else 4) and sim.credits >= reserve + int(sim.tower_definition(id).cost):
 					_buy(sim, id)
 
-func _prepare_economy(sim: Battle) -> void:
+func _prepare_economy(sim: Battle, advanced_only: bool = false) -> bool:
 	# Retain a defense budget and avoid purchases too late to benefit the run.
-	if sim.wave >= 43:
-		return
+	if sim.wave >= 43 or sim.at_tower_limit():
+		return false
 	var reserve := 7 * maxi(0, sim.wave - 4) ** 2
 	for target: Array in PRODUCTION_PLANS[production_plan]:
+		if advanced_only and (int(target[0]) not in [39, 42, 45] or _count(sim, _id(target[0])) > 0):
+			continue
 		var id := _id(target[0])
 		var def := sim.tower_definition(id)
 		if sim.wave < int(target[1]) or _count(sim, id) >= int(target[2]) or sim.credits < reserve + int(def.cost):
 			continue
+		var support_cell := Vector2i(-1, -1)
+		if def.production == 0:
+			support_cell = _economy_support_cell(sim, def)
+			if support_cell.x < 0:
+				continue
 		if not sim.research.unlocked.has(id):
 			if sim.research.minimum_cost(def.research_id) > sim.research.points:
 				continue
@@ -395,10 +407,14 @@ func _prepare_economy(sim: Battle) -> void:
 		if def.production > 0:
 			if not _buy(sim, id, production_seats):
 				continue
-		elif not _buy_economy_support(sim, def):
-			continue
+		else:
+			if not sim.install(support_cell, def.id):
+				continue
+			invested += int(def.cost)
+			first_buy[int(def.id.right(2))] = sim.wave
 		production_spend += int(def.cost)
-		return
+		return true
+	return false
 
 func _fill_defense_gap(sim: Battle) -> void:
 	if sim.wave not in range(30, 43) or _count(sim, _id(28)) + _count(sim, _id(29)) > 0:
@@ -423,11 +439,13 @@ func _add_production(id: String, resource: int, hundredths: int) -> void:
 	var totals: Array = production_breakdown.get_or_add(id, [0, 0])
 	totals[resource] += hundredths
 
-func _buy_economy_support(sim: Battle, def: Dictionary) -> bool:
+func _economy_support_cell(sim: Battle, def: Dictionary) -> Vector2i:
+	if production_priority and def.economy == "rp_amp" and _count(sim, _id(42)) == 0:
+		return Vector2i(-1, -1)
 	var best := Vector2i(-1, -1)
 	var best_output := 0.0
 	for cell: Vector2i in production_seats:
-		if not sim.can_install(cell, def.id):
+		if sim.placement_status(cell, def.id) not in [Battle.Placement.READY, Battle.Placement.LOCKED]:
 			continue
 		var center := Vector2(cell) + Vector2.ONE * 0.5
 		var count := 0
@@ -445,11 +463,7 @@ func _buy_economy_support(sim: Battle, def: Dictionary) -> bool:
 		if output * percent > best_output:
 			best = cell
 			best_output = output * percent
-	if not sim.install(best, def.id):
-		return false
-	invested += int(def.cost)
-	first_buy[int(def.id.right(2))] = sim.wave
-	return true
+	return best
 
 func _buy_support(sim: Battle, id: String) -> void:
 	var def := sim.tower_definition(id)

@@ -102,12 +102,12 @@
     {"id":"spectral_clock","name":"전장 지휘 코어 설계","cost_rp":1950,"stage":5,"lane":4,"requirements":{"all":["weapon_frame","grav_circuit",{"any":["shear","capture"]},{"any":["nova","storm"]}]},"position":[7970,1090],"unlock":{"type":"tower","id":"tower_36"},"description":"전역 피해 +20% · 속도 +15% · 15초마다 5초간 속도 추가 +20%"},
     {"id":"eco_gather","name":"분산 자원 수집","cost_rp":5,"stage":1,"lane":0,"requirements":"survey","position":[900,1200],"unlock":{"type":"tower","id":"tower_37"}},
     {"id":"eco_synthesis","name":"물질 합성 공정","cost_rp":160,"stage":2,"lane":0,"requirements":{"all":["eco_gather","exchange"]},"position":[2050,1200],"unlock":{"type":"tower","id":"tower_38"}},
-    {"id":"eco_reactor","name":"고밀도 물질 생성","cost_rp":2350,"stage":4,"lane":0,"requirements":{"all":["eco_synthesis","ignition"]},"position":[5050,1200],"unlock":{"type":"tower","id":"tower_39"}},
+    {"id":"eco_reactor","name":"고밀도 물질 생성","cost_rp":1450,"stage":4,"lane":0,"requirements":{"all":["eco_synthesis","plasma_grid"]},"position":[4550,1200],"unlock":{"type":"tower","id":"tower_39"}},
     {"id":"eco_analyzer","name":"현장 데이터 분석","cost_rp":90,"stage":2,"lane":2,"requirements":{"all":["eco_gather","bus"]},"position":[1600,1305],"unlock":{"type":"tower","id":"tower_40"}},
     {"id":"eco_compute","name":"분산 연산 허브","cost_rp":620,"stage":3,"lane":2,"requirements":{"all":["eco_analyzer","capacitor"]},"position":[3160,1305],"unlock":{"type":"tower","id":"tower_41"}},
-    {"id":"eco_quantum","name":"양자 병렬 연산","cost_rp":3800,"stage":4,"lane":2,"requirements":{"all":["eco_compute","photon_gate"]},"position":[5180,1305],"unlock":{"type":"tower","id":"tower_42"}},
+    {"id":"eco_quantum","name":"양자 병렬 연산","cost_rp":2350,"stage":4,"lane":2,"requirements":{"all":["eco_compute",{"any":["crossfeed","uplink"]}]},"position":[4820,1305],"unlock":{"type":"tower","id":"tower_42"}},
     {"id":"eco_credit_amp","name":"물질 생산 증폭","cost_rp":450,"stage":3,"lane":0,"requirements":{"all":["eco_synthesis","plasma_grid"]},"position":[3470,1200],"unlock":{"type":"tower","id":"tower_43"}},
     {"id":"eco_rp_amp","name":"연구 연산 증폭","cost_rp":800,"stage":4,"lane":2,"requirements":{"all":["eco_compute","gradient"]},"position":[4330,1305],"unlock":{"type":"tower","id":"tower_44"}},
-    {"id":"eco_core","name":"산업 통합망 설계","cost_rp":3700,"stage":5,"lane":0,"requirements":{"all":["eco_credit_amp","eco_rp_amp",{"any":["eco_reactor","eco_quantum"]}]},"position":[6620,1250],"unlock":{"type":"tower","id":"tower_45"}}
+    {"id":"eco_core","name":"산업 통합망 설계","cost_rp":2000,"stage":5,"lane":0,"requirements":{"any":[{"all":["eco_reactor","eco_credit_amp"]},{"all":["eco_quantum","eco_rp_amp"]}]},"position":[5650,1250],"unlock":{"type":"tower","id":"tower_45"}}
   ]
 }

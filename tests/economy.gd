@@ -19,6 +19,7 @@ func _run() -> void:
 	check(map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty(), "sample map loaded")
 	_base_outputs()
 	_opening()
+	_core_unlock_paths()
 	_lifetime()
 	_networks()
 	_precision_and_limits()
@@ -108,6 +109,33 @@ func _play_wave(sim: Battle) -> void:
 			break
 		sim.tick(STEP)
 
+func _core_unlock_paths() -> void:
+	var graph := rules.research
+	for branch in [["eco_reactor", "eco_credit_amp", "eco_rp_amp"],
+			["eco_quantum", "eco_rp_amp", "eco_credit_amp"]]:
+		var run := ResearchRun.new(graph)
+		var route: Dictionary = {}
+		var total := BattleData.NUMBER_LIMIT
+		for plan in graph._plans("eco_core", {}, {}):
+			if not plan.has(branch[0]) or not plan.has(branch[1]) or plan.has(branch[2]):
+				continue
+			var cost := 0
+			for id: String in plan:
+				cost += run.cost(id)
+			if cost < total:
+				total = cost
+				route = plan
+		check(not route.is_empty(), "industrial core has an independent route through " + branch[0])
+		if route.is_empty():
+			continue
+		run.earn(total)
+		for id: String in graph.ordered:
+			if route.has(id) and id != "eco_core" and id != branch[1]:
+				check(run.purchase(id), "purchase prerequisite " + id)
+		check(not run.purchase("eco_core"), "top producer still needs its matching amplifier")
+		check(run.purchase(branch[1]) and run.purchase("eco_core") and run.unlocked.has("tower_45")
+			and not run.completed.has(branch[2]) and run.points == 0, "one complete branch unlocks the core at exact cost")
+
 func _network(sim: Battle, production_ids: Array[String] = []) -> Battle.Turret:
 	var core := _place(sim, Vector2i(5, 4), "tower_45")
 	_place(sim, Vector2i(6, 4), "tower_43")
@@ -170,7 +198,7 @@ func _precision_and_limits() -> void:
 	var baseline := _fixture(levels)
 	var producer := _place(sim, Vector2i(5, 4), "tower_37")
 	var core := _place(sim, Vector2i(6, 4), "tower_45")
-	check(producer.definition.cost == 20 and core.definition.cost == 37_500, "custom prices cover producers and boosters")
+	check(producer.definition.cost == 20 and core.definition.cost == 22_500, "custom prices cover producers and boosters")
 	var starting_difference := baseline.credits - sim.credits
 	for i in 5:
 		sim.start_wave()
