@@ -114,6 +114,12 @@ func _detail_for_selection() -> void:
 		var count: int = package.get(key, []).size()
 		if count > 0:
 			content.append("%s %d개" % [ModLibrary.CONTENT_NAMES[key], count])
+	if not package.get("campaign", {}).is_empty():
+		content.append("캠페인")
+	if not package.get("tower_overrides", {}).is_empty():
+		content.append("타워 수정 %d개" % package.tower_overrides.size())
+	if not package.get("files", {}).is_empty():
+		content.append("이미지·음향 %d개" % package.files.size())
 	var state := "활성화됨" if _library.applied.has(_selected) else "비활성화"
 	if _library.problems.has(_selected):
 		state = "적용 보류 · " + _library.problems[_selected]

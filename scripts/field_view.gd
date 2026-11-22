@@ -47,6 +47,7 @@ var _overlay: Node2D
 var _sparks: SpriteBatch
 var _rings: SpriteBatch
 var _effect_glows: SpriteBatch
+var _custom_towers := {}
 var _aim_cell := Vector2i(-1, -1)
 var _aim_tower := ""
 var _aim_lines := PackedVector2Array()
@@ -75,7 +76,12 @@ func _ready() -> void:
 	_bolts = SpriteBatch.new(BOLT_TEXTURE, 55.0, material_mask)
 	add_child(_bases)
 	add_child(_heads)
-	_mobs.setup(_glow, CELL)
+	for id: String in battle.data.media.get("towers", {}):
+		var batch := SpriteBatch.new(battle.data.tower_sprite(id), CELL, null)
+		batch.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		_custom_towers[id] = batch
+		add_child(batch)
+	_mobs.setup(_glow, CELL, battle.data.media.get("enemies", {}))
 	add_child(_mobs)
 	add_child(_bolts)
 	_overlay = Node2D.new()
@@ -209,6 +215,18 @@ func _update_batches() -> void:
 	_tower_halos.begin(battle.towers.size() if halos else 0)
 	_bases.begin(battle.towers.size())
 	_heads.begin(battle.towers.size())
+	var used := {}
+	var custom_counts := {}
+	if not _custom_towers.is_empty():
+		for tower: Battle.Turret in battle.towers:
+			var id: String = tower.definition.id
+			if _custom_towers.has(id):
+				custom_counts[id] = int(custom_counts.get(id, 0)) + 1
+	for id: String in _custom_towers:
+		var batch: SpriteBatch = _custom_towers[id]
+		batch.begin(int(custom_counts.get(id, 0)))
+		used[id] = 0
+	var defaults := 0
 	for i in battle.towers.size():
 		var tower := battle.towers[i]
 		var at := pixel(tower.position)
@@ -223,15 +241,23 @@ func _update_batches() -> void:
 		lit_base.g = 0.43 * breath
 		var lit_head := TowerArt.batch_color(frame + 1)
 		lit_head.g = lerpf(0.65 + 0.045 * weight, 1.0, recoil) * breath
-		_bases.item(i, at, Vector2.RIGHT * scale, lit_base)
-		_heads.item(i, at - aim * (tower.recoil * 31.0), aim * scale, lit_head)
+		if _custom_towers.has(id):
+			var batch: SpriteBatch = _custom_towers[id]
+			batch.item(used[id], at - aim * (tower.recoil * 31.0), aim * scale, Color.WHITE)
+			used[id] += 1
+		else:
+			_bases.item(defaults, at, Vector2.RIGHT * scale, lit_base)
+			_heads.item(defaults, at - aim * (tower.recoil * 31.0), aim * scale, lit_head)
+			defaults += 1
 		if halos:
 			var radius := 31.0 + weight * 8.0 + recoil * 11.0
 			var power := (0.34 + 0.041 * weight + 0.26 * recoil) * breath * glow_strength
 			_tower_halos.item(i, at, Vector2.RIGHT * radius, Color(tower.definition.tint, power))
 	_tower_halos.finish()
-	_bases.finish()
-	_heads.finish()
+	_bases.finish(defaults)
+	_heads.finish(defaults)
+	for id: String in _custom_towers:
+		_custom_towers[id].finish(used[id])
 	# On a zoomed mobile view, keep off-screen bodies out of the render batches.
 	var visible_region := Rect2()
 	if _preferences.mobile_mode and scale.x > 1.02:
@@ -320,8 +346,12 @@ func _draw() -> void:
 			var art_size := CELL * TowerArt.size_for_stage(int(battle.data.towers.lookup(build_id).stage))
 			var silhouette := Rect2(tile.get_center() - Vector2.ONE * art_size * 0.5, Vector2.ONE * art_size)
 			var frame := TowerArt.first_frame(build_id)
-			draw_texture_rect(TowerArt.icon(frame), silhouette, false, Color(1, 1, 1, 0.72))
-			draw_texture_rect(TowerArt.icon(frame + 1), silhouette, false, Color(1, 1, 1, 0.84))
+			var sprite := battle.data.tower_sprite(build_id)
+			if sprite != null:
+				draw_texture_rect(sprite, silhouette, false, Color(1, 1, 1, 0.84))
+			else:
+				draw_texture_rect(TowerArt.icon(frame), silhouette, false, Color(1, 1, 1, 0.72))
+				draw_texture_rect(TowerArt.icon(frame + 1), silhouette, false, Color(1, 1, 1, 0.84))
 	if battle.occupied.has(selected):
 		draw_arc(pixel(battle.occupied[selected].position), 21.0, 0, TAU, 32, battle.occupied[selected].definition.tint, 2.0, true)
 

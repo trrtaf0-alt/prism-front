@@ -13,6 +13,10 @@ var _caps := PackedInt32Array()
 var _total := 0.0
 var _cursor := 0
 var _finale: bool
+var _boss_id: String
+var _scripted: Array
+var _group := 0
+var _group_used := 0
 var _elite := PackedByteArray()
 var _elite_total := 0.0
 var _rng := RandomNumberGenerator.new()
@@ -24,12 +28,15 @@ var _group_end := 0
 var _pending: Array[Dictionary] = []
 var _next_pending := 0
 
-func _init(registry: EnemyRegistry, number: int, amount: int, seed: int, escort: Dictionary = {}) -> void:
+func _init(registry: EnemyRegistry, number: int, amount: int, seed: int, escort: Dictionary = {}, terminal: int = BattleData.FINAL_WAVE,
+		boss_id: String = "boss", scripted: Array = []) -> void:
 	_amount = amount
 	if number >= int(escort.get("first_wave", BattleData.FINAL_WAVE + 1)):
 		_escort = escort
 	_registry = registry
-	_finale = number == BattleData.FINAL_WAVE
+	_finale = number == terminal
+	_boss_id = boss_id
+	_scripted = scripted
 	_rng.seed = seed
 	for def: Dictionary in registry.definitions.values():
 		if def.child or def.boss or number < int(def.first_wave):
@@ -51,6 +58,8 @@ func _init(registry: EnemyRegistry, number: int, amount: int, seed: int, escort:
 
 func next(elite_weight: float = 1.0) -> Dictionary:
 	in_escort = false
+	if not _scripted.is_empty():
+		return _scripted_next()
 	if _next_pending >= _pending.size():
 		if _escort.is_empty() or _cursor == 0 or _cursor >= _amount:
 			return _roll(elite_weight)
@@ -59,6 +68,22 @@ func next(elite_weight: float = 1.0) -> Dictionary:
 	var unit := _pending[_next_pending]
 	_next_pending += 1
 	return unit
+
+func _scripted_next() -> Dictionary:
+	_cursor += 1
+	if _cursor == 1 and _finale:
+		return _registry.lookup(_boss_id)
+	var group: Dictionary = _scripted[_group]
+	_group_used += 1
+	if _group_used == int(group.count):
+		_group += 1
+		_group_used = 0
+	return _registry.lookup(group.enemy)
+
+func next_interval(fallback: float) -> float:
+	if _group >= _scripted.size():
+		return fallback
+	return float(_scripted[_group].get("interval", fallback))
 
 func _prepare_batch(elite_weight: float) -> void:
 	_pending.clear()
@@ -103,7 +128,7 @@ func _roll(elite_weight: float) -> Dictionary:
 	var slot := _cursor
 	_cursor += 1
 	if slot == 0 and _finale:
-		return _registry.lookup("boss")
+		return _registry.lookup(_boss_id)
 	if slot == 0 or _ids.is_empty():
 		return _registry.lookup("normal")
 	var ticket := _rng.randf() * (_total + _elite_total * (elite_weight - 1.0))

@@ -45,7 +45,9 @@ var _visible_drones: Array[Battle.Drone] = []
 
 var _cell: float
 
-func setup(glow: Texture2D, cell: float) -> void:
+var _custom_shapes := {}
+
+func setup(glow: Texture2D, cell: float, sprites: Dictionary = {}) -> void:
 	_cell = cell
 	var surface := ShaderMaterial.new()
 	surface.shader = SURFACE
@@ -58,8 +60,12 @@ func setup(glow: Texture2D, cell: float) -> void:
 	mantles.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	add_child(halos)
 	add_child(mantles)
-	for texture in TEXTURES:
-		var body := SpriteBatch.new(texture, _cell, surface)
+	var textures := TEXTURES.duplicate()
+	for id: String in sprites:
+		_custom_shapes[id] = textures.size()
+		textures.append(sprites[id])
+	for texture in textures:
+		var body := SpriteBatch.new(texture, _cell, surface if bodies.size() < TEXTURES.size() else null)
 		body.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		bodies.append(body)
 		add_child(body)
@@ -100,7 +106,7 @@ func submit(battle: Battle, origin: Vector2, dim: bool, quality: int, visible_re
 	var injured := 0
 	var marked := 0
 	for drone in drones:
-		_counts[drone.shape] += 1
+		_counts[int(_custom_shapes.get(drone.definition.get("id", ""), drone.shape))] += 1
 		shielded += int(drone.shield_hp > 0)
 		injured += int(drone.health < drone.maximum_health)
 		marked += int(drone.status.mark_stacks > 0)
@@ -148,8 +154,10 @@ func submit(battle: Battle, origin: Vector2, dim: bool, quality: int, visible_re
 			var swirl := Vector2.from_angle(battle.elapsed * (-0.78 if drone.boss else 0.55))
 			mantles.item(mantle_count, at, swirl * drone.scale * (1.08 + phase * 0.07), Color(color, 0.28 if dim else 0.57 + phase * 0.10))
 			mantle_count += 1
-		bodies[drone.shape].item(_used[drone.shape], at, heading * drone.scale, color)
-		_used[drone.shape] += 1
+		var body := int(_custom_shapes.get(drone.definition.get("id", ""), drone.shape))
+		var paint := Color(1.0, 1.0, 1.0, color.a) if body >= TEXTURES.size() else color
+		bodies[body].item(_used[body], at, heading * drone.scale, paint)
+		_used[body] += 1
 		var half_width := 9.0 * maxf(0.72, drone.scale)
 		var y := -13.0 * drone.scale
 		if drone.scale >= 1.4:

@@ -91,11 +91,11 @@ static func tower_text(def: Dictionary, data: BattleData, title_size: int = 30) 
 	return "\n".join(rows)
 
 static func enemy_text(base: Dictionary, data: BattleData, wave: int, mode: StringName, constraints: RunConstraints = null, title_size: int = 30) -> String:
-	var actual_wave := BattleData.FINAL_WAVE if base.boss else wave
+	var actual_wave := data.final_wave if base.boss else wave
 	var unit := data.enemy_for_wave(base, actual_wave, mode, constraints)
 	var appearance := "능력으로 생성" if unit.child else "%d웨이브부터 편성" % int(unit.first_wave)
 	if unit.boss:
-		appearance = "%d웨이브에 1기" % BattleData.FINAL_WAVE
+		appearance = "%d웨이브에 1기" % data.final_wave
 	var rp := int(unit.reward_rp) if unit.child else roundi(float(unit.reward_rp) * data.slot_rp_multiplier(actual_wave))
 	var rows := PackedStringArray([_heading(unit.name, title_size), appearance])
 	if not unit.child and not unit.boss and wave < int(unit.first_wave):

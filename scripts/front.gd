@@ -227,6 +227,7 @@ func _replace_screen() -> void:
 	queue_redraw()
 
 func show_menu() -> void:
+	Sound.apply_mod_audio({})
 	_replace_screen()
 	Sound.play_music(&"patrol")
 	game = false
@@ -311,6 +312,7 @@ func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}, start
 	_replace_screen()
 	data = mod_library.data
 	_modded_run = not mod_library.applied.is_empty()
+	Sound.apply_mod_audio(data.media.get("audio", {}))
 	_enemy_pick_radius = 1.0
 	for def: Dictionary in data.mobs.definitions.values():
 		_enemy_pick_radius = maxf(_enemy_pick_radius, float(def.scale) * 0.5 + 0.6)
@@ -329,7 +331,7 @@ func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}, start
 	callout_time = 0.0
 	defeat_delay = 0.0
 	last_base_damage = 0
-	battle = Battle.new(map, data, difficulty, levels, starting_funds, starting_rp)
+	battle = Battle.new(data.mod_map if data.mod_map != null else map, data, difficulty, levels, starting_funds, starting_rp)
 	battle.effect.connect(_battle_effect)
 	battle.tower_installed.connect(Sound.deploy_cue)
 	battle.attack_visual.connect(Sound.attack_cue)
@@ -529,7 +531,7 @@ func _update_boss_hud() -> void:
 
 func _update_hud() -> void:
 	_update_boss_hud()
-	wave_label.text = "%d / %d" % [battle.wave, BattleData.FINAL_WAVE]
+	wave_label.text = "%d / %d" % [battle.wave, data.final_wave]
 	health_label.text = "%d / %d" % [battle.health, int(data.balance.base_health)]
 	var ratio := float(battle.health) / float(data.balance.base_health)
 	health_bar.size.x = BASE_BAR_WIDTH * ratio
@@ -552,9 +554,9 @@ func _update_hud() -> void:
 	if battle.won or battle.lost:
 		wave_button.text = "작전 종료"
 	elif battle.active:
-		wave_button.text = "보스전" if battle.wave == BattleData.FINAL_WAVE else "교전 중"
-	elif battle.wave == BattleData.FINAL_WAVE - 1:
-		wave_button.text = "50웨이브 시작"
+		wave_button.text = "보스전" if battle.wave == data.final_wave else "교전 중"
+	elif battle.wave == data.final_wave - 1:
+		wave_button.text = "%d웨이브 시작" % data.final_wave
 	else:
 		wave_button.text = "웨이브 %d 시작" % (battle.wave + 1)
 	_update_forecast()
@@ -659,7 +661,7 @@ func _update_placement() -> void:
 		Battle.Placement.OCCUPIED:
 			message = "이미 타워가 있습니다"
 		Battle.Placement.TERRAIN:
-			message = "장애물" if map.tile_at(cell) == "#" else "적 이동 경로"
+			message = "장애물" if battle.field.tile_at(cell) == "#" else "적 이동 경로"
 		Battle.Placement.LIMIT:
 			message = "설치 한도 %d기" % battle.tower_limit()
 		Battle.Placement.FUNDS:
@@ -688,9 +690,16 @@ func _update_forecast() -> void:
 	_forecast_wave = upcoming
 	_forecast_seed = battle.roster_seed
 	var forecast_text := ""
-	var escort := data.escort_shield(upcoming, battle.difficulty, battle.constraints) > 0
-	if upcoming == BattleData.FINAL_WAVE:
-		forecast_text = "보스 1 · 지원군 %d\n단계 전환 시 보호막 갱신" % (data.wave_count(upcoming) - 1)
+	var escort: bool = not data.wave_rules.get(upcoming, {}).has("spawns") \
+		and data.escort_shield(upcoming, battle.difficulty, battle.constraints) > 0
+	if upcoming == data.final_wave:
+		var boss := data.mobs.lookup(data.boss_id)
+		var title: String = "보스" if data.boss_id == "boss" else boss.name
+		forecast_text = "%s 1 · 지원군 %d" % [title, data.wave_count(upcoming) - 1]
+		for phase: Dictionary in boss.phases:
+			if int(phase.get("shield", 0)) > 0:
+				forecast_text += "\n단계 전환 시 보호막 갱신"
+				break
 		if escort:
 			forecast_text += " · 호위 분대"
 	else:
@@ -937,7 +946,7 @@ func _wave_started(number: int) -> void:
 	if not _modded_run and not battle.constraints.active():
 		Profile.record_wave(number, battle.difficulty)
 	result.text = ""
-	if number == BattleData.FINAL_WAVE:
+	if number == data.final_wave:
 		wave_callout = ""
 		callout_time = 0.0
 		toast.hide()
@@ -1028,11 +1037,13 @@ func show_pause() -> void:
 	button_at(panel, "메인 메뉴", Rect2(36, 421, 488, 78) if mobile else Rect2(36, 338, 408, 54), show_menu)
 
 func show_codex() -> void:
+	if not game:
+		data = mod_library.data
 	_codex_from_pause = modal_kind == "pause"
 	var panel := _open_modal("codex", MOBILE_READING_SIZE if Profile.mobile_mode else Vector2(1396, 861))
 	var codex := CombatCodex.new()
 	place(codex, panel, Rect2(Vector2.ZERO, panel.size))
-	var wave := clampi(battle.wave, 1, BattleData.FINAL_WAVE) if game else 1
+	var wave := clampi(battle.wave, 1, data.final_wave) if game else 1
 	var mode := battle.difficulty if game else &"easy"
 	codex.setup(self, wave, mode, _close_codex, Profile.mobile_mode)
 
@@ -1053,7 +1064,7 @@ func _cleared(record: Dictionary) -> void:
 	building = false
 	_sync_selection()
 	var panel := _open_modal("victory", Vector2(900, 602))
-	text_at(panel, "50웨이브 클리어", 42, 28, 47, MINT)
+	text_at(panel, "%d웨이브 클리어" % data.final_wave, 42, 28, 47, MINT)
 	text_at(panel, BattleData.DIFFICULTIES[battle.difficulty], 750, 48, 23, GOLD, 105)
 	var stats := [
 		["총 플레이 시간", _duration(record.seconds)], ["보스전 시간", _duration(record.finale)],
@@ -1236,7 +1247,7 @@ func show_catalog(show_all: bool = false) -> void:
 		var frame := TowerArt.first_frame(id)
 		for layer in [frame, frame + 1]:
 			var portrait := TextureRect.new()
-			portrait.texture = TowerArt.icon(layer)
+			portrait.texture = data.tower_sprite(id) if data.tower_sprite(id) != null else TowerArt.icon(layer)
 			portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			portrait.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			place(portrait, tile, Rect2(1, 10, 70, 70))

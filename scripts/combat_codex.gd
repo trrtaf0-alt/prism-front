@@ -23,13 +23,15 @@ func setup(host: Control, initial_wave: int, initial_mode: StringName, close: Ca
 	var tower_tab_rect := Rect2(204, 24, 208, 82) if mobile else Rect2(36, 95, 150, 48)
 	var enemy_tab_rect := Rect2(428, 24, 208, 82) if mobile else Rect2(198, 95, 150, 48)
 	_tower_tab = _host.button_at(self, "타워  %d" % _host.data.towers.ids.size(), tower_tab_rect, _populate.bind(false))
-	_enemy_tab = _host.button_at(self, "적  %d" % _host.data.mobs.definitions.size(), enemy_tab_rect, _populate.bind(true))
+	var enemy_count: int = _enemy_ids().size()
+	_enemy_tab = _host.button_at(self, "적  %d" % enemy_count, enemy_tab_rect, _populate.bind(true))
 	var group := ButtonGroup.new()
 	for button in [_tower_tab, _enemy_tab]:
 		button.toggle_mode = true
 		button.button_group = group
 
 	_entries = ItemList.new()
+	_entries.fixed_icon_size = Vector2i.ONE * (44 if mobile else 30)
 	_entries.add_theme_font_size_override("font_size", 34 if mobile else 23)
 	_entries.add_theme_constant_override("v_separation", 27 if mobile else 15)
 	_entries.add_theme_stylebox_override("panel", _host.box("#101820", "#314451"))
@@ -56,7 +58,7 @@ func setup(host: Control, initial_wave: int, initial_mode: StringName, close: Ca
 	_wave_label = _host.text_at(_wave_controls, "웨이브", 0, 18 if mobile else 9, 31 if mobile else 23)
 	_wave = SpinBox.new()
 	_wave.min_value = 1
-	_wave.max_value = BattleData.FINAL_WAVE
+	_wave.max_value = _host.data.final_wave
 	_wave.value = initial_wave
 	if mobile:
 		_wave.get_line_edit().add_theme_font_size_override("font_size", 33)
@@ -96,16 +98,23 @@ func _populate(enemies: bool) -> void:
 	_enemy_tab.set_pressed_no_signal(enemies)
 	_wave_controls.visible = enemies
 	_entries.clear()
-	var ids: Array = _host.data.mobs.definitions.keys() if enemies else _host.data.towers.ids
+	var ids: Array = _enemy_ids() if enemies else _host.data.towers.ids
 	for id: String in ids:
 		var def: Dictionary = _host.data.mobs.lookup(id) if enemies else _host.data.towers.lookup(id)
-		var index := _entries.add_item(def.name)
+		var sprite: Texture2D = _host.data.media.get("enemies", {}).get(id) if enemies else _host.data.tower_sprite(id)
+		var index := _entries.add_item(def.name, sprite)
 		_entries.set_item_metadata(index, id)
 		_entries.set_item_custom_fg_color(index, Color(str(def.color)).lerp(Color.WHITE, 0.36))
 	if _entries.item_count > 0:
 		_entries.select(0)
 		_entries.ensure_current_is_visible()
 		_show_entry(0)
+
+func _enemy_ids() -> Array:
+	var data: BattleData = _host.data
+	return data.mobs.definitions.keys().filter(func(id: String) -> bool:
+		return id == data.boss_id or not data.mobs.lookup(id).boss
+	)
 
 func _refresh(_value: float) -> void:
 	var selected := _entries.get_selected_items()

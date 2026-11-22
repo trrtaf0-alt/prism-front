@@ -83,7 +83,7 @@ func _register(raw: Dictionary) -> bool:
 		return false
 	if def.armor < 0 or def.armor >= 1 or def.control_resist < 0 or def.control_resist >= 1 or int(def.generation) not in [0, 1, 2] or float(def.generation) != int(def.generation):
 		return false
-	if def.boss and (id != "boss" or int(def.first_wave) != BattleData.FINAL_WAVE or def.child):
+	if def.boss and def.child:
 		return false
 	for ability in ["regen", "cloak", "acceleration", "guardian", "boost", "brood"]:
 		if not def[ability] is Dictionary:

@@ -22,7 +22,7 @@ var definitions: Dictionary = {}
 var ids: Array[String] = []
 var error := ""
 
-func _init(base: Dictionary, additions: Array) -> void:
+func _init(base: Dictionary, additions: Array, overrides: Dictionary = {}) -> void:
 	if base.is_empty() or additions.is_empty():
 		error = "기본 또는 확장 타워 데이터를 읽을 수 없습니다."
 		return
@@ -31,12 +31,21 @@ func _init(base: Dictionary, additions: Array) -> void:
 		"id": BASE, "interval": 1.0 / float(base.shots_per_second), "attack": "bolt",
 		"description": "출구에 가까운 적의 이동을 예측해 직선탄을 발사합니다.",
 	}, true)
-	_add(core)
+	_add(_patched(core, overrides.get(BASE, {})))
 	for item: Variant in additions:
 		if not item is Dictionary:
 			error = "타워 정의 형식이 올바르지 않습니다."
 			return
-		_add(item)
+		_add(_patched(item, overrides.get(item.get("id"), {})))
+
+static func _patched(raw: Dictionary, patch: Dictionary) -> Dictionary:
+	if patch.is_empty():
+		return raw
+	var updated := raw.merged(patch, true)
+	if updated.has("refund") and (patch.has("cost") or patch.has("refund_ratio")):
+		var ratio := float(patch.get("refund_ratio", float(raw.refund) / float(raw.cost)))
+		updated.refund = floori(float(updated.cost) * ratio)
+	return updated
 
 func _add(raw: Dictionary) -> void:
 	var id := str(raw.get("id", ""))

@@ -272,12 +272,12 @@ func sell(cell: Vector2i) -> bool:
 
 func preview_wave() -> Dictionary:
 	var number := wave + 1
-	if number > BattleData.FINAL_WAVE:
+	if number > data.final_wave:
 		return {}
-	if number == BattleData.FINAL_WAVE:
-		return {"boss": 1}
+	if number == data.final_wave:
+		return {data.boss_id: 1}
 	var count := data.wave_count(number)
-	var preview := WaveRoster.new(data.mobs, number, count, roster_seed ^ number)
+	var preview := data.make_roster(number, roster_seed ^ number)
 	var counts := {}
 	for i in count:
 		var id: String = preview.next().id
@@ -285,7 +285,7 @@ func preview_wave() -> Dictionary:
 	return counts
 
 func start_wave() -> bool:
-	if active or lost or won or wave >= BattleData.FINAL_WAVE:
+	if active or lost or won or wave >= data.final_wave:
 		return false
 	wave += 1
 	active = true
@@ -297,14 +297,14 @@ func start_wave() -> bool:
 	queued = data.wave_count(wave)
 	_rp_multiplier = data.slot_rp_multiplier(wave)
 	_interval = data.spawn_interval(wave)
-	_spawn_clock = _interval
 	_escort_shield = data.escort_shield(wave, difficulty, constraints)
 	var escort: Dictionary = data.balance.escorts if _escort_shield > 0 else {}
-	_roster = WaveRoster.new(data.mobs, wave, queued, roster_seed ^ wave, escort)
-	if wave == BattleData.FINAL_WAVE:
+	_roster = data.make_roster(wave, roster_seed ^ wave, escort)
+	if wave == data.final_wave:
 		finale_started = elapsed
 	wave_started.emit(wave)
 	_spawn_primary(1.0)
+	_spawn_clock = _roster.next_interval(_interval)
 	return true
 
 func _spawn_primary(elite_weight: float) -> void:
@@ -318,7 +318,7 @@ func _spawn_primary(elite_weight: float) -> void:
 func _dispatch(delta: float) -> void:
 	_spawn_clock -= delta
 	while _spawn_clock <= 0.000001 and queued > 0:
-		if wave == BattleData.FINAL_WAVE:
+		if wave == data.final_wave:
 			var phase := bosses[0].mob.phase if not bosses.is_empty() else 2
 			var escorts := primary_spawned - 1
 			var stage := mini(2, maxi(phase, int(escorts >= 180) + int(escorts >= 495)))
@@ -326,7 +326,7 @@ func _dispatch(delta: float) -> void:
 			finale_last_spawn = elapsed + _spawn_clock - finale_started
 		else:
 			_spawn_primary(1.0)
-		_spawn_clock += _interval
+		_spawn_clock += _roster.next_interval(_interval)
 
 func _wave_enemy(definition: Dictionary) -> Dictionary:
 	var id: String = definition.id
@@ -407,7 +407,7 @@ func _finish_wave() -> void:
 	if not active:
 		return
 	active = false
-	var final := wave == BattleData.FINAL_WAVE
+	var final := wave == data.final_wave
 	if final and (not boss_killed or health <= 0):
 		lost = true
 		defeated.emit(wave)
@@ -500,7 +500,7 @@ func _remove_drones() -> void:
 			_recycle_drone(i)
 		elif drone.progress >= _path_length:
 			var remaining := drone.health
-			if drone.primary and drone.boss and wave == BattleData.FINAL_WAVE:
+			if drone.primary and drone.boss and wave == data.final_wave:
 				boss_escaped = true
 			health = maxi(0, health - remaining)
 			base_damaged.emit(remaining)
@@ -887,7 +887,7 @@ func _apply_damage(drone: Drone, amount: int, direction: Vector2, advanced: bool
 			queue_birth(drone.progress, child, EnemyRegistry.SPLIT_COUNT)
 			mob_effect(&"divide", drone.position, drone.position, drone.tint, 0.55)
 		if drone.boss:
-			if drone.primary and wave == BattleData.FINAL_WAVE:
+			if drone.primary and wave == data.final_wave:
 				boss_killed = true
 				finale_boss_time = elapsed - finale_started
 				escorts_waiting_at_boss_kill = queued

@@ -90,7 +90,7 @@ New-Item -ItemType Directory -Force dist | Out-Null
 
 메인 메뉴의 **모드 관리 → 모드 추가**에서 ZIP을 선택한 뒤, 목록에서 모드를 활성화하고 새 게임을 시작합니다. Windows에서는 모드 관리 화면에 ZIP을 끌어다 놓을 수도 있습니다. Android에서는 기기의 파일 선택기를 엽니다. 비활성화하면 설치본은 남습니다. 삭제는 확인 후 선택한 모드에만 적용되며, 모드 적용 판은 일반 기록과 별개입니다.
 
-모드 ZIP의 루트에 `mod.json`과 콘텐츠 JSON을 넣습니다. 압축 파일은 최대 1 MiB이고 각 JSON은 최대 256 KiB입니다. 모드는 데이터만 추가하며 기존 ID, 전투 규칙, 웨이브 수와 최종 보스는 유지합니다.
+모드 ZIP의 루트에 `mod.json`과 콘텐츠 JSON을 넣습니다. 기존 형식 1은 콘텐츠를 추가할 수 있고 ZIP은 최대 1 MiB입니다. 아래의 형식 2도 같은 관리 화면에서 설치합니다. 두 형식 모두 JSON 파일마다 최대 256 KiB이며, 모드당 타워·연구·적을 종류별 96개까지 추가할 수 있습니다. 최대 24개 모드를 설치할 수 있고, 활성 모드의 추가 콘텐츠는 종류별 총 256개까지 적용됩니다.
 
 ```json
 {
@@ -110,7 +110,48 @@ New-Item -ItemType Directory -Force dist | Out-Null
 | `research.json` | `{"nodes": [...]}` | `data/research.json` |
 | `enemies.json` | `{"enemies": [...]}` | `data/enemies.json` |
 
-ID는 소문자와 숫자로 시작하며 점, 밑줄, 하이픈을 덧붙일 수 있습니다. 추가 타워와 해금 연구는 `research_id`와 `unlock.id`로 연결합니다. 다른 모드의 데이터가 필요하면 `requires`에 해당 모드의 ID를 적습니다. 의존 모드를 먼저 적용하고 나머지는 모드 ID 순으로 검사합니다. 충돌하거나 의존성이 충족되지 않은 모드는 보류 사유가 표시됩니다. 새 타워는 기본 아트를 사용하며, ZIP에서 스크립트나 별도 리소스를 불러오지 않습니다.
+ID는 소문자와 숫자로 시작하며 점, 밑줄, 하이픈을 덧붙일 수 있습니다. 추가 타워와 해금 연구는 `research_id`와 `unlock.id`로 연결합니다. 다른 모드의 데이터가 필요하면 `requires`에 해당 모드의 ID를 적습니다. 의존 모드를 먼저 적용하고 나머지는 모드 ID 순으로 검사합니다. 충돌하거나 의존성이 충족되지 않은 모드는 보류 사유가 표시됩니다.
+
+### 모드 형식 2
+
+`mod.json`의 `format`을 `2`로 지정하고, 필요한 파일을 ZIP 루트에 추가합니다. 설치한 형식 1 모드도 계속 사용할 수 있습니다.
+
+| 선택 파일 | 역할 |
+| --- | --- |
+| `tower_overrides.json` | 기존 타워 ID를 키로 사용해 이름, 설명, 색, 피해량, 주기, 사거리, 가격, 환급률, 생산량 또는 탄속 수정 |
+| `campaign.json` | 전장, 최종 웨이브, 최종 보스, 웨이브별 편성·스폰 간격·완료 보상 지정 |
+| `assets.json` | 타워와 적 ID를 PNG에 연결하거나 음악·효과음 슬롯을 WAV 또는 Ogg Vorbis 파일에 연결 |
+
+`tower_overrides.json` 예시는 `{"tower_01":{"damage":3,"cost":12}}`입니다. 수정 내용은 해당 모드를 적용한 판에만 반영됩니다. 타워 수정과 이미지·음향 연결은 같은 ID 또는 슬롯이 겹치면 보류됩니다. 캠페인 모드는 한 판에 하나만 적용됩니다.
+
+`campaign.json` 예시
+
+```json
+{
+  "final_wave": 12,
+  "boss_id": "example_boss",
+  "waves": [
+    {
+      "wave": 1, "count": 10, "interval": 0.5, "reward": 18,
+      "spawns": [
+        {"enemy": "normal", "count": 7},
+        {"enemy": "swift", "count": 3, "interval": 0.2}
+      ]
+    }
+  ]
+}
+```
+
+- 최종 웨이브는 1~100 사이에서 설정합니다. 설정을 생략한 웨이브는 기본 수량, 간격과 가중치 편성을 사용합니다.
+- `spawns`를 설정하면 그룹이 배열 순서대로 생성됩니다. 그룹의 `interval`은 그 그룹의 다음 적이 나올 때까지의 간격을 지정합니다. 웨이브의 첫 적은 즉시 등장합니다. 그룹 합계는 `count`와 일치해야 하며, 최종 웨이브의 합계는 자동으로 먼저 등장하는 보스 1기를 제외해 계산합니다. 명시 편성은 일반 출현 가중치·호위 편성과 별개로 동작합니다.
+- `map`에는 `data/sample_map.json`과 같은 30×18 맵 객체를 넣을 수 있습니다. 경로는 생성 지점에서 출구까지 상하좌우로 이어져야 합니다.
+- 새 최종 보스는 `enemies.json`에서 `"boss":true`로 정의하고 `boss_id`에 지정합니다. 체력 기준 행동은 `phases`에 높은 HP 비율부터 `threshold`, `shield`, `speed_multiplier`, `regen`, `boost`로 정의할 수 있습니다. 커스텀 보스는 작성자가 정한 HP와 속도를 사용하며 보스 제약·특전은 그대로 적용됩니다.
+
+`assets.json` 예시는 `{"towers":{"tower_01":"assets/turret.png"},"enemies":{"example_boss":"assets/boss.png"},"audio":{"patrol":"assets/field.ogg","wave":"assets/wave.wav"}}`입니다.
+
+- PNG는 각 변 최대 512픽셀입니다. 오디오는 음악 `patrol`, `boss`와 효과음 `wave`, `clear`, `install`, `sell`, `hit`, `kill`, `base`, `charge`, `heavy` 슬롯을 지원합니다. 음악은 최대 300초, 효과음은 최대 8초입니다.
+- 형식 2 ZIP은 최대 4 MiB입니다. `assets/`에는 파일 32개, 파일당 2 MiB, 합계 3 MiB까지 넣을 수 있습니다. 활성 모드의 리소스 연결은 총 64개까지 적용됩니다.
+- 웨이브 편성과 보스 단계는 JSON으로 정의합니다. 외부 GDScript, 실행 파일, Godot 리소스 팩은 불러오지 않습니다.
 
 ## Windows 내보내기
 

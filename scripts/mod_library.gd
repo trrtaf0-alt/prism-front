@@ -3,6 +3,7 @@ extends RefCounted
 
 const MAX_INSTALLED := 24
 const MAX_ADDED_PER_KIND := 256
+const MAX_ACTIVE_MEDIA := 64
 const KEYS := ["towers", "nodes", "enemies"]
 const CONTENT_NAMES := {"towers": "타워", "nodes": "연구", "enemies": "적"}
 
@@ -39,7 +40,7 @@ func reload() -> void:
 			continue
 		var source := FileAccess.open(_path(filename), FileAccess.READ)
 		var package: Variant = null
-		if source != null and source.get_length() <= 4 * ModPackage.MAX_MEMBER:
+		if source != null and source.get_length() <= ModPackage.MAX_INSTALLED_FILE:
 			package = JSON.parse_string(source.get_as_text())
 		if not package is Dictionary or not ModPackage.validate(package).is_empty() or package.manifest.id != id:
 			package = {"manifest": {"id": id, "name": id, "author": "", "version": "", "description": "설치 파일을 읽을 수 없습니다."}, "invalid": true}
@@ -70,7 +71,10 @@ func install(path: String) -> String:
 	var id: String = package.manifest.id
 	if packages.has(id):
 		return "같은 ID의 모드가 이미 설치되어 있습니다 · " + id
-	if not _write(_path(id + ".json"), JSON.stringify(package)):
+	var serialized := JSON.stringify(package)
+	if serialized.to_utf8_buffer().size() > ModPackage.MAX_INSTALLED_FILE:
+		return "저장 가능한 모드 크기를 초과했습니다."
+	if not _write(_path(id + ".json"), serialized):
 		return "설치 파일을 저장할 수 없습니다."
 	packages[id] = package
 	resolve()
@@ -113,7 +117,8 @@ func resolve() -> void:
 	data = _base
 	applied.clear()
 	problems.clear()
-	var appended := {"towers": [], "nodes": [], "enemies": []}
+	var appended := {"towers": [], "nodes": [], "enemies": [], "campaign": {},
+		"tower_overrides": {}, "media": {"towers": {}, "enemies": {}, "audio": {}}}
 	var pending := requested.keys()
 	pending.sort()
 	for id in packages:
@@ -154,16 +159,53 @@ func _include(id: String, appended: Dictionary) -> String:
 			candidate[key].append(row)
 		if candidate[key].size() > MAX_ADDED_PER_KIND:
 			return "활성 모드의 %s 추가 한도를 초과했습니다." % CONTENT_NAMES[key]
+	var campaign: Dictionary = package.get("campaign", {})
+	if not campaign.is_empty():
+		if not candidate.campaign.is_empty():
+			return "다른 캠페인 모드가 이미 적용되었습니다."
+		candidate.campaign = campaign
+	for target: String in package.get("tower_overrides", {}):
+		if candidate.tower_overrides.has(target):
+			return "두 모드가 같은 타워를 수정합니다 · " + target
+		if not data.towers.definitions.has(target):
+			return "수정할 기존 타워가 없습니다 · " + target
+		candidate.tower_overrides[target] = package.tower_overrides[target]
+	var error := _include_media(id, candidate.media)
+	if not error.is_empty():
+		return error
 	var preview := BattleData.new(candidate)
-	for error in [preview.towers.error, preview.mobs.error, preview.research.error]:
-		if not error.is_empty():
-			return error
+	for problem in [preview.towers.error, preview.mobs.error, preview.research.error, preview.campaign_error]:
+		if not problem.is_empty():
+			return problem
+	for kind: String in ["towers", "enemies"]:
+		var registry: Dictionary = preview.towers.definitions if kind == "towers" else preview.mobs.definitions
+		for target: String in candidate.media[kind]:
+			if not registry.has(target):
+				return "이미지를 연결할 ID가 없습니다 · " + target
 	if not _bounded_research(preview.research, candidate.nodes):
 		return "연구 선행 경로가 너무 복잡합니다."
 	data = preview
-	for key in KEYS:
+	for key in candidate:
 		appended[key] = candidate[key]
 	applied[id] = true
+	return ""
+
+func _include_media(id: String, media: Dictionary) -> String:
+	var package: Dictionary = packages[id]
+	var amount := 0
+	for kind: String in media:
+		var targets: Dictionary = package.get("bindings", {}).get(kind, {})
+		amount += media[kind].size() + targets.size()
+		for target: String in targets:
+			if media[kind].has(target):
+				return "리소스 연결 충돌 · " + target
+	if amount > MAX_ACTIVE_MEDIA:
+		return "활성 모드의 리소스 연결은 최대 %d개입니다." % MAX_ACTIVE_MEDIA
+	var decoded := ModPackage.decode_media(package)
+	if decoded.has("error"):
+		return decoded.error
+	for kind: String in decoded.media:
+		media[kind].merge(decoded.media[kind])
 	return ""
 
 func _bounded_research(graph: ResearchGraph, rows: Array) -> bool:

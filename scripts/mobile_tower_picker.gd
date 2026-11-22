@@ -78,6 +78,8 @@ func setup(host: Control, show_all: bool, initial: String) -> void:
 func _add_tower(id: String, def: Dictionary, unlocked: bool) -> Button:
 	var button := Button.new()
 	button.text = "%s  ·  %d%s" % [def.name, def.cost, "" if unlocked else "  ·  연구"]
+	button.icon = _front.battle.data.tower_sprite(id)
+	button.add_theme_constant_override("icon_max_width", 64)
 	button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	button.custom_minimum_size.y = 94.0
 	button.add_theme_font_size_override("font_size", 32)

@@ -31,6 +31,9 @@ var _retrigger := {&"hit": 85, &"kill": 96}
 var _deployment: Array[StringName] = []
 var _support_deployment: Array[StringName] = []
 var _silent := false
+var _default_music := {}
+var _default_effects := {}
+var _active_audio := {}
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -58,6 +61,7 @@ func _ready() -> void:
 		player.volume_linear = 0.0
 		add_child(player)
 		_music[track] = player
+		_default_music[track] = player.stream
 
 func _register(kind: StringName, stream: AudioStreamWAV, polyphony: int) -> void:
 	var player := AudioStreamPlayer.new()
@@ -66,6 +70,7 @@ func _register(kind: StringName, stream: AudioStreamWAV, polyphony: int) -> void
 	player.max_polyphony = polyphony
 	add_child(player)
 	_voices[kind] = player
+	_default_effects[kind] = stream
 
 func _register_deploy(id: StringName, stage: int, support: int) -> StringName:
 	var spec := [
@@ -112,6 +117,25 @@ func support_cue(event: StringName, _kind: int, _start: Vector2, _end: Vector2) 
 	match event:
 		&"sync": cue(&"support_sync")
 		&"quantum": cue(&"support_echo")
+
+func apply_mod_audio(audio: Dictionary) -> void:
+	if audio == _active_audio:
+		return
+	_active_audio = audio
+	if _music_fade != null and _music_fade.is_running():
+		_music_fade.kill()
+	music_track = &""
+	for id: StringName in _music:
+		var player: AudioStreamPlayer = _music[id]
+		player.stop()
+		player.volume_linear = 0.0
+		player.stream = audio.get(str(id), _default_music[id])
+	for id: StringName in _voices:
+		var player: AudioStreamPlayer = _voices[id]
+		var stream: AudioStream = audio.get(str(id), _default_effects[id])
+		if player.stream != stream:
+			player.stop()
+			player.stream = stream
 
 func play_music(track: StringName = &"", seconds: float = 1.0) -> void:
 	if track == music_track:

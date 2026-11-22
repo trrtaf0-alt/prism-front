@@ -104,6 +104,7 @@ func _run() -> void:
 	_check(not reloaded.packages.has("fixture") and not reloaded.requested.has("fixture"), "confirmed deletion clears installed content and saved activation")
 	ui.start_game()
 	_check(not ui.battle.data.towers.definitions.has("qa_beam") and ui.battle.data.towers.ids.size() == 44, "new run after deletion loads all base towers")
+	await _expanded(ui, reloaded, installed)
 	sim = null
 	ui.queue_free()
 	await process_frame
@@ -119,17 +120,118 @@ func _run() -> void:
 	print("Mod checks: %d, failures: %d" % [_checks, _failures])
 	quit(int(_failures > 0))
 
-func _fixture(id: String, contents: Dictionary, dependencies: Array = []) -> String:
+func _expanded(ui: Control, library: ModLibrary, installed: String) -> void:
+	var map := BattleData.read_json("res://data/sample_map.json")
+	map.name = "역방향 실험장"
+	var original_spawn: Array = map.spawn
+	map.spawn = map.exit
+	map.exit = original_spawn
+	map.path.reverse()
+	for row in map.tiles.size():
+		map.tiles[row] = map.tiles[row].replace("S", "s").replace("E", "S").replace("s", "E")
+	var sprite := Image.create_empty(24, 24, false, Image.FORMAT_RGBA8)
+	sprite.fill(Color("#52ffbb"))
+	var sample := AudioStreamWAV.new()
+	sample.mix_rate = 8000
+	var silence := PackedByteArray()
+	silence.resize(800)
+	sample.data = silence
+	var wav_path := _workspace.path_join("test.wav")
+	_check(sample.save_to_wav(wav_path) == OK, "create genuine WAV fixture")
+	_files.append(wav_path)
+	var example := _fixture("expanded", {
+		"enemies.json": {"enemies": [{
+			"id": "qa_boss", "name": "테스트 보스", "boss": true, "shape": "boss", "color": "#50efff",
+			"health": 400, "speed": 0.2, "reward": 50, "reward_rp": 5, "armor": 0,
+			"phases": [{"threshold": 0.5, "speed_multiplier": 1.5, "shield": 12}],
+		}]},
+		"campaign.json": {"map": map, "final_wave": 2, "boss_id": "qa_boss", "waves": [
+			{"wave": 1, "count": 2, "interval": 0.15, "reward": 17, "spawns": [
+				{"enemy": "normal", "count": 1}, {"enemy": "swift", "count": 1, "interval": 0.75},
+			]},
+			{"wave": 2, "count": 2, "interval": 0.1, "spawns": [{"enemy": "normal", "count": 1}]},
+		]},
+		"tower_overrides.json": {"tower_01": {"damage": 3, "cost": 12}},
+		"assets.json": {"towers": {"tower_01": "assets/sprite.png"}, "enemies": {"qa_boss": "assets/sprite.png"},
+			"audio": {"patrol": "assets/patrol.ogg", "wave": "assets/test.wav"}},
+		"assets/sprite.png": sprite.save_png_to_buffer(),
+		"assets/patrol.ogg": FileAccess.get_file_as_bytes("res://assets/music/neon_watch.ogg"),
+		"assets/test.wav": FileAccess.get_file_as_bytes(wav_path),
+	}, [], 2)
+	var installation := library.install(example)
+	_check(installation.is_empty() and library.data == _base, "format 2 ZIP with nested media installs disabled: " + installation)
+	_check(library.set_enabled("expanded", true).is_empty() and library.applied.has("expanded"),
+		"format 2 activation: " + str(library.problems))
+	if not library.applied.has("expanded"):
+		return
+	var checker := ModLibrary.new(installed, _base)
+	_check(checker.applied.has("expanded") and checker.data.tower_sprite("tower_01") != null, "expanded ZIP and media bindings survive reload")
+	ui.start_game()
+	var sim: Battle = ui.battle
+	var audio := root.get_node("Sound")
+	_check(sim.field.title == "역방향 실험장" and sim.field.start == Vector2i(29, 9), "new game loads full custom path")
+	_check(sim.tower_definition("tower_01").damage == 3 and sim.tower_definition("tower_01").cost == 12, "base tower patch reaches combat")
+	_check(sim.tower_definition("tower_01").refund == 12, "base refund follows patched cost")
+	_check(audio._music[&"patrol"].stream == sim.data.audio("patrol") and audio._voices[&"wave"].stream == sim.data.audio("wave"), "music and effect override the existing players")
+	_check(sim.data.audio("patrol") is AudioStreamOggVorbis and sim.data.audio("patrol").loop \
+		and sim.data.audio("wave") is AudioStreamWAV, "Ogg music loops and WAV effects use the installed file")
+	_check(ui.field._custom_towers.has("tower_01") and ui.field._mobs._custom_shapes.has("qa_boss"), "tower and enemy textures have live render batches")
+	_check(sim.preview_wave() == {"normal": 1, "swift": 1} and sim.start_wave() and sim.enemies[0].definition.id == "normal", "scripted composition is previewed and spawns in order")
+	sim._dispatch(0.5)
+	_check(sim.enemies.size() == 1, "next group delay overrides the wave interval")
+	sim._dispatch(0.25)
+	_check(sim.enemies.size() == 2 and sim.enemies[1].definition.id == "swift", "next group spawns on schedule")
+	for unit: Battle.Drone in sim.enemies:
+		sim._apply_damage(unit, 1_000_000, Vector2.ZERO)
+	sim._remove_drones()
+	sim.tick(0.0)
+	_check(not sim.active and sim.data.wave_reward(1) == 17 and sim.preview_wave().has("qa_boss"), "custom reward and boss preview use campaign data")
+	_check(sim.start_wave() and sim.bosses.size() == 1 and sim.bosses[0].maximum_health == 400, "replacement boss spawns once with mod HP")
+	if sim.bosses.is_empty():
+		return
+	var boss: Battle.Drone = sim.bosses[0]
+	sim._apply_damage(boss, 201, Vector2.ZERO)
+	sim.tick(0.0)
+	_check(boss.mob.phase == 1 and boss.shield_hp == 12, "custom health threshold invokes real phase logic")
+	ui.field._update_batches()
+	if "--visual" in OS.get_cmdline_user_args() and DisplayServer.get_name() != "headless":
+		await process_frame
+		await RenderingServer.frame_post_draw
+		_check(ui.field._mobs.bodies[ui.field._mobs._custom_shapes.qa_boss].multimesh.visible_instance_count == 1, "custom boss renderer submits one body")
+	sim._apply_damage(boss, 1_000_000, Vector2.ZERO)
+	sim._remove_drones()
+	sim.tick(0.1)
+	_check(sim.active and not sim.won and sim.enemies.size() == 1, "boss death waits for scheduled survivors")
+	for unit: Battle.Drone in sim.enemies:
+		sim._apply_damage(unit, 1_000_000, Vector2.ZERO)
+	sim._remove_drones()
+	sim.tick(0.0)
+	_check(sim.won and not sim.start_wave() and ui.modal_kind == "victory", "campaign clears at wave two and blocks wave three")
+	var conflict := _fixture("second-campaign", {"campaign.json": {"final_wave": 3}}, ["expanded"], 2)
+	var broken := _fixture("bad-roster", {"campaign.json": {"waves": [{"wave": 1, "count": 2,
+		"spawns": [{"enemy": "unknown", "count": 2}]}]}}, [], 2)
+	_check(library.install(conflict).is_empty() and library.set_enabled("second-campaign", true).is_empty() \
+		and library.problems.has("second-campaign"), "second campaign cannot silently overwrite an active one")
+	_check(library.set_all(false).is_empty() and library.install(broken).is_empty() \
+		and library.set_enabled("bad-roster", true).is_empty() and library.problems.get("bad-roster", "").contains("unknown")
+		and library.data == _base, "invalid roster is isolated without changing normal game")
+	ui.show_menu()
+	ui.start_game()
+	_check(sim.won and ui.battle.data.final_wave == 50 and ui.battle.tower_definition("tower_01").damage == 1 \
+		and audio._music[&"patrol"].stream == audio._default_music[&"patrol"], "new game restores vanilla without mutating prior run")
+
+func _fixture(id: String, contents: Dictionary, dependencies: Array = [], format: int = 1) -> String:
 	var path := _workspace.path_join(id + ".zip")
 	var zip := ZIPPacker.new()
 	if zip.open(path) != OK:
 		return ""
-	contents["mod.json"] = {"format": 1, "id": id, "name": "검증 " + id, "author": "QA",
+	contents["mod.json"] = {"format": format, "id": id, "name": "검증 " + id, "author": "QA",
 		"version": "1.0", "description": "모드 관리 통합 테스트 파일입니다.", "requires": dependencies}
 	for filename in contents:
 		zip.start_file(filename)
-		var text: String = contents[filename] if contents[filename] is String else JSON.stringify(contents[filename])
-		zip.write_file(text.to_utf8_buffer())
+		var item: Variant = contents[filename]
+		var bytes: PackedByteArray = item if item is PackedByteArray else str(item if item is String else JSON.stringify(item)).to_utf8_buffer()
+		zip.write_file(bytes)
 		zip.close_file()
 	zip.close()
 	_files.append(path)
