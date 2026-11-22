@@ -90,7 +90,8 @@ func _run() -> void:
 	list_scroll.ensure_control_visible(collector)
 	await process_frame
 	await _tap_control(collector)
-	check(picker._details.text.contains("재화 15 생산"), "mobile economic tower card shows production")
+	var collector_yield := int(sim.tower_definition("tower_37").production)
+	check(picker._details.text.contains("재화 %d 생산" % collector_yield), "mobile economic tower card shows production")
 	await _tap_button(ui.modal, "연구 보기")
 	check(ui.modal_kind == "research" and ui.research_screen.board.focus_id == "eco_gather", "mobile locked economy card opens the matching research")
 	ui.close_modal()
