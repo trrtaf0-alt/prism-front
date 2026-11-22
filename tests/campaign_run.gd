@@ -26,6 +26,22 @@ const SUPPORT_PLANS := {
 	"all": {31: 12, 32: 18, 33: 25, 34: 34, 35: 41, 36: 45},
 }
 
+const PRODUCTION_PLANS := {
+	"none": [],
+	"cash": [[39, 26, 3], [43, 20, 1], [38, 9, 4], [37, 1, 3]],
+	"research": [[42, 25, 2], [44, 22, 1], [41, 13, 3], [40, 6, 3]],
+	"mixed": [[45, 29, 1], [39, 26, 3], [42, 25, 2], [43, 20, 1], [44, 22, 1],
+		[41, 13, 3], [38, 9, 4], [40, 6, 3], [37, 1, 3]],
+}
+
+var production_plan := "none"
+var production_credits := 0
+var production_rp := 0
+var production_spend := 0
+var production_research := 0
+var production_breakdown: Dictionary = {}
+var production_guard := false
+var production_seats: Array[Vector2i] = []
 var support_plan := "none"
 var difficulty := &"easy"
 var trial_health := 0
@@ -55,6 +71,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	var args := OS.get_cmdline_user_args()
+	production_guard = "--production-guard" in args
 	for arg in args:
 		if arg.begins_with("--strategy="):
 			policy = arg.trim_prefix("--strategy=")
@@ -62,6 +79,8 @@ func _run() -> void:
 			roster_seed = int(arg.trim_prefix("--seed="))
 		if arg.begins_with("--support="):
 			support_plan = arg.trim_prefix("--support=")
+		if arg.begins_with("--production="):
+			production_plan = arg.trim_prefix("--production=")
 		if arg.begins_with("--difficulty="):
 			difficulty = StringName(arg.trim_prefix("--difficulty="))
 		if arg.begins_with("--constraints="):
@@ -82,7 +101,7 @@ func _run() -> void:
 				return
 			trial_health = int(values[0])
 			trial_armor = float(values[1]) / 100.0
-	if not BattleData.DIFFICULTIES.has(difficulty) or not SUPPORT_PLANS.has(support_plan) or not POLICIES.has(policy) or not map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty() or not rules.mobs.error.is_empty():
+	if not BattleData.DIFFICULTIES.has(difficulty) or not SUPPORT_PLANS.has(support_plan) or not POLICIES.has(policy) or not PRODUCTION_PLANS.has(production_plan) or not map.load_map(BattleData.read_json("res://data/sample_map.json")).is_empty() or not rules.mobs.error.is_empty():
 		printerr("Invalid campaign fixture")
 		quit(1)
 		return
@@ -104,6 +123,12 @@ func _run() -> void:
 			var tile := Vector2i(x, y)
 			if map.tile_at(tile) == "." and not seats.has(tile):
 				seats.append(tile)
+	production_seats = seats.duplicate()
+	if production_guard:
+		# Leave commonly used firing positions free and group producers for shared buffs.
+		var anchor := Vector2i(2, map.size.y - 2)
+		production_seats.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+			return (a - anchor).length_squared() < (b - anchor).length_squared())
 	# Preserve the existing benchmark CLI and snapshot convention, where positive levels are penalties.
 	var rule_levels: Dictionary = {}
 	for id: StringName in constraint_levels:
@@ -159,8 +184,19 @@ func _run() -> void:
 			return
 		if wave == 1 and leaky:
 			_place_opening(sim)
+		_record_economy(sim)
+		if wave == 49 and summarize:
+			print("PRE_BOSS " + JSON.stringify({
+				"placed": first_buy, "cash": sim.credits, "gross_spend": invested, "earned": sim.total_credits,
+				"rp": sim.research.total_earned, "production_spend": production_spend,
+				"production_research": production_research, "produced_credits": production_credits,
+				"produced_rp": production_rp, "production_breakdown": production_breakdown,
+			}))
 		if wave < BattleData.FINAL_WAVE:
 			_prepare(sim)
+			if production_guard:
+				_fill_defense_gap(sim)
+			_prepare_economy(sim)
 		if wave == BattleData.FINAL_WAVE - 1 and not snapshot_path.is_empty():
 			var saved := _save_finale(sim)
 			quit(0 if saved else 1)
@@ -241,6 +277,8 @@ func _report_summary(sim: Battle) -> void:
 		"boss_time": sim.finale_boss_time, "gross_spend": invested, "cash": sim.credits,
 		"earned": sim.total_credits, "rp": sim.research.total_earned, "research": sim.research.completed.size(),
 		"unlock": first_unlock, "placed": first_buy, "towers": _build(sim),
+		"production": production_plan, "produced_credits": production_credits, "produced_rp": production_rp,
+		"production_spend": production_spend, "production_research": production_research,
 	}))
 
 func _build(sim: Battle) -> Dictionary:
@@ -338,6 +376,81 @@ func _prepare(sim: Battle) -> void:
 				if _count(sim, id) < (7 if n == 25 else 4) and sim.credits >= reserve + int(sim.tower_definition(id).cost):
 					_buy(sim, id)
 
+func _prepare_economy(sim: Battle) -> void:
+	# Retain a defense budget and avoid purchases too late to benefit the run.
+	if sim.wave >= 43:
+		return
+	var reserve := 7 * maxi(0, sim.wave - 4) ** 2
+	for target: Array in PRODUCTION_PLANS[production_plan]:
+		var id := _id(target[0])
+		var def := sim.tower_definition(id)
+		if sim.wave < int(target[1]) or _count(sim, id) >= int(target[2]) or sim.credits < reserve + int(def.cost):
+			continue
+		if not sim.research.unlocked.has(id):
+			if sim.research.minimum_cost(def.research_id) > sim.research.points:
+				continue
+			var before := sim.research.points
+			_research(sim, id)
+			production_research += before - sim.research.points
+		if def.production > 0:
+			if not _buy(sim, id, production_seats):
+				continue
+		elif not _buy_economy_support(sim, def):
+			continue
+		production_spend += int(def.cost)
+		return
+
+func _fill_defense_gap(sim: Battle) -> void:
+	if sim.wave not in range(30, 43) or _count(sim, _id(28)) + _count(sim, _id(29)) > 0:
+		return
+	for number in [25, 26, 23, 22, 21, 18, 13]:
+		var id := _id(number)
+		if _count(sim, id) < 7 and _buy(sim, id):
+			return
+
+func _record_economy(sim: Battle) -> void:
+	production_credits += sim.economy.last_credits
+	production_rp += sim.economy.last_rp
+	# Each column stores the pre-custom-rule contribution in hundredths.
+	for tower: Battle.Turret in sim.economy.providers:
+		var resource := int(tower.definition.economy == "rp")
+		var base := int(tower.definition.production)
+		_add_production(tower.definition.id, resource, base * 100)
+		for provider: Array in sim.economy.providers[tower].values():
+			_add_production(provider[0].definition.id, resource, base * int(provider[1]))
+
+func _add_production(id: String, resource: int, hundredths: int) -> void:
+	var totals: Array = production_breakdown.get_or_add(id, [0, 0])
+	totals[resource] += hundredths
+
+func _buy_economy_support(sim: Battle, def: Dictionary) -> bool:
+	var best := Vector2i(-1, -1)
+	var best_output := 0.0
+	for cell: Vector2i in production_seats:
+		if not sim.can_install(cell, def.id):
+			continue
+		var center := Vector2(cell) + Vector2.ONE * 0.5
+		var count := 0
+		var output := 0.0
+		for tower: Battle.Turret in sim.economy.installed:
+			var base := int(tower.definition.production)
+			if base == 0 or tower.position.distance_squared_to(center) > float(def.range) ** 2:
+				continue
+			var role: String = tower.definition.economy
+			if def.economy != "core" and role != ("credits" if def.economy == "credit_amp" else "rp"):
+				continue
+			count += 1
+			output += base if role == "credits" else base * 4.0
+		var percent := TowerEconomy.core_bonus(count) if def.economy == "core" else TowerEconomy.AMPLIFIER_BONUS
+		if output * percent > best_output:
+			best = cell
+			best_output = output * percent
+	if not sim.install(best, def.id):
+		return false
+	invested += int(def.cost)
+	first_buy[int(def.id.right(2))] = sim.wave
+	return true
+
 func _buy_support(sim: Battle, id: String) -> void:
 	var def := sim.tower_definition(id)
 	if sim.credits < int(def.cost):
@@ -351,7 +464,7 @@ func _buy_support(sim: Battle, id: String) -> void:
 		var weight := 0.0
 		var center := Vector2(candidate) + Vector2(0.5, 0.5)
 		for tower in sim.towers:
-			if tower.definition.support == TowerSupport.Kind.NONE and (def.global or center.distance_squared_to(tower.position) <= radius_sq):
+			if TowerRegistry.attacks(tower.definition) and (def.global or center.distance_squared_to(tower.position) <= radius_sq):
 				weight += 1.0 + float(tower.definition.stage)
 		if weight > score:
 			best = candidate
@@ -367,10 +480,10 @@ func _count(sim: Battle, id: String) -> int:
 			result += 1
 	return result
 
-func _buy(sim: Battle, id: String) -> bool:
+func _buy(sim: Battle, id: String, candidates: Array[Vector2i] = []) -> bool:
 	if not sim.research.unlocked.has(id) or sim.credits < int(sim.tower_definition(id).cost):
 		return false
-	for cell in seats:
+	for cell in (seats if candidates.is_empty() else candidates):
 		if sim.install(cell, id):
 			invested += int(sim.tower_definition(id).cost)
 			var number := int(id.right(2))

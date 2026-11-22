@@ -63,8 +63,8 @@ func _base_outputs() -> void:
 		check(sim.credits == before and sim.bolts.is_empty() and attack_events.is_empty(), "producer is passive during the wave")
 		_drain(sim)
 		check(Vector2i(sim.economy.last_credits, sim.economy.last_rp) == [
-			Vector2i(15, 0), Vector2i(800, 0), Vector2i(22_000, 0),
-			Vector2i(0, 40), Vector2i(0, 480), Vector2i(0, 5_000),
+			Vector2i(10, 0), Vector2i(500, 0), Vector2i(14_000, 0),
+			Vector2i(0, 20), Vector2i(0, 480), Vector2i(0, 5_000),
 		][i], "base output " + id)
 		check(sim.sell(tower.cell) and sim.credits == before + 40 + sim.economy.last_credits + int(tower.definition.refund), "base refund and paid rewards " + id)
 
@@ -79,7 +79,7 @@ func _lifetime() -> void:
 	_place(sim, Vector2i(7, 5), "tower_45")
 	check(sim.economy.links.is_empty(), "boosters placed in combat are ineligible")
 	_drain(sim)
-	check(sim.economy.last_credits == 15, "only the producer kept for the entire wave receives base output")
+	check(sim.economy.last_credits == 10, "only the producer kept for the entire wave receives base output")
 	var after := sim.credits
 	sim.tick(30.0)
 	sim._finish_wave()
@@ -88,7 +88,7 @@ func _lifetime() -> void:
 	check(sim.sell(Vector2i(7, 5)), "selling the core removes its production boost")
 	check(sim.economy.links.size() == 1 and sim.economy.bonuses.values() == [20, 20], "sale refreshes eligible links and bonus before payout")
 	_drain(sim)
-	check(sim.economy.last_credits == 36, "replacement factory becomes eligible the next wave")
+	check(sim.economy.last_credits == 24, "replacement factory becomes eligible the next wave")
 
 func _opening() -> void:
 	var sim := Battle.new(map, rules)
@@ -100,7 +100,7 @@ func _opening() -> void:
 	check(sim.research.purchase("survey") and sim.research.purchase("eco_gather") and sim.install(Vector2i(5, 4), "tower_37"), "collector can be purchased before wave two at ordinary income")
 	sim.start_wave()
 	_play_wave(sim)
-	check(sim.wave == 2 and not sim.active and sim.economy.last_credits == 15, "collector pays back its first 15 credits after real combat")
+	check(sim.wave == 2 and not sim.active and sim.economy.last_credits == 10, "collector pays back its first 10 credits after real combat")
 
 func _play_wave(sim: Battle) -> void:
 	for tick in 90 * 60:
@@ -108,7 +108,7 @@ func _play_wave(sim: Battle) -> void:
 			break
 		sim.tick(STEP)
 
-func _network(sim: Battle) -> Battle.Turret:
+func _network(sim: Battle, production_ids: Array[String] = []) -> Battle.Turret:
 	var core := _place(sim, Vector2i(5, 4), "tower_45")
 	_place(sim, Vector2i(6, 4), "tower_43")
 	_place(sim, Vector2i(7, 4), "tower_43")
@@ -119,7 +119,8 @@ func _network(sim: Battle) -> Battle.Turret:
 	for cell in [Vector2i(3, 4), Vector2i(4, 4), Vector2i(5, 6), Vector2i(6, 6),
 			Vector2i(7, 6), Vector2i(8, 6), Vector2i(2, 4), Vector2i(2, 5),
 			Vector2i(3, 5), Vector2i(4, 5)]:
-		_place(sim, cell, "tower_37" if i < 8 else "tower_40")
+		var id := ("tower_37" if i < 8 else "tower_40") if production_ids.is_empty() else production_ids[i]
+		_place(sim, cell, id)
 		i += 1
 	return core
 
@@ -136,7 +137,7 @@ func _networks() -> void:
 	check(sim.economy.connected(credits_amp).size() == 8 and sim.economy.connected(rp_amp).size() == 2, "dedicated bonuses match the resource type")
 	sim.start_wave()
 	_drain(sim)
-	check(sim.economy.last_credits == 225 and sim.economy.last_rp == 108, "custom award multipliers apply independently after the +50% cap")
+	check(sim.economy.last_credits == 150 and sim.economy.last_rp == 54, "custom award multipliers apply independently after the +50% cap")
 	sim.start_wave()
 	sim.sell(Vector2i(3, 4))
 	check(sim.economy.connected(core).size() == 9 and sim.economy.bonuses.values().count(48) == 9, "selling one producer decreases the remaining core bonuses during its wave")
@@ -153,20 +154,30 @@ func _networks() -> void:
 	sim.sell(stronger.cell)
 	check(sim.economy.bonuses[shared] == 14 and sim.economy.providers[shared]["core"][0] == weaker, "sale replaces the strongest core with the next valid source")
 
+	sim = _fixture()
+	_network(sim, [
+		"tower_39", "tower_39", "tower_39", "tower_38", "tower_38",
+		"tower_42", "tower_42", "tower_41", "tower_41", "tower_40",
+	])
+	sim.start_wave()
+	_drain(sim)
+	check(sim.economy.last_credits == 64_500 and sim.economy.last_rp == 16_470,
+		"mature complex pays both resources at the shared +50% cap")
+
 func _precision_and_limits() -> void:
 	var levels := {&"credits": 2, &"tower_price": 5, &"tower_limit": -5}
 	var sim := _fixture(levels)
 	var baseline := _fixture(levels)
 	var producer := _place(sim, Vector2i(5, 4), "tower_37")
 	var core := _place(sim, Vector2i(6, 4), "tower_45")
-	check(producer.definition.cost == 20 and core.definition.cost == 60_000, "custom prices cover producers and boosters")
+	check(producer.definition.cost == 20 and core.definition.cost == 37_500, "custom prices cover producers and boosters")
 	var starting_difference := baseline.credits - sim.credits
 	for i in 5:
 		sim.start_wave()
 		baseline.start_wave()
 		_drain(sim)
 		_drain(baseline)
-	check(sim.credits - baseline.credits + starting_difference == 126, "five 25.2-credit payments carry fractions without repeated rounding")
+	check(sim.credits - baseline.credits + starting_difference == 84, "five 16.8-credit payments carry fractions without repeated rounding")
 	for x in range(1, 11):
 		_place(sim, Vector2i(x, 2), "tower_37")
 	check(sim.at_tower_limit() and not sim.install(Vector2i(12, 2), "tower_44"), "producers and boosters occupy the shared limit")
