@@ -64,7 +64,7 @@ func _base_outputs() -> void:
 		_drain(sim)
 		check(Vector2i(sim.economy.last_credits, sim.economy.last_rp) == [
 			Vector2i(15, 0), Vector2i(800, 0), Vector2i(22_000, 0),
-			Vector2i(0, 40), Vector2i(0, 320), Vector2i(0, 1600),
+			Vector2i(0, 40), Vector2i(0, 480), Vector2i(0, 5_000),
 		][i], "base output " + id)
 		check(sim.sell(tower.cell) and sim.credits == before + 40 + sim.economy.last_credits + int(tower.definition.refund), "base refund and paid rewards " + id)
 
