@@ -86,6 +86,32 @@ New-Item -ItemType Directory -Force dist | Out-Null
 & $Godot --headless --path . --export-debug Android dist/PrismFront.apk
 ```
 
+## 모드 관리
+
+메인 메뉴의 **모드 관리 → 모드 추가**에서 ZIP을 선택한 뒤, 목록에서 모드를 활성화하고 새 게임을 시작합니다. Windows에서는 모드 관리 화면에 ZIP을 끌어다 놓을 수도 있습니다. Android에서는 기기의 파일 선택기를 엽니다. 비활성화하면 설치본은 남습니다. 삭제는 확인 후 선택한 모드에만 적용되며, 모드 적용 판은 일반 기록과 별개입니다.
+
+모드 ZIP의 루트에 `mod.json`과 콘텐츠 JSON을 넣습니다. 압축 파일은 최대 1 MiB이고 각 JSON은 최대 256 KiB입니다. 모드는 데이터만 추가하며 기존 ID, 전투 규칙, 웨이브 수와 최종 보스는 유지합니다.
+
+```json
+{
+  "format": 1,
+  "id": "example",
+  "name": "예시 모드",
+  "author": "작성자",
+  "version": "1.0",
+  "description": "추가 콘텐츠 설명",
+  "requires": []
+}
+```
+
+| 선택 파일 | 루트 구조 | 기존 데이터 예시 |
+| --- | --- | --- |
+| `towers.json` | `{"towers": [...]}` | `data/towers.json` |
+| `research.json` | `{"nodes": [...]}` | `data/research.json` |
+| `enemies.json` | `{"enemies": [...]}` | `data/enemies.json` |
+
+ID는 소문자와 숫자로 시작하며 점, 밑줄, 하이픈을 덧붙일 수 있습니다. 추가 타워와 해금 연구는 `research_id`와 `unlock.id`로 연결합니다. 다른 모드의 데이터가 필요하면 `requires`에 해당 모드의 ID를 적습니다. 의존 모드를 먼저 적용하고 나머지는 모드 ID 순으로 검사합니다. 충돌하거나 의존성이 충족되지 않은 모드는 보류 사유가 표시됩니다. 새 타워는 기본 아트를 사용하며, ZIP에서 스크립트나 별도 리소스를 불러오지 않습니다.
+
 ## Windows 내보내기
 
 [Godot 4.7.2 안정 버전](https://godotengine.org/download/archive/4.7.2-stable/)과 같은 버전의 표준 내보내기 템플릿을 준비합니다. 프로젝트 루트에서 PowerShell로 실행합니다.

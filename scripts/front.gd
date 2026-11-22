@@ -14,6 +14,9 @@ const INSPECT_BAR_WIDTH := 274.0
 const MOBILE_READING_SIZE := Vector2(1856, 1016)
 
 var data := BattleData.new()
+var mod_library: ModLibrary
+var mod_screen: ModScreen
+var _modded_run := false
 var map := FieldMap.new()
 var map_error := ""
 var battle: Battle
@@ -83,6 +86,8 @@ var _heading_font := FontVariation.new()
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_init_theme()
+	var mod_path := "user://qa-mods" if "--qa" in OS.get_cmdline_user_args() else "user://mods"
+	mod_library = ModLibrary.new(mod_path, data)
 	if Profile.mobile_mode:
 		_touch.tapped.connect(_tap_battlefield)
 		_touch.panned.connect(_pan_battlefield_touch)
@@ -241,10 +246,12 @@ func show_menu() -> void:
 	for button in [settings, codex, exit]:
 		_style_menu_button(button, MENU_CYAN)
 		button.add_theme_stylebox_override("normal", box("#0b141d", "#293c48"))
+	var mods := button_at(screen, "모드 관리", Rect2(165, 753, 414, 77) if mobile else Rect2(165, 701, 330, 53), show_mods)
+	_style_menu_button(mods, MENU_CYAN)
 	if map_error.is_empty():
 		play.grab_focus()
 	else:
-		text_at(screen, "맵 오류 · " + map_error, 165, 716, 21, PINK, 580)
+		text_at(screen, "맵 오류 · " + map_error, 165, 844 if mobile else 770, 21, PINK, 580)
 		settings.grab_focus()
 
 func _style_menu_button(button: Button, accent: Color, primary: bool = false) -> void:
@@ -290,10 +297,23 @@ func show_constraints() -> void:
 	place(picker, panel, Rect2(Vector2.ZERO, panel.size))
 	picker.setup(self)
 
+func show_mods() -> void:
+	if game:
+		return
+	var panel := _open_modal("mods", Vector2(1420, 940))
+	mod_screen = ModScreen.new()
+	place(mod_screen, panel, Rect2(Vector2.ZERO, panel.size))
+	mod_screen.setup(self, mod_library, Profile.mobile_mode)
+
 func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}, starting_funds: int = -1, starting_rp: int = 0) -> void:
 	if not map_error.is_empty():
 		return
 	_replace_screen()
+	data = mod_library.data
+	_modded_run = not mod_library.applied.is_empty()
+	_enemy_pick_radius = 1.0
+	for def: Dictionary in data.mobs.definitions.values():
+		_enemy_pick_radius = maxf(_enemy_pick_radius, float(def.scale) * 0.5 + 0.6)
 	Sound.play_music(&"patrol")
 	game = true
 	selected = NONE
@@ -796,6 +816,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _back() -> void:
 	match modal_kind:
+		"mods":
+			if not mod_screen.cancel():
+				close_modal()
 		"pause", "research", "catalog", "support", "difficulty":
 			close_modal()
 		"constraints":
@@ -911,7 +934,7 @@ func _boss_event(kind: StringName, _start: Vector2, _end: Vector2, _tint: Color,
 		callout_time = 2.7
 
 func _wave_started(number: int) -> void:
-	if not battle.constraints.active():
+	if not _modded_run and not battle.constraints.active():
 		Profile.record_wave(number, battle.difficulty)
 	result.text = ""
 	if number == BattleData.FINAL_WAVE:
@@ -1022,7 +1045,7 @@ func _close_codex() -> void:
 func _cleared(record: Dictionary) -> void:
 	Sound.play_music()
 	var constrained := battle.constraints.active()
-	if not constrained:
+	if not constrained and not _modded_run:
 		Profile.record_clear(record)
 	var entry := Profile.campaign_record(battle.difficulty)
 	callout_time = 0.0
@@ -1038,7 +1061,10 @@ func _cleared(record: Dictionary) -> void:
 		["획득 재화", str(record.credits)], ["완료 연구", "%d / %d" % [int(record.research), data.research.ids.size()]],
 		["타워 설치", "%d회" % int(record.installed)],
 	]
-	stats.append(["커스텀 규칙", battle.constraints.badge_text()] if constrained else ["최단 기록", _duration(entry.fastest_clear)])
+	if _modded_run:
+		stats.append(["게임 모드", "모드 적용"])
+	else:
+		stats.append(["커스텀 규칙", battle.constraints.badge_text()] if constrained else ["최단 기록", _duration(entry.fastest_clear)])
 	for i in stats.size():
 		var x := 44 + int(i % 4) * 205
 		var y := 112 + floori(i / 4.0) * 110
@@ -1047,7 +1073,9 @@ func _cleared(record: Dictionary) -> void:
 	text_at(panel, "설치한 5단계 공격 타워", 44, 344, 19, MUTED)
 	var terminal := " · ".join(PackedStringArray(record.terminal))
 	text_at(panel, terminal if not terminal.is_empty() else "없음", 44, 380, 23, GOLD, 812)
-	if constrained:
+	if _modded_run:
+		text_at(panel, "모드 적용 게임 클리어", 44, 445, 18, MENU_CYAN)
+	elif constrained:
 		text_at(panel, "커스텀 규칙 클리어", 44, 445, 18, MENU_CYAN)
 	elif Profile.save_error:
 		text_at(panel, "클리어 기록을 저장하지 못했습니다.", 44, 445, 18, PINK)
@@ -1068,9 +1096,9 @@ func show_game_over() -> void:
 	text_at(panel, "보스 탈출" if battle.boss_escaped and battle.health > 0 else "게임 오버", 36, 27, 47, PINK)
 	text_at(panel, "도달 웨이브", 39, 116, 19, MUTED)
 	var constrained := battle.constraints.active()
-	text_at(panel, "커스텀 규칙" if constrained else "최고 기록", 280, 116, 19, MUTED)
+	text_at(panel, "게임 모드" if _modded_run else ("커스텀 규칙" if constrained else "최고 기록"), 280, 116, 19, MUTED)
 	text_at(panel, str(battle.wave), 39, 148, 31, LIGHT, 222)
-	var detail := battle.constraints.badge_text() if constrained else str(Profile.campaign_record(battle.difficulty).wave)
+	var detail := "모드 적용" if _modded_run else (battle.constraints.badge_text() if constrained else str(Profile.campaign_record(battle.difficulty).wave))
 	text_at(panel, detail, 280, 148, 31, GOLD, 206)
 	button_at(panel, _restart_label(), Rect2(36, 229, 450, 59), start_game.bind(battle.difficulty), true).grab_focus()
 	button_at(panel, "메인 메뉴", Rect2(36, 301, 450, 59), show_menu)

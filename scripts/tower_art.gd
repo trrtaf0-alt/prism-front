@@ -15,7 +15,7 @@ static func first_frame(id: String) -> int:
 	if suffix == id or not suffix.is_valid_int():
 		return 0
 	var number := suffix.to_int()
-	return (number - 1) * 2 if number >= 1 and number <= 45 else 0
+	return (number - 1) * 2 if number >= 1 and number <= 45 and number != 27 else 0
 
 static func batch_color(frame: int) -> Color:
 	return Color(float(frame) / FRAME_ENCODING, 1.0, 1.0)

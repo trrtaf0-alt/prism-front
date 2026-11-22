@@ -28,6 +28,10 @@ func _run() -> void:
 	var menu_font := ui.screen.get_node("StartGame").get_theme_font("font") as FontVariation
 	var base_font := menu_font.base_font as FontFile
 	check(base_font.hinting == TextServer.HINTING_NORMAL and base_font.subpixel_positioning == TextServer.SUBPIXEL_POSITIONING_DISABLED, "mobile UI snaps font glyphs to device pixels")
+	await _tap_button(ui.screen, "모드 관리")
+	check(ui.modal_kind == "mods" and ui.mod_screen._title.text == "설치된 모드 없음", "mobile touch opens the mod manager")
+	if ui.modal_kind == "mods":
+		await _tap_button(ui.modal, "닫기")
 	await _tap_control(ui.screen.get_node("StartGame"))
 	if not _expect_modal("difficulty"):
 		_finish()

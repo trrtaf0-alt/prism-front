@@ -13,11 +13,23 @@ static func read_json(path: String) -> Dictionary:
 var turret: Dictionary = read_json("res://data/turret.json")
 var drone: Dictionary = read_json("res://data/drone.json")
 var balance: Dictionary = read_json("res://data/balance.json")
-var mobs := EnemyRegistry.new(drone, read_json("res://data/enemies.json"))
+var mobs: EnemyRegistry
 var difficulty_rules := read_json("res://data/difficulty.json")
 var status_rules: Dictionary = read_json("res://data/status.json")
-var towers := TowerRegistry.new(turret, read_json("res://data/towers.json").get("towers", []))
-var research := ResearchGraph.new(read_json("res://data/research.json").get("nodes", []), towers)
+var towers: TowerRegistry
+var research: ResearchGraph
+
+func _init(additions: Dictionary = {}) -> void:
+	var enemy_content := read_json("res://data/enemies.json")
+	if enemy_content.get("enemies") is Array:
+		enemy_content.enemies.append_array(additions.get("enemies", []))
+	mobs = EnemyRegistry.new(drone, enemy_content)
+	var tower_rows: Array = read_json("res://data/towers.json").get("towers", [])
+	tower_rows.append_array(additions.get("towers", []))
+	towers = TowerRegistry.new(turret, tower_rows)
+	var research_rows: Array = read_json("res://data/research.json").get("nodes", [])
+	research_rows.append_array(additions.get("nodes", []))
+	research = ResearchGraph.new(research_rows, towers)
 
 func enemy_for_wave(base: Dictionary, wave: int, difficulty: StringName, constraints: RunConstraints = null) -> Dictionary:
 	var unit := _difficulty_enemy(base, wave, difficulty)
