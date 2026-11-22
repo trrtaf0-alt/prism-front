@@ -166,12 +166,12 @@ var _advanced_impact_budget := 4
 var _needs_cleanup := false
 var _maximum_step := 0.0
 
-func _init(map: FieldMap, rules: BattleData, mode: StringName = &"easy", levels: Dictionary = {}, starting_funds: int = -1) -> void:
+func _init(map: FieldMap, rules: BattleData, mode: StringName = &"easy", levels: Dictionary = {}, starting_funds: int = -1, starting_rp: int = 0) -> void:
 	field = map
 	data = rules
 	difficulty = mode if BattleData.DIFFICULTIES.has(mode) else &"easy"
-	constraints = RunConstraints.new(levels, starting_funds, int(data.balance.starting_credits))
-	research = ResearchRun.new(data.research, constraints.value(&"research_price"))
+	constraints = RunConstraints.new(levels, starting_funds, int(data.balance.starting_credits), starting_rp)
+	research = ResearchRun.new(data.research, constraints.value(&"research_price"), constraints.starting_rp)
 	_tower_limit = constraints.value(&"tower_limit")
 	_credit_percent = constraints.value(&"credits")
 	_rp_percent = constraints.value(&"rp")

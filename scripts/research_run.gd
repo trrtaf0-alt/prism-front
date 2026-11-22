@@ -12,9 +12,10 @@ var highest_stage := 0
 var completed: Dictionary = {}
 var unlocked: Dictionary = {TowerRegistry.BASE: true}
 
-func _init(definitions: ResearchGraph, price_percent: int = 100) -> void:
+func _init(definitions: ResearchGraph, price_percent: int = 100, starting_rp: int = 0) -> void:
 	graph = definitions
 	_cost_percent = price_percent
+	points = starting_rp
 
 func cost(id: String) -> int:
 	return RunConstraints.scaled(int(graph.nodes[id].cost_rp), _cost_percent)

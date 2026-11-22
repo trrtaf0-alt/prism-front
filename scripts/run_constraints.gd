@@ -25,24 +25,28 @@ const DEFINITIONS := {
 
 var _levels: Dictionary = {}
 var starting_funds: int
+var starting_rp: int
 var _default_funds: int
 
-func _init(selected: Dictionary = {}, funds: int = -1, default_funds: int = 50) -> void:
+func _init(selected: Dictionary = {}, funds: int = -1, default_funds: int = 50, rp: int = 0) -> void:
 	_default_funds = default_funds
 	starting_funds = clampi(funds, 0, BattleData.NUMBER_LIMIT) if funds >= 0 else default_funds
+	starting_rp = clampi(rp, 0, BattleData.NUMBER_LIMIT)
 	for id: StringName in DEFINITIONS:
 		var level := clampi(int(selected.get(id, 0)), -5, max_level(id))
 		if level != 0:
 			_levels[id] = level
 
 func active() -> bool:
-	return not _levels.is_empty() or starting_funds != _default_funds
+	return not _levels.is_empty() or starting_funds != _default_funds or starting_rp > 0
 
 func count() -> int:
 	return _levels.size()
 
 func badge_text() -> String:
 	if _levels.is_empty():
+		if starting_rp > 0:
+			return "시작 RP" if starting_funds == _default_funds else "시작 자원"
 		return "시작자금"
 	var restrictions := _levels.values().any(func(level: int): return level < 0)
 	var perks := _levels.values().any(func(level: int): return level > 0)
@@ -56,6 +60,8 @@ func summary_text() -> String:
 		lines.append("%s · %s" % [DEFINITIONS[id][0], setting_text(id, level)])
 	if starting_funds != _default_funds:
 		lines.append("시작자금 · %d" % starting_funds)
+	if starting_rp > 0:
+		lines.append("시작 RP · %d" % starting_rp)
 	return "\n".join(lines)
 
 func value(id: StringName) -> int:

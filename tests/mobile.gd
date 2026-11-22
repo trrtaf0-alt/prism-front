@@ -43,10 +43,15 @@ func _run() -> void:
 	await _tap_control(constraints._funds)
 	check(constraints._funds.has_focus(), "touch focuses the numeric starting funds field")
 	await _tap_control(constraints._presets[250])
+	await _tap_control(constraints._starting_rp)
+	check(constraints._starting_rp.has_focus(), "touch focuses the separate starting RP field")
+	constraints._starting_rp.text = "7"
+	constraints._starting_rp.text_changed.emit("7")
 	check(constraints._effects[&"boss_hp"].text == "제약 -1단계 · +50%" and constraints._effects[&"rp"].text == "특전 +1단계 · +25%", "touch steppers choose penalties and perks")
-	await _capture("android-custom-rules")
+	await _capture("android-starting-rp")
 	await _tap_button(ui.modal, "이 설정으로 시작")
 	check(ui.game and ui.battle.difficulty == &"easy" and ui.battle.constraints.count() == 2 and ui.battle.credits == 250, "touch starts the selected custom game with the chosen funds")
+	check(ui.game and ui.battle.research.points == 7, "starting RP ignores the RP income multiplier")
 	if not ui.game:
 		_finish()
 		return
@@ -193,7 +198,7 @@ func _research(sim: Battle) -> void:
 	await _swipe(midpoint, end)
 	check(board.offset != old_offset, "one touch drags the research board")
 	var id: String = sim.research.graph.ids[0]
-	sim.research.earn(sim.research.cost(id))
+	var remaining := sim.research.points - sim.research.cost(id)
 	board.select_node(id, true)
 	var node_point := (sim.research.graph.point(id) * board.zoom) + board.offset
 	var selected: Array[String] = []
@@ -202,7 +207,7 @@ func _research(sim: Battle) -> void:
 	check(selected == [id] and board.focus_id == id and not ui.research_screen.cost.text.is_empty(), "a node tap selects its details once")
 	await _capture("android-research")
 	await _tap_control(ui.research_screen.buy)
-	check(sim.research.completed.has(id) and sim.research.points == 0, "touch confirms one paid research")
+	check(sim.research.completed.has(id) and sim.research.points == remaining, "touch pays for research from starting RP")
 
 func _expect_modal(kind: String) -> bool:
 	var matches: bool = ui.modal_kind == kind

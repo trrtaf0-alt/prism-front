@@ -70,6 +70,11 @@ func _economy() -> void:
 	check(mixed.credits == 350 and mixed.total_credits == 100 and mixed.research.total_earned == 8, "kill and clearance credit perks coexist with an RP penalty")
 	var zero_funds := Battle.new(map, rules, &"normal", {}, 0)
 	check(zero_funds.credits == 0 and zero_funds.constraints.active() and zero_funds.constraints.count() == 0, "zero funds alone makes a custom run")
+	var starting_rp := Battle.new(map, rules, &"easy", {&"rp": -5}, -1, 30)
+	check(starting_rp.research.points == 30 and starting_rp.research.total_earned == 0 and starting_rp.credits == 50, "starting RP is separate from funds and earned RP")
+	starting_rp.start_wave()
+	_drain(starting_rp)
+	check(starting_rp.research.points == 35 and starting_rp.research.total_earned == 5, "RP income restriction only changes subsequent earnings")
 
 func _prices_and_limit() -> void:
 	var sim := Battle.new(map, rules, &"easy", {&"tower_price": -4, &"research_price": -3, &"tower_limit": -5})
@@ -213,24 +218,29 @@ func _interface() -> void:
 	_click(panel._presets[5000])
 	check(panel._effects[&"credits"].text == "특전 +1단계 · +25%" and panel._effects[&"tower_limit"].text == "제약 -1단계 · 최대 40기", "picker displays signed levels, categories and values")
 	check(panel._funds.text == "5000" and panel._presets[5000].button_pressed, "recommended funds can be selected by mouse")
-	await _capture("custom-rules-settings")
+	_set_amount_text(panel._starting_rp, "125")
+	await _capture("starting-rp-settings")
 	panel._reset()
-	check(panel._levels.is_empty() and panel._presets[50].button_pressed and panel._steppers[&"tower_limit"][1].disabled, "reset restores neutral stages, unbounded installation and default funds")
+	check(panel._levels.is_empty() and panel._presets[50].button_pressed and panel._starting_rp.text == "0" and panel._steppers[&"tower_limit"][1].disabled, "reset restores neutral stages, default funds and zero starting RP")
 	for invalid in ["", "-1", "1.5", "abc", "9000000000000001", "99999999999999999999999"]:
-		_set_funds_text(panel, invalid)
-		check(panel._start_button.disabled and panel._funds_amount() == -1, "invalid direct input cannot start a game")
+		_set_amount_text(panel._funds, invalid)
+		check(panel._start_button.disabled, "invalid funds cannot start a game")
+	_set_amount_text(panel._funds, "9000000000000000")
+	check(not panel._start_button.disabled and panel._parse_amount(panel._funds.text) == BattleData.NUMBER_LIMIT, "the existing economy cap is a valid direct input")
+	for invalid in ["", "-1", "1.5", "9000000000000001"]:
+		_set_amount_text(panel._starting_rp, invalid)
+		check(panel._start_button.disabled and panel._summary.text.begins_with("시작 RP"), "invalid starting RP cannot start a game")
 	panel._start()
 	check(not ui.game, "invalid input is rejected at game start")
-	_set_funds_text(panel, "9000000000000000")
-	check(not panel._start_button.disabled and panel._funds_amount() == BattleData.NUMBER_LIMIT, "the existing economy cap is a valid direct input")
-	_set_funds_text(panel, "1234")
+	_set_amount_text(panel._funds, "1234")
+	_set_amount_text(panel._starting_rp, "125")
 	panel._select(&"tower_price", -5)
 	panel._select(&"research_price", 2)
 	panel._start()
 	check(ui.game and ui.battle.difficulty == &"hard" and ui.battle.constraints.count() == 2 and ui.build_button.text.contains("20"), "selected difficulty and displayed installation cost reach the new run")
-	check(ui.battle.credits == 1234 and ui.battle.research.cost(rules.research.ids[0]) == 2, "typed funds and research discount reach the new run")
+	check(ui.battle.credits == 1234 and ui.battle.research.points == 125 and ui.rp_label.text == "125" and ui.battle.research.cost(rules.research.ids[0]) == 2, "typed funds, RP and research discount reach the new run")
 	var badge := ui.screen.get_node_or_null("ActiveConstraints") as Label
-	check(badge != null and badge.text == "규칙 2종" and badge.tooltip_text == "타워 설치 가격 · 제약 -5단계 · +100%\n연구 비용 · 특전 +2단계 · -20%\n시작자금 · 1234", "HUD badge reports restrictions, perks and starting funds")
+	check(badge != null and badge.text == "규칙 2종" and badge.tooltip_text == "타워 설치 가격 · 제약 -5단계 · +100%\n연구 비용 · 특전 +2단계 · -20%\n시작자금 · 1234\n시작 RP · 125", "HUD badge reports rules and both starting resources")
 	if badge != null:
 		var hover := InputEventMouseMotion.new()
 		hover.position = badge.get_global_transform_with_canvas() * (badge.size * 0.5)
@@ -250,13 +260,17 @@ func _interface() -> void:
 	ui.start_wave()
 	badge = ui.screen.get_node_or_null("ActiveConstraints") as Label
 	check(badge != null and badge.text == "시작자금" and badge.tooltip_text == "시작자금 · 0" and profile.campaign_record(&"hard") == entry, "funds-only run has a badge and does not modify the ordinary record")
+	ui.start_game(&"hard", {}, 50, 125)
+	ui.start_wave()
+	badge = ui.screen.get_node_or_null("ActiveConstraints") as Label
+	check(badge != null and badge.text == "시작 RP" and badge.tooltip_text == "시작 RP · 125" and profile.campaign_record(&"hard") == entry, "RP-only run is also separate from ordinary records")
 	ui.start_game(&"hard")
-	check(not ui.battle.constraints.active() and ui.build_button.text.contains("10") and ui.battle.credits == 50, "ordinary restart clears previous constraints")
+	check(not ui.battle.constraints.active() and ui.build_button.text.contains("10") and ui.battle.credits == 50 and ui.battle.research.points == 0, "ordinary restart clears previous constraints and RP")
 	check(not ui.screen.has_node("ActiveConstraints"), "ordinary runs omit the badge and its tooltip")
 
-func _set_funds_text(panel: ConstraintsScreen, value: String) -> void:
-	panel._funds.text = value
-	panel._funds.text_changed.emit(value)
+func _set_amount_text(input: LineEdit, value: String) -> void:
+	input.text = value
+	input.text_changed.emit(value)
 
 func _click(button: Button) -> void:
 	var point := button.get_global_transform_with_canvas() * (button.size * 0.5)

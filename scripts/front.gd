@@ -290,7 +290,7 @@ func show_constraints() -> void:
 	place(picker, panel, Rect2(Vector2.ZERO, panel.size))
 	picker.setup(self)
 
-func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}, starting_funds: int = -1) -> void:
+func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}, starting_funds: int = -1, starting_rp: int = 0) -> void:
 	if not map_error.is_empty():
 		return
 	_replace_screen()
@@ -309,7 +309,7 @@ func start_game(difficulty: StringName = &"easy", levels: Dictionary = {}, start
 	callout_time = 0.0
 	defeat_delay = 0.0
 	last_base_damage = 0
-	battle = Battle.new(map, data, difficulty, levels, starting_funds)
+	battle = Battle.new(map, data, difficulty, levels, starting_funds, starting_rp)
 	battle.effect.connect(_battle_effect)
 	battle.tower_installed.connect(Sound.deploy_cue)
 	battle.attack_visual.connect(Sound.attack_cue)
